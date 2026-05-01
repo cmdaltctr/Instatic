@@ -56,6 +56,26 @@
 }
 
 /* ── SaveIndicator ────────────────────────────────────────────────────────── */
+.statusWrapper {
+    position: relative;
+    height: 28px;
+}
+
+.statusToast {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: var(--editor-surface);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--editor-danger-lighter);
+    white-space: nowrap;
+    z-index: 201;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
 .pill {
     display: flex;
     align-items: center;

@@ -51,4 +51,22 @@ describe('self-hosted admin static serving', () => {
       rmSync(staticDir, { recursive: true, force: true })
     }
   })
+
+  it('serves uploaded media files from /uploads', async () => {
+    const uploadsDir = mkdtempSync(join(tmpdir(), 'page-builder-uploads-'))
+    try {
+      writeFileSync(join(uploadsDir, 'hero.png'), 'image-bytes')
+
+      const res = await handleServerRequest(new Request('http://localhost/uploads/hero.png'), {
+        db: new StaticFakeDb(),
+        uploadsDir,
+      })
+
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toContain('image/png')
+      expect(await res.text()).toBe('image-bytes')
+    } finally {
+      rmSync(uploadsDir, { recursive: true, force: true })
+    }
+  })
 })

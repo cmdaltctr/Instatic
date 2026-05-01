@@ -30,6 +30,58 @@
 
 import DOMPurify, { type Config } from 'dompurify'
 
+type DOMPurifyHookNode = {
+  tagName?: string
+  setAttribute?: (name: string, value: string) => void
+}
+
+type DOMPurifyRuntime = {
+  sanitize?: (value: string, config?: Config) => unknown
+  addHook?: (hookName: 'afterSanitizeAttributes', callback: (node: DOMPurifyHookNode) => void) => void
+}
+
+type DOMPurifyFactory = DOMPurifyRuntime & ((window: Window) => DOMPurifyRuntime)
+
+const importedDOMPurify = DOMPurify as unknown as DOMPurifyFactory
+let activeDOMPurify: DOMPurifyRuntime | null = null
+let linkHookInstalled = false
+
+function installLinkHook(purifier: DOMPurifyRuntime): DOMPurifyRuntime {
+  if (!linkHookInstalled && typeof purifier.addHook === 'function') {
+    purifier.addHook('afterSanitizeAttributes', (node) => {
+      if (node.tagName === 'A') {
+        node.setAttribute?.('target', '_blank')
+        node.setAttribute?.('rel', 'noopener noreferrer')
+      }
+    })
+    linkHookInstalled = true
+  }
+  return purifier
+}
+
+function getDOMPurify(): DOMPurifyRuntime | null {
+  const direct = activeDOMPurify ?? importedDOMPurify
+  if (typeof direct.sanitize === 'function') {
+    return installLinkHook(direct)
+  }
+
+  if (typeof window !== 'undefined' && typeof importedDOMPurify === 'function') {
+    activeDOMPurify = importedDOMPurify(window)
+    if (typeof activeDOMPurify.sanitize === 'function') {
+      return installLinkHook(activeDOMPurify)
+    }
+  }
+
+  return null
+}
+
+function stripHtmlFallback(value: string): string {
+  return value
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
+    .replace(/<[^>]*>/g, '')
+}
+
 // ---------------------------------------------------------------------------
 // DOMPurify configuration profiles
 // ---------------------------------------------------------------------------
@@ -76,19 +128,6 @@ export const PLAIN_TEXT_CONFIG: Config & { _plainText?: true } = {
 }
 
 // ---------------------------------------------------------------------------
-// Force safe link targets
-// ---------------------------------------------------------------------------
-
-// DOMPurify hook: after sanitizing, ensure all <a> tags have rel="noopener noreferrer"
-// This prevents reverse tabnapping attacks when links open in a new tab.
-DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-  if (node.tagName === 'A') {
-    node.setAttribute('target', '_blank')
-    node.setAttribute('rel', 'noopener noreferrer')
-  }
-})
-
-// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -110,13 +149,14 @@ export function sanitizeRichtext(
   if (!str.trim()) return ''
 
   // DOMPurify requires a live DOM. In environments where it's unavailable
-  // (e.g. SSR without happy-dom), fall back to plain-text escaping.
-  if (typeof document === 'undefined' || typeof DOMPurify.sanitize !== 'function') {
-    // Fallback: strip all tags via a simple regex (not as thorough, but safe)
-    return str.replace(/<[^>]*>/g, '')
+  // (e.g. one-off server scripts), fall back to plain-text stripping.
+  const purifier = getDOMPurify()
+  if (!purifier || typeof purifier.sanitize !== 'function') {
+    const stripped = stripHtmlFallback(str)
+    return config._plainText ? stripped.trim() : stripped
   }
 
-  const sanitized = String(DOMPurify.sanitize(str, config))
+  const sanitized = String(purifier.sanitize(str, config))
 
   // When plain-text mode is requested, apply a post-strip regex pass.
   // DOMPurify's ALLOWED_TAGS:[] covers most cases but certain browsers / DOM

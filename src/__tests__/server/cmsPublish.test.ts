@@ -3,6 +3,7 @@ import type { Project } from '../../../core/page-tree/types'
 import type { DbClient, DbResult } from '../../../server/cms/db'
 import { saveDraftProject } from '../../../server/cms/projectRepository'
 import {
+  getDraftPublishStatus,
   getPublishedPageBySlug,
   publishDraftProject,
 } from '../../../server/cms/publishRepository'
@@ -88,6 +89,22 @@ class PublishFakeDb implements DbClient {
         : undefined
       return { rows: version ? [{ snapshot_json: version.snapshot_json } as Row] : [], rowCount: version ? 1 : 0 }
     }
+    if (normalized.startsWith('select pages.id as page_id')) {
+      const rows = this.pages
+        .filter((page) => page.status === 'published' && page.active_version_id)
+        .map((page) => {
+          const version = this.versions.find((v) => v.id === page.active_version_id)
+          return version
+            ? {
+                page_id: page.id,
+                snapshot_json: version.snapshot_json,
+                published_at: version.published_at ?? new Date('2026-01-03').toISOString(),
+              }
+            : null
+        })
+        .filter(Boolean)
+      return { rows: rows as Row[], rowCount: rows.length }
+    }
     throw new Error(`Unhandled SQL: ${sql}`)
   }
 }
@@ -159,5 +176,37 @@ describe('CMS publishing', () => {
     const published = await getPublishedPageBySlug(db, 'index')
 
     expect(published?.project.pages[0].nodes.text_1.props.text).toBe('Public version')
+  })
+
+  it('reports that the current draft matches the active published snapshots after publishing', async () => {
+    const db = new PublishFakeDb()
+    await saveDraftProject(db, project('Public version'))
+    await publishDraftProject(db, 'admin_1')
+
+    const status = await getDraftPublishStatus(db)
+
+    expect(status).toMatchObject({
+      hasPublishedVersion: true,
+      draftMatchesPublished: true,
+      draftPages: 1,
+      publishedPages: 1,
+    })
+    expect(status.lastPublishedAt).toBeTruthy()
+  })
+
+  it('reports that the current draft no longer matches after a later draft save', async () => {
+    const db = new PublishFakeDb()
+    await saveDraftProject(db, project('Public version'))
+    await publishDraftProject(db, 'admin_1')
+    await saveDraftProject(db, project('Draft only'))
+
+    const status = await getDraftPublishStatus(db)
+
+    expect(status).toMatchObject({
+      hasPublishedVersion: true,
+      draftMatchesPublished: false,
+      draftPages: 1,
+      publishedPages: 1,
+    })
   })
 })

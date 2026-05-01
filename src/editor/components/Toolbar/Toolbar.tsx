@@ -20,14 +20,16 @@ import { PreviewButton } from './PreviewButton'
 import { SettingsButton } from './SettingsButton'
 import { SaveIndicator } from './SaveIndicator'
 import { PreviewOverlay } from '../Preview/PreviewOverlay'
+import type { PersistenceSaveStatus } from '@editor/hooks/usePersistence'
 import styles from './Toolbar.module.css'
 
 interface ToolbarProps {
   onSave?: () => void | Promise<void>
+  saveStatus?: PersistenceSaveStatus
   publishEnabled?: boolean
 }
 
-export function Toolbar({ onSave, publishEnabled = true }: ToolbarProps) {
+export function Toolbar({ onSave, saveStatus, publishEnabled = true }: ToolbarProps) {
   const projectName = useEditorStore((s) => s.project?.name ?? 'Untitled Project')
 
   return (
@@ -60,7 +62,7 @@ export function Toolbar({ onSave, publishEnabled = true }: ToolbarProps) {
         {/* ── Right section ───────────────────────────────────────────────── */}
         <ZoomControls />
         <Divider />
-        <SaveIndicator onSave={onSave} />
+        <SaveIndicator onSave={onSave} saveStatus={saveStatus} />
         <Divider />
         <PreviewButton />
         <PublishButton enabled={publishEnabled} onSave={onSave} />

@@ -13,11 +13,83 @@ export interface PublishResult {
   publishedPages: number
 }
 
+export interface DraftPublishStatus {
+  hasPublishedVersion: boolean
+  draftMatchesPublished: boolean
+  draftPages: number
+  publishedPages: number
+  lastPublishedAt?: string
+}
+
+interface ActivePublishedRow {
+  page_id: string
+  snapshot_json: PublishedPageSnapshot
+  published_at: string | Date
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(',')}]`
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record).sort().map((key) =>
+      `${JSON.stringify(key)}:${canonicalJson(record[key])}`
+    ).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
 function createSnapshot(project: Project, pageId: string): PublishedPageSnapshot {
   return {
     cmsSnapshotVersion: 1,
     pageId,
     project: structuredClone(project),
+  }
+}
+
+export async function getDraftPublishStatus(db: DbClient): Promise<DraftPublishStatus> {
+  const project = await loadDraftProject(db)
+  if (!project) {
+    return {
+      hasPublishedVersion: false,
+      draftMatchesPublished: false,
+      draftPages: 0,
+      publishedPages: 0,
+    }
+  }
+
+  const result = await db.query<ActivePublishedRow>(
+    `select pages.id as page_id,
+            page_versions.snapshot_json,
+            page_versions.published_at
+     from pages
+     join page_versions on page_versions.id = pages.active_version_id
+     where pages.status = 'published'
+       and pages.active_version_id is not null
+     order by pages.sort_order asc, pages.created_at asc`,
+  )
+
+  const publishedRows = result.rows
+  const draftProjectJson = canonicalJson(project)
+  const draftPageIds = new Set(project.pages.map((page) => page.id))
+  const draftMatchesPublished =
+    publishedRows.length === project.pages.length &&
+    publishedRows.every((row) =>
+      draftPageIds.has(row.page_id) &&
+      canonicalJson(row.snapshot_json.project) === draftProjectJson
+    )
+  const lastPublishedAt = publishedRows
+    .map((row) => new Date(row.published_at).getTime())
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a)[0]
+
+  return {
+    hasPublishedVersion: publishedRows.length > 0,
+    draftMatchesPublished,
+    draftPages: project.pages.length,
+    publishedPages: publishedRows.length,
+    ...(lastPublishedAt ? { lastPublishedAt: new Date(lastPublishedAt).toISOString() } : {}),
   }
 }
 

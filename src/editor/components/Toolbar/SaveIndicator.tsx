@@ -18,17 +18,20 @@ import {
   readAutoSavePreference,
   subscribeToEditorPrefsChanged,
 } from '../../preferences/editorPreferences'
+import type { PersistenceSaveStatus } from '@editor/hooks/usePersistence'
 import styles from './Toolbar.module.css'
 
 interface SaveIndicatorProps {
   onSave?: () => void | Promise<void>
+  saveStatus?: PersistenceSaveStatus
 }
 
-export function SaveIndicator({ onSave }: SaveIndicatorProps) {
+export function SaveIndicator({ onSave, saveStatus }: SaveIndicatorProps) {
   const hasUnsaved = useEditorStore((s) => s.hasUnsavedChanges)
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(readAutoSavePreference)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveFailed, setSaveFailed] = useState(false)
+  const isStatusSaving = saveStatus?.state === 'saving'
+  const saveError = saveStatus?.state === 'error' ? saveStatus.message ?? 'Save failed' : null
 
   useEffect(() => {
     return subscribeToEditorPrefsChanged(() => {
@@ -37,39 +40,56 @@ export function SaveIndicator({ onSave }: SaveIndicatorProps) {
   }, [])
 
   async function handleManualSave() {
-    if (!onSave || isSaving) return
+    if (!onSave || isSaving || isStatusSaving) return
     setIsSaving(true)
-    setSaveFailed(false)
     try {
       await onSave()
     } catch (err) {
-      setSaveFailed(true)
       console.error('[toolbar] Manual save failed:', err)
     } finally {
       setIsSaving(false)
     }
   }
 
-  if (!autoSaveEnabled && hasUnsaved) {
-    const label = isSaving
+  if (saveError) {
+    return (
+      <div className={styles.statusWrapper}>
+        <Button
+          variant="destructive"
+          size="sm"
+          aria-label="Retry save"
+          title={saveError}
+          onClick={handleManualSave}
+          disabled={!onSave || isSaving || isStatusSaving}
+          data-testid="save-indicator"
+        >
+          <Icon name="circle-alert" size={14} aria-hidden="true" />
+          <span>Save failed</span>
+        </Button>
+        <div role="alert" className={styles.statusToast}>
+          {saveError}
+        </div>
+      </div>
+    )
+  }
+
+  if (isStatusSaving || (!autoSaveEnabled && hasUnsaved)) {
+    const label = isSaving || isStatusSaving
       ? 'Saving...'
-      : saveFailed
-        ? 'Retry save'
-        : 'Save'
+      : 'Save'
 
     return (
       <Button
         variant="primary"
         size="sm"
-        aria-label="Save project"
-        aria-busy={isSaving}
+        aria-label={isStatusSaving ? 'Saving project' : 'Save project'}
+        aria-busy={isSaving || isStatusSaving}
         title="Save changes"
         onClick={handleManualSave}
-        disabled={!onSave}
+        disabled={!onSave || isStatusSaving}
         data-testid="save-indicator"
-        tone={saveFailed ? 'danger' : 'default'}
       >
-        <Icon name={isSaving ? 'loader' : 'save'} size={14} aria-hidden="true" />
+        <Icon name={isSaving || isStatusSaving ? 'loader' : 'save'} size={14} aria-hidden="true" />
         <span>{label}</span>
       </Button>
     )

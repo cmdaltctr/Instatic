@@ -3,6 +3,12 @@
  */
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useEditorStore, selectActivePage } from '../../../../core/editor-store/store'
+import {
+  createUniquePageSlug,
+  normalizePageSlug,
+  pageSlugDuplicateError,
+  pageSlugError,
+} from '../../../../core/page-tree/slugs'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import s from '../Settings.module.css'
@@ -18,6 +24,7 @@ export function PagesSection() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editSlug, setEditSlug] = useState('')
+  const [pageError, setPageError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const confirmBtnRef = useRef<HTMLButtonElement>(null)
@@ -28,24 +35,33 @@ export function PagesSection() {
 
   const handleAdd = useCallback(() => {
     const title = newTitle.trim()
-    if (!title) return
-    const slug = title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    if (!title || !project) return
+    const slug = createUniquePageSlug(title, project.pages)
     addPage(title, slug)
     setNewTitle('')
-  }, [newTitle, addPage])
+    setPageError(null)
+  }, [newTitle, project, addPage])
 
-  const handleStartEdit = (id: string, title: string) => {
+  const handleStartEdit = (id: string, title: string, slug: string) => {
     setEditingId(id)
     setEditTitle(title)
-    setEditSlug(title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''))
+    setEditSlug(slug)
+    setPageError(null)
   }
 
   const handleSaveEdit = useCallback(() => {
-    if (!editingId) return
+    if (!editingId || !project) return
     const title = editTitle.trim()
-    if (title) renamePage(editingId, title)
+    const slug = normalizePageSlug(editSlug)
+    const error = pageSlugError(slug) || pageSlugDuplicateError(slug, project.pages, editingId)
+    if (error) {
+      setPageError(error)
+      return
+    }
+    if (title) renamePage(editingId, title, slug)
     setEditingId(null)
-  }, [editingId, editTitle, renamePage])
+    setPageError(null)
+  }, [editingId, editTitle, editSlug, project, renamePage])
 
   const handleDeletePage = (id: string) => {
     if (!project) return
@@ -62,7 +78,7 @@ export function PagesSection() {
     <div>
       <h3 className={s.sectionHeading}>Pages</h3>
       <p className={s.sectionDescription}>
-        Manage pages in your project. Each page has a URL slug used in the exported ZIP.
+        Manage pages in your site. Each page has a URL slug used by the published frontend.
       </p>
 
       {/* Page list */}
@@ -87,13 +103,30 @@ export function PagesSection() {
                 <Input
                   type="text"
                   value={editSlug}
-                  onChange={(e) => setEditSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  onChange={(e) => {
+                    setEditSlug(normalizePageSlug(e.target.value))
+                    setPageError(null)
+                  }}
                   placeholder="url-slug"
                   aria-label="URL slug"
                 />
+                {pageError && (
+                  <p role="alert" className={s.errorText}>
+                    {pageError}
+                  </p>
+                )}
                 <div className={s.editFormActions}>
                   <Button variant="primary" size="md" onClick={handleSaveEdit}>Save</Button>
-                  <Button variant="secondary" size="md" onClick={() => setEditingId(null)}>Cancel</Button>
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={() => {
+                      setEditingId(null)
+                      setPageError(null)
+                    }}
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -115,7 +148,7 @@ export function PagesSection() {
                   <Button
                     variant="secondary"
                     size="md"
-                    onClick={() => handleStartEdit(page.id, page.title)}
+                    onClick={() => handleStartEdit(page.id, page.title, page.slug)}
                     aria-label={`Rename page ${page.title}`}
                   >
                     Rename

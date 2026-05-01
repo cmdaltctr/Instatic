@@ -1,5 +1,6 @@
 import type { Project } from '../page-tree/types'
 import type { IPersistenceAdapter, ProjectSummary } from './types'
+import { responseErrorMessage } from './httpErrors'
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
@@ -22,7 +23,9 @@ export class CmsAdapter implements IPersistenceAdapter {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ project }),
     })
-    if (!res.ok) throw new Error(`CMS save failed with ${res.status}`)
+    if (!res.ok) {
+      throw new Error(await responseErrorMessage(res, `CMS save failed with ${res.status}`))
+    }
   }
 
   async loadProject(_id: string): Promise<Project | undefined> {
@@ -31,7 +34,9 @@ export class CmsAdapter implements IPersistenceAdapter {
       credentials: 'include',
     })
     if (res.status === 404) return undefined
-    if (!res.ok) throw new Error(`CMS load failed with ${res.status}`)
+    if (!res.ok) {
+      throw new Error(await responseErrorMessage(res, `CMS load failed with ${res.status}`))
+    }
     const body = await res.json() as { project?: Project }
     return body.project
   }

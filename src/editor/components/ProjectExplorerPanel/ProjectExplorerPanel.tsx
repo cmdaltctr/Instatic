@@ -2,6 +2,11 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode 
 import { useEditorStore } from '@core/editor-store/store'
 import type { ProjectFile } from '@core/files/types'
 import { checkSizeLimit, detectMimeType } from '@core/files/upload'
+import {
+  listCmsMediaAssets,
+  uploadCmsMediaAsset,
+  type CmsMediaAsset,
+} from '@core/persistence/cmsMedia'
 import { PanelHeader } from '../shared/PanelHeader'
 import { Button } from '@ui/components/Button'
 import { FileUpload } from '@ui/components/FileUpload'
@@ -19,6 +24,7 @@ import styles from './ProjectExplorerPanel.module.css'
 
 interface ProjectExplorerPanelProps {
   variant?: 'docked'
+  mediaMode?: 'project' | 'cms'
 }
 
 type FileBucket = 'styles' | 'assets' | 'scripts'
@@ -49,7 +55,10 @@ async function blobToBase64(file: File): Promise<string> {
   return btoa(binary)
 }
 
-export function ProjectExplorerPanel({ variant = 'docked' }: ProjectExplorerPanelProps) {
+export function ProjectExplorerPanel({
+  variant = 'docked',
+  mediaMode = 'project',
+}: ProjectExplorerPanelProps) {
   const isOpen = useEditorStore((s) => s.projectExplorerPanelOpen)
   const project = useEditorStore((s) => s.project)
   const activePageId = useEditorStore((s) => s.activePageId)
@@ -62,17 +71,47 @@ export function ProjectExplorerPanel({ variant = 'docked' }: ProjectExplorerPane
   const createFile = useEditorStore((s) => s.createFile)
   const updateFileBlob = useEditorStore((s) => s.updateFileBlob)
   const openInEditor = useEditorStore((s) => s.openInEditor)
+  const openMediaAssetPreview = useEditorStore((s) => s.openMediaAssetPreview)
   const [createKind, setCreateKind] = useState<ProjectCreateKind | null>(null)
+  const [cmsAssets, setCmsAssets] = useState<CmsMediaAsset[]>([])
+  const [mediaError, setMediaError] = useState<string | null>(null)
+  const [mediaLoading, setMediaLoading] = useState(false)
   const panelRef = useRef<HTMLElement>(null)
 
   const files = project?.files ?? EMPTY_FILES
   const fileBuckets = useMemo(() => groupProjectFiles(files), [files])
+  const usingCmsMedia = mediaMode === 'cms'
+  const assetCount = usingCmsMedia ? cmsAssets.length : fileBuckets.assets.length
 
   useEffect(() => {
     if (isOpen) {
       requestAnimationFrame(() => panelRef.current?.focus())
     }
   }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !usingCmsMedia) return
+
+    let canceled = false
+    setMediaLoading(true)
+    setMediaError(null)
+    listCmsMediaAssets()
+      .then((assets) => {
+        if (!canceled) setCmsAssets(assets)
+      })
+      .catch((err) => {
+        if (!canceled) {
+          setMediaError(err instanceof Error ? err.message : 'Unable to load media')
+        }
+      })
+      .finally(() => {
+        if (!canceled) setMediaLoading(false)
+      })
+
+    return () => {
+      canceled = true
+    }
+  }, [isOpen, usingCmsMedia])
 
   if (!isOpen || variant !== 'docked') return null
 
@@ -112,6 +151,12 @@ export function ProjectExplorerPanel({ variant = 'docked' }: ProjectExplorerPane
 
       const path = `public/${safeAssetName(file.name)}`
       try {
+        if (usingCmsMedia) {
+          const asset = await uploadCmsMediaAsset(file)
+          setCmsAssets((assets) => [asset, ...assets.filter((item) => item.id !== asset.id)])
+          continue
+        }
+
         const fileId = createFile(path, detectMimeType(file.type, path))
         updateFileBlob(fileId, {
           mimeType: file.type || 'application/octet-stream',
@@ -125,6 +170,7 @@ export function ProjectExplorerPanel({ variant = 'docked' }: ProjectExplorerPane
 
   const pages = project?.pages ?? []
   const components = project?.visualComponents ?? []
+  const assetEmptyLabel = mediaLoading ? 'Loading...' : mediaError ?? 'None yet'
 
   return (
     <>
@@ -201,11 +247,13 @@ export function ProjectExplorerPanel({ variant = 'docked' }: ProjectExplorerPane
 
               <ExplorerSection
                 title="Assets"
-                count={fileBuckets.assets.length}
+                count={assetCount}
                 actionLabel="Upload asset"
                 actionIcon="upload"
+                emptyLabel={assetEmptyLabel}
                 uploadAction={<FileUpload
                   multiple
+                  accept={usingCmsMedia ? 'image/*,video/*' : undefined}
                   onChange={handleAssetUpload}
                   buttonProps={{
                     variant: 'ghost',
@@ -218,7 +266,11 @@ export function ProjectExplorerPanel({ variant = 'docked' }: ProjectExplorerPane
                   <Icon name="upload" size={13} />
                 </FileUpload>}
               >
-                <FileRows files={fileBuckets.assets} icon="image-2" onOpen={openInEditor} />
+                {usingCmsMedia ? (
+                  <MediaRows assets={cmsAssets} onOpen={openMediaAssetPreview} />
+                ) : (
+                  <FileRows files={fileBuckets.assets} icon="image-2" onOpen={openInEditor} />
+                )}
               </ExplorerSection>
 
               <ExplorerSection
@@ -253,6 +305,7 @@ interface ExplorerSectionProps {
   actionIcon: string
   onAction?: () => void
   uploadAction?: ReactNode
+  emptyLabel?: string
   children: ReactNode
 }
 
@@ -263,6 +316,7 @@ function ExplorerSection({
   actionIcon,
   onAction,
   uploadAction,
+  emptyLabel = 'None yet',
   children,
 }: ExplorerSectionProps) {
   return (
@@ -286,7 +340,7 @@ function ExplorerSection({
         )}
       </div>
       <div className={styles.rows}>
-        {count === 0 ? <div className={styles.sectionEmpty}>None yet</div> : children}
+        {count === 0 ? <div className={styles.sectionEmpty}>{emptyLabel}</div> : children}
       </div>
     </section>
   )
@@ -335,6 +389,25 @@ function FileRows({
       meta={file.path}
       ariaLabel={`Open ${fileName(file.path)}`}
       onClick={() => onOpen(file.id)}
+    />
+  ))
+}
+
+function MediaRows({
+  assets,
+  onOpen,
+}: {
+  assets: CmsMediaAsset[]
+  onOpen: (asset: CmsMediaAsset) => void
+}) {
+  return assets.map((asset) => (
+    <ExplorerRow
+      key={asset.id}
+      icon={asset.mimeType.startsWith('video/') ? 'video' : 'image-2'}
+      label={asset.filename}
+      meta={asset.publicPath}
+      ariaLabel={`Open media ${asset.filename}`}
+      onClick={() => onOpen(asset)}
     />
   ))
 }

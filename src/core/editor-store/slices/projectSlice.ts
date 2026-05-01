@@ -50,7 +50,7 @@ export interface ProjectSlice {
   // Page mutations
   addPage: (title: string, slug?: string) => Page
   deletePage: (pageId: string) => void
-  renamePage: (pageId: string, title: string) => void
+  renamePage: (pageId: string, title: string, slug?: string) => void
   reorderPages: (fromIndex: number, toIndex: number) => void
 
   // Node mutations (operate on the active page)
@@ -337,8 +337,8 @@ export const createProjectSlice: StateCreator<EditorStore, [], [], ProjectSlice>
       }
     },
 
-    renamePage: (pageId, title) => {
-      mutateProject((p) => renamePage(p, pageId, title))
+    renamePage: (pageId, title, slug) => {
+      mutateProject((p) => renamePage(p, pageId, title, slug))
     },
 
     reorderPages: (fromIndex, toIndex) => {

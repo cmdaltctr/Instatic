@@ -476,6 +476,13 @@
   font-family: var(--font-mono, monospace);
 }
 
+.errorText {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--editor-danger);
+}
+
 .pageItemActions {
   display: flex;
   gap: 6px;

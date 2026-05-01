@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
-import { publishCmsDraft } from '@core/persistence'
+import { getCmsPublishStatus, publishCmsDraft } from '@core/persistence'
 import { Icon } from '../../../ui/icons/Icon'
 import { Button } from '@ui/components/Button'
 import styles from './Toolbar.module.css'
@@ -14,6 +14,7 @@ interface PublishButtonProps {
 
 export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
   const project = useEditorStore((s) => s.project)
+  const hasUnsavedChanges = useEditorStore((s) => s.hasUnsavedChanges)
   const [state, setState] = useState<PublishState>('idle')
   const [message, setMessage] = useState<string | null>(null)
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -24,10 +25,47 @@ export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
     }
   }, [])
 
-  const resetLater = useCallback(() => {
+  useEffect(() => {
+    if (!enabled || !project) return
+    let cancelled = false
+
+    async function loadPublishStatus() {
+      try {
+        const status = await getCmsPublishStatus()
+        if (cancelled) return
+        if (status.draftMatchesPublished) {
+          setState('published')
+          setMessage(null)
+        }
+      } catch (err) {
+        console.warn('[toolbar] Failed to load publish status:', err)
+      }
+    }
+
+    void loadPublishStatus()
+    return () => { cancelled = true }
+  }, [enabled, project?.id])
+
+  useEffect(() => {
+    if (!hasUnsavedChanges || state !== 'published') return
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    statusTimerRef.current = null
+    setState('idle')
+    setMessage(null)
+  }, [hasUnsavedChanges, state])
+
+  const resetErrorLater = useCallback(() => {
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
     statusTimerRef.current = setTimeout(() => {
       setState('idle')
+      setMessage(null)
+      statusTimerRef.current = null
+    }, 5000)
+  }, [])
+
+  const clearMessageLater = useCallback(() => {
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    statusTimerRef.current = setTimeout(() => {
       setMessage(null)
       statusTimerRef.current = null
     }, 5000)
@@ -53,13 +91,13 @@ export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
           ? '1 page published'
           : `${result.publishedPages} pages published`,
       )
-      resetLater()
+      clearMessageLater()
     } catch (err) {
       setState('error')
       setMessage(err instanceof Error ? err.message : 'Unknown publish error')
-      resetLater()
+      resetErrorLater()
     }
-  }, [enabled, onSave, project, resetLater, state])
+  }, [clearMessageLater, enabled, onSave, project, resetErrorLater, state])
 
   const isPublishing = state === 'publishing'
   const disabled = !project || !enabled || isPublishing

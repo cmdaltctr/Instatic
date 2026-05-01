@@ -2,8 +2,7 @@
 
 .select {
     position: relative;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    display: flex;
     align-items: center;
     width: 100%;
     box-sizing: border-box;

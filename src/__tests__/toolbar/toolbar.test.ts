@@ -151,6 +151,33 @@ describe('SaveIndicator — state display', () => {
     expect(src).toContain('role="status"')
     expect(src).toContain('aria-live="polite"')
   })
+
+  it('source emits role="alert" for save failures', () => {
+    const { readFileSync } = require('fs')
+    const src = readFileSync(
+      new URL('../../editor/components/Toolbar/SaveIndicator.tsx', import.meta.url),
+      'utf-8',
+    )
+    expect(src).toContain('role="alert"')
+  })
+
+  it('EditorLayout passes persistence save status into the toolbar', () => {
+    const { readFileSync } = require('fs')
+    const src = readFileSync(
+      new URL('../../app/EditorLayout.tsx', import.meta.url),
+      'utf-8',
+    )
+    expect(src).toContain('saveStatus={persistence.saveStatus}')
+  })
+
+  it('EditorLayout marks a fresh CMS project as unsaved until the first save', () => {
+    const { readFileSync } = require('fs')
+    const src = readFileSync(
+      new URL('../../app/EditorLayout.tsx', import.meta.url),
+      'utf-8',
+    )
+    expect(src).toContain('markNewProjectUnsaved: true')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -320,6 +347,26 @@ describe('PublishButton — publish state machine', () => {
     expect(publishPosition).toBeGreaterThan(savePosition)
   })
 
+  it('loads persisted publish status when the toolbar mounts', () => {
+    const { readFileSync } = require('fs')
+    const src = readFileSync(
+      new URL('../../editor/components/Toolbar/PublishButton.tsx', import.meta.url),
+      'utf-8',
+    )
+    expect(src).toContain('getCmsPublishStatus')
+    expect(src).toContain('draftMatchesPublished')
+  })
+
+  it('returns from Published to Publish when the draft has unsaved changes', () => {
+    const { readFileSync } = require('fs')
+    const src = readFileSync(
+      new URL('../../editor/components/Toolbar/PublishButton.tsx', import.meta.url),
+      'utf-8',
+    )
+    expect(src).toContain('hasUnsavedChanges')
+    expect(src).toContain("setState('idle')")
+  })
+
   it('does not import old static export pipelines', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
@@ -482,7 +529,7 @@ describe('Toolbar — structural requirements', () => {
       'utf-8',
     )
     expect(src).toContain("import { Toolbar }")
-    expect(src).toContain('const saveProject = usePersistence(')
+    expect(src).toContain('const persistence = usePersistence(')
     expect(src).toContain('requestedProjectId')
     expect(src).toContain('persistenceAdapter')
     expect(src).toContain('publishEnabled={persistenceMode === \'cms\'}')

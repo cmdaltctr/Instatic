@@ -15,6 +15,7 @@ import {
   renamePage,
   reorderPages,
 } from '../../core/page-tree/mutations'
+import { createUniquePageSlug } from '../../core/page-tree/slugs'
 import { makeProject, makePage } from '../fixtures'
 
 // ---------------------------------------------------------------------------
@@ -64,6 +65,16 @@ describe('addPage', () => {
     const project = makeProject({ pages: [makePage({ slug: 'existing' })] })
     addPage(project, 'New', 'new-page')
     expect(project.pages[project.pages.length - 1].slug).toBe('new-page')
+  })
+
+  it('generates slugs that avoid reserved public routes', () => {
+    const project = makeProject({ pages: [] })
+    expect(createUniquePageSlug('Admin', project.pages)).toBe('admin-page')
+  })
+
+  it('generates slugs that avoid existing page slugs', () => {
+    const project = makeProject({ pages: [makePage({ slug: 'about' })] })
+    expect(createUniquePageSlug('About', project.pages)).toBe('about-2')
   })
 
   it('is Immer-safe — produce() works with addPage', () => {

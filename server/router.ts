@@ -9,6 +9,7 @@ import { serveAdminApp, serveStaticFile } from './static'
 export interface ServerRuntime {
   db: DbClient
   staticDir?: string
+  uploadsDir?: string
 }
 
 function publicSlugFromPath(pathname: string): string {
@@ -27,7 +28,7 @@ export async function handleServerRequest(
   }
 
   if (url.pathname.startsWith('/api/cms/')) {
-    return handleCmsRequest(req, runtime.db)
+    return handleCmsRequest(req, runtime.db, { uploadsDir: runtime.uploadsDir })
   }
 
   if (url.pathname === '/api/agent') {
@@ -37,6 +38,11 @@ export async function handleServerRequest(
   if (runtime.staticDir && url.pathname.startsWith('/assets/')) {
     const asset = await serveStaticFile(runtime.staticDir, url.pathname)
     if (asset) return asset
+  }
+
+  if (runtime.uploadsDir && url.pathname.startsWith('/uploads/')) {
+    const upload = await serveStaticFile(runtime.uploadsDir, url.pathname.slice('/uploads'.length))
+    if (upload) return upload
   }
 
   if (

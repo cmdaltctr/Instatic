@@ -80,7 +80,7 @@
 }
 
 .row:hover {
-    background: var(--editor-surface-hover);
+    background: var(--editor-surface);
 }
 
 .row:focus-visible {
@@ -89,7 +89,7 @@
 }
 
 .rowActive {
-    background: var(--editor-surface-active);
+    background: var(--editor-surface);
     color: var(--editor-text);
 }
 

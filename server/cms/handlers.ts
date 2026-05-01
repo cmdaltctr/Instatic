@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import { nanoid } from 'nanoid'
 import type { DbClient } from './db'
 import {
@@ -18,7 +20,8 @@ import {
   getSetupStatus,
 } from './repositories'
 import { loadDraftProject, saveDraftProject } from './projectRepository'
-import { publishDraftProject } from './publishRepository'
+import { getDraftPublishStatus, publishDraftProject } from './publishRepository'
+import { createMediaAsset, listMediaAssets } from './mediaRepository'
 import type { AdminUserRow } from './types'
 import { validateProject, ValidationError } from '../../src/core/persistence/validate'
 import {
@@ -28,6 +31,12 @@ import {
   readJsonObject,
   setCookieHeader,
 } from '../http'
+
+interface CmsHandlerOptions {
+  uploadsDir?: string
+}
+
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024
 
 function readString(body: Record<string, unknown>, key: string): string {
   const value = body[key]
@@ -61,7 +70,27 @@ async function getAuthenticatedAdmin(
   return findAdminBySessionHash(db, idHash)
 }
 
-export async function handleCmsRequest(req: Request, db: DbClient): Promise<Response> {
+function isAcceptedMediaType(mimeType: string): boolean {
+  return /^image\/|^video\//.test(mimeType)
+}
+
+function safeStorageName(filename: string): string {
+  const normalized = filename.replace(/\\/g, '/')
+  const safe = basename(normalized).replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^_+/, '')
+  return safe || 'upload.bin'
+}
+
+async function readUploadedFile(req: Request): Promise<File | null> {
+  const body = await req.formData()
+  const file = body.get('file')
+  return file instanceof File ? file : null
+}
+
+export async function handleCmsRequest(
+  req: Request,
+  db: DbClient,
+  options: CmsHandlerOptions = {},
+): Promise<Response> {
   const url = new URL(req.url)
 
   if (url.pathname === '/api/cms/setup/status') {
@@ -158,12 +187,62 @@ export async function handleCmsRequest(req: Request, db: DbClient): Promise<Resp
     return methodNotAllowed()
   }
 
+  if (url.pathname === '/api/cms/media') {
+    const admin = await getAuthenticatedAdmin(req, db)
+    if (!admin) return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
+
+    if (req.method === 'GET') {
+      return jsonResponse({ assets: await listMediaAssets(db) })
+    }
+
+    if (req.method === 'POST') {
+      if (!options.uploadsDir) {
+        return jsonResponse({ error: 'Uploads directory is not configured' }, { status: 500 })
+      }
+
+      const file = await readUploadedFile(req)
+      if (!file) return badRequest('Missing file')
+      if (file.size <= 0) return badRequest('File is empty')
+      if (file.size > MAX_MEDIA_BYTES) return badRequest('File exceeds the 50 MB hard limit')
+
+      const mimeType = file.type || 'application/octet-stream'
+      if (!isAcceptedMediaType(mimeType)) {
+        return badRequest('Only image and video files can be uploaded')
+      }
+
+      const storagePath = `${nanoid()}-${safeStorageName(file.name)}`
+      const publicPath = `/uploads/${storagePath}`
+      await mkdir(options.uploadsDir, { recursive: true })
+      await writeFile(join(options.uploadsDir, storagePath), new Uint8Array(await file.arrayBuffer()))
+
+      const asset = await createMediaAsset(db, {
+        id: nanoid(),
+        filename: file.name || storagePath,
+        mimeType,
+        sizeBytes: file.size,
+        storagePath,
+        publicPath,
+      })
+      return jsonResponse({ asset }, { status: 201 })
+    }
+
+    return methodNotAllowed()
+  }
+
   if (url.pathname === '/api/cms/publish') {
     const admin = await getAuthenticatedAdmin(req, db)
     if (!admin) return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
     if (req.method !== 'POST') return methodNotAllowed()
 
     return jsonResponse(await publishDraftProject(db, admin.id))
+  }
+
+  if (url.pathname === '/api/cms/publish/status') {
+    const admin = await getAuthenticatedAdmin(req, db)
+    if (!admin) return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
+    if (req.method !== 'GET') return methodNotAllowed()
+
+    return jsonResponse(await getDraftPublishStatus(db))
   }
 
   return jsonResponse({ error: 'Not found' }, { status: 404 })

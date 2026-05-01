@@ -31,7 +31,7 @@
  *   a brand-new object on every evaluation, causing the listener to fire on
  *   every store mutation and leaking unbounded setTimeout instances.
  */
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
 import type { IPersistenceAdapter } from '@core/persistence/types'
 import { localAdapter } from '@core/persistence/local'
@@ -46,12 +46,29 @@ const LAST_PROJECT_KEY = 'pb-last-project-id'
 /** Auto-save debounce interval in milliseconds */
 const AUTO_SAVE_DELAY_MS = 30_000
 
+export interface PersistenceSaveStatus {
+  state: 'loading' | 'saved' | 'unsaved' | 'saving' | 'error'
+  message?: string
+  lastSavedAt?: number
+}
+
+export interface PersistenceController {
+  saveProject: () => Promise<void>
+  saveStatus: PersistenceSaveStatus
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message.trim() ? err.message : fallback
+}
+
 export function usePersistence(
   requestedProjectId: string | undefined,
   adapter: IPersistenceAdapter = localAdapter,
-  options: { rememberLastProject?: boolean } = {},
-) {
+  options: { rememberLastProject?: boolean; markNewProjectUnsaved?: boolean } = {},
+): PersistenceController {
   const rememberLastProject = options.rememberLastProject ?? true
+  const markNewProjectUnsaved = options.markNewProjectUnsaved ?? false
+  const [saveStatus, setSaveStatus] = useState<PersistenceSaveStatus>({ state: 'loading' })
   /** Whether the initial load has completed — prevents auto-save before load */
   const loadedRef = useRef(false)
   /** Stable reference to the adapter so it doesn't trigger re-renders */
@@ -64,9 +81,16 @@ export function usePersistence(
     const { project, setHasUnsavedChanges } = useEditorStore.getState()
     if (!project) return
 
-    await adapterRef.current.saveProject(project)
-    if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, project.id)
-    setHasUnsavedChanges(false)
+    setSaveStatus({ state: 'saving', message: 'Saving draft' })
+    try {
+      await adapterRef.current.saveProject(project)
+      if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, project.id)
+      setHasUnsavedChanges(false)
+      setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
+    } catch (err) {
+      setSaveStatus({ state: 'error', message: errorMessage(err, 'Save failed') })
+      throw err
+    }
   }, [rememberLastProject])
 
   // ─── 1. Load project on mount ──────────────────────────────────────────────
@@ -92,6 +116,7 @@ export function usePersistence(
             loadProject(validated)
             if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, validated.id)
             loadedRef.current = true
+            setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
             return
           }
         } catch (err) {
@@ -108,12 +133,18 @@ export function usePersistence(
         const newProject = createProject('My Project')
         if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, newProject.id)
         loadedRef.current = true
+        if (markNewProjectUnsaved) {
+          useEditorStore.getState().setHasUnsavedChanges(true)
+          setSaveStatus({ state: 'unsaved', message: 'Draft not saved yet' })
+        } else {
+          setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
+        }
       }
     }
 
     load()
     return () => { cancelled = true }
-  }, [rememberLastProject, requestedProjectId])
+  }, [markNewProjectUnsaved, rememberLastProject, requestedProjectId])
 
   // ─── 2. Auto-save (debounced) ──────────────────────────────────────────────
   useEffect(() => {
@@ -141,8 +172,12 @@ export function usePersistence(
       (dirty) => {
         if (!dirty) {
           clearTimeout(timer)
+          setSaveStatus((status) =>
+            status.state === 'saving' ? status : { state: 'saved', lastSavedAt: status.lastSavedAt }
+          )
           return
         }
+        setSaveStatus({ state: 'unsaved', message: 'Unsaved changes' })
         scheduleAutoSave()
       },
     )
@@ -186,5 +221,5 @@ export function usePersistence(
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [saveCurrentProject])
 
-  return saveCurrentProject
+  return { saveProject: saveCurrentProject, saveStatus }
 }

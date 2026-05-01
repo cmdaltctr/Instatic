@@ -28,4 +28,10 @@ describe('admin CMS route wiring', () => {
     expect(admin).toContain('loginCms')
     expect(admin).toContain('persistenceMode="cms"')
   })
+
+  it('uses a submit button for setup and login forms', () => {
+    const admin = readFileSync(join(root, 'src/app/AdminEntry.tsx'), 'utf8')
+
+    expect(admin).toContain('type="submit"')
+  })
 })

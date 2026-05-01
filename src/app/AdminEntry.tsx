@@ -159,6 +159,7 @@ export default function AdminEntry() {
           <Button
             variant="primary"
             size="lg"
+            type="submit"
             fullWidth
             disabled={submitting}
             aria-busy={submitting}

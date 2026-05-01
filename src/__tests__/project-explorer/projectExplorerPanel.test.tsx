@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { readFileSync } from 'fs'
 import { ProjectExplorerPanel } from '../../editor/components/ProjectExplorerPanel'
+import { CodeEditorPanel } from '../../editor/components/CodeEditor'
 import { useEditorStore } from '../../core/editor-store/store'
 import { makeNode, makePage, makeProject } from '../fixtures'
 import type { VisualComponent } from '../../core/visualComponents/types'
@@ -21,6 +22,7 @@ function resetStore() {
     projectExplorerPanelOpen: false,
     codeEditorPanelOpen: false,
     activeEditorFileId: null,
+    activeMediaAssetPreview: null,
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,
@@ -138,6 +140,65 @@ describe('ProjectExplorerPanel', () => {
 
     expect(within(panel).queryByText('src/pages/Index.tsx')).toBeNull()
     expect(within(panel).queryByText('src/components/HeroCard.tsx')).toBeNull()
+  })
+
+  it('Project Explorer can be wired to CMS media instead of base64 project files', () => {
+    const source = readFileSync(
+      new URL('../../editor/components/ProjectExplorerPanel/ProjectExplorerPanel.tsx', import.meta.url),
+      'utf-8',
+    )
+
+    expect(source).toContain('mediaMode')
+    expect(source).toContain('listCmsMediaAssets')
+    expect(source).toContain('uploadCmsMediaAsset')
+  })
+
+  it('opens CMS media assets in the editor preview instead of navigating away', async () => {
+    loadProject()
+    const originalFetch = globalThis.fetch
+    const originalOpen = window.open
+    const openCalls: unknown[] = []
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({
+        assets: [{
+          id: 'media-1',
+          filename: 'hero.png',
+          mimeType: 'image/png',
+          sizeBytes: 12,
+          publicPath: '/uploads/hero.png',
+          createdAt: '2026-01-03T00:00:00.000Z',
+        }],
+      }), { status: 200 })) as typeof fetch
+    window.open = ((...args: unknown[]) => {
+      openCalls.push(args)
+      return null
+    }) as typeof window.open
+
+    try {
+      render(
+        <>
+          <ProjectExplorerPanel variant="docked" mediaMode="cms" />
+          <CodeEditorPanel />
+        </>,
+      )
+
+      const mediaRow = await screen.findByRole('button', { name: /open media hero\.png/i })
+      fireEvent.click(mediaRow)
+
+      await waitFor(() => {
+        const state = useEditorStore.getState() as ReturnType<typeof useEditorStore.getState> & {
+          activeMediaAssetPreview?: { publicPath: string } | null
+        }
+        expect(state.codeEditorPanelOpen).toBe(true)
+        expect(state.activeEditorFileId).toBeNull()
+        expect(state.activeMediaAssetPreview?.publicPath).toBe('/uploads/hero.png')
+      })
+      expect(openCalls).toHaveLength(0)
+      expect(screen.getByLabelText('Image preview: hero.png')).toBeDefined()
+    } finally {
+      globalThis.fetch = originalFetch
+      window.open = originalOpen
+    }
   })
 
   it('opens pages and components on the canvas from concept rows', () => {

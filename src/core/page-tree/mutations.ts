@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import type { Page, PageNode, Project } from './types'
 import { getParent, isAncestor } from './selectors'
+import { normalizePageSlug } from './slugs'
 
 /**
  * Pure Immer-compatible mutation helpers for the page tree.
@@ -284,7 +285,7 @@ export function addPage(project: Project, title: string, slug: string): Page {
   const page: Page = {
     id: nanoid(),
     title,
-    slug: slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+    slug: normalizePageSlug(slug),
     rootNodeId: rootNode.id,
     nodes: { [rootNode.id]: rootNode },
   }
@@ -299,10 +300,11 @@ export function deletePage(project: Project, pageId: string): void {
   project.pages = project.pages.filter((p) => p.id !== pageId)
 }
 
-export function renamePage(project: Project, pageId: string, title: string): void {
+export function renamePage(project: Project, pageId: string, title: string, slug?: string): void {
   const page = project.pages.find((p) => p.id === pageId)
   if (!page) throw new Error(`[PageTree] Page "${pageId}" not found`)
   page.title = title
+  if (slug !== undefined) page.slug = normalizePageSlug(slug)
 }
 
 export function reorderPages(project: Project, fromIndex: number, toIndex: number): void {

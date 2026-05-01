@@ -172,6 +172,61 @@ describe('sanitizeRichtext() with PLAIN_TEXT_CONFIG', () => {
   })
 })
 
+describe('sanitizeRichtext() in server runtime', () => {
+  it('imports without DOM globals and removes executable content', () => {
+    const result = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        '-e',
+        `
+          const { sanitizeRichtext } = await import('./src/core/sanitize.ts')
+          const sanitized = sanitizeRichtext('<script>alert(1)</script><p>Safe</p>')
+          if (sanitized.includes('<script') || sanitized.includes('alert(1)')) {
+            throw new Error('unsafe fallback: ' + sanitized)
+          }
+          if (!sanitized.includes('Safe')) {
+            throw new Error('lost safe text: ' + sanitized)
+          }
+        `,
+      ],
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+
+    if (result.exitCode !== 0) {
+      const stderr = new TextDecoder().decode(result.stderr)
+      throw new Error(stderr)
+    }
+  })
+
+  it('preserves safe richtext when the server DOM environment is installed', () => {
+    const result = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        '-e',
+        `
+          await import('./server/domEnvironment.ts')
+          const { sanitizeRichtext } = await import('./src/core/sanitize.ts')
+          const sanitized = sanitizeRichtext('<p><strong>Safe</strong> <a href="https://example.com">Link</a></p>')
+          if (!sanitized.includes('<strong>Safe</strong>')) {
+            throw new Error('lost richtext formatting: ' + sanitized)
+          }
+          if (!sanitized.includes('rel="noopener noreferrer"')) {
+            throw new Error('lost safe link attributes: ' + sanitized)
+          }
+        `,
+      ],
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+
+    if (result.exitCode !== 0) {
+      const stderr = new TextDecoder().decode(result.stderr)
+      throw new Error(stderr)
+    }
+  })
+})
+
 // ---------------------------------------------------------------------------
 // isRichtextPropKey — prop key detection
 // ---------------------------------------------------------------------------

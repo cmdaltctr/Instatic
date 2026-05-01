@@ -26,6 +26,14 @@ export interface PanelState {
   width: number
 }
 
+export interface MediaAssetPreview {
+  id: string
+  filename: string
+  mimeType: string
+  sizeBytes: number
+  publicPath: string
+}
+
 export interface UiSlice {
   // Panel visibility / layout
   domTreePanel: PanelState
@@ -57,6 +65,7 @@ export interface UiSlice {
 
   // CodeEditor (Task #432) — ID of the file currently open in the code editor
   activeEditorFileId: string | null
+  activeMediaAssetPreview: MediaAssetPreview | null
 
   // Actions
   setDomTreePanel: (state: Partial<PanelState>) => void
@@ -89,6 +98,8 @@ export interface UiSlice {
 
   /** Open a ProjectFile in the CodeEditor panel. Sets activeEditorFileId and auto-shows the panel. */
   openInEditor: (fileId: string) => void
+  /** Open a CMS media asset in the same draggable CodeEditor preview panel. */
+  openMediaAssetPreview: (asset: MediaAssetPreview) => void
   /** Clear activeEditorFileId and hide the panel (e.g. when the file is deleted or editor closed). */
   closeEditor: () => void
 
@@ -152,6 +163,7 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
   dependenciesPanelOpen: false,
   codeEditorPanelOpen: false,
   activeEditorFileId: null,
+  activeMediaAssetPreview: null,
   activeDocument: null,
 
   setDomTreePanel: (partial) => {
@@ -258,11 +270,14 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
 
   openInEditor: (fileId) =>
     // Auto-show the panel whenever a file is opened (avoids a two-click UX).
-    set({ activeEditorFileId: fileId, codeEditorPanelOpen: true }),
+    set({ activeEditorFileId: fileId, activeMediaAssetPreview: null, codeEditorPanelOpen: true }),
+
+  openMediaAssetPreview: (asset) =>
+    set({ activeEditorFileId: null, activeMediaAssetPreview: asset, codeEditorPanelOpen: true }),
 
   closeEditor: () =>
     // Closing the editor hides the panel and clears the active file.
-    set({ activeEditorFileId: null, codeEditorPanelOpen: false }),
+    set({ activeEditorFileId: null, activeMediaAssetPreview: null, codeEditorPanelOpen: false }),
 
   setActiveDocument: (doc) => set({ activeDocument: doc }),
 

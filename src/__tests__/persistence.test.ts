@@ -157,6 +157,36 @@ describe('validateProject — rejects invalid data', () => {
     }
   })
 
+  it('throws for invalid public page slugs', () => {
+    const p = validProject()
+    p.pages[0].slug = 'About Us'
+
+    expect(() => validateProject(p)).toThrow(ValidationError)
+    try { validateProject(p) } catch (e) {
+      expect((e as ValidationError).path).toBe('project.pages[0].slug')
+    }
+  })
+
+  it('throws for reserved public page slugs', () => {
+    const p = validProject()
+    p.pages[0].slug = 'admin'
+
+    expect(() => validateProject(p)).toThrow(ValidationError)
+    try { validateProject(p) } catch (e) {
+      expect((e as ValidationError).message).toContain('reserved')
+    }
+  })
+
+  it('throws for duplicate public page slugs', () => {
+    const p = validProject()
+    p.pages.push({ ...structuredClone(p.pages[0]), id: 'page-2', title: 'Duplicate Home' })
+
+    expect(() => validateProject(p)).toThrow(ValidationError)
+    try { validateProject(p) } catch (e) {
+      expect((e as ValidationError).message).toContain('duplicate slug')
+    }
+  })
+
   it('throws for non-array node.children', () => {
     const p = validProject()
     ;(p.pages[0].nodes.root as Record<string, unknown>).children = 'bad'

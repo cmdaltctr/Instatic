@@ -45,3 +45,10 @@ export {
   renamePage,
   reorderPages,
 } from './mutations'
+
+export {
+  normalizePageSlug,
+  pageSlugError,
+  pageSlugDuplicateError,
+  createUniquePageSlug,
+} from './slugs'

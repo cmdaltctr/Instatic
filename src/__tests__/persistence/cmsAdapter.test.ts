@@ -83,4 +83,11 @@ describe('CmsAdapter', () => {
 
     await expect(adapter.loadProject('default')).resolves.toBeUndefined()
   })
+
+  it('surfaces CMS save error messages from the API response body', async () => {
+    const adapter = new CmsAdapter(async () =>
+      new Response(JSON.stringify({ error: 'Duplicate page slug "/about"' }), { status: 400 }))
+
+    await expect(adapter.saveProject(project())).rejects.toThrow('Duplicate page slug "/about"')
+  })
 })

@@ -29,7 +29,7 @@ import { Suspense, lazy, memo, useEffect, useRef } from 'react'
 import { useEditorStore } from '../../../core/editor-store/store'
 import { PanelHeader } from '../shared/PanelHeader'
 import { useDraggablePanel } from '../../hooks/useDraggablePanel'
-import { ImagePreview } from './ImagePreview'
+import { ImagePreview, RemoteAssetPreview } from './ImagePreview'
 import { cn } from '@ui/cn'
 import styles from './CodeEditorPanel.module.css'
 
@@ -54,6 +54,7 @@ export const CodeEditorPanel = memo(function CodeEditorPanel() {
   // ── Store subscriptions ──────────────────────────────────────────────────
   const activeEditorFileId = useEditorStore((s) => s.activeEditorFileId)
   const codeEditorPanelOpen = useEditorStore((s) => s.codeEditorPanelOpen)
+  const activeMediaAssetPreview = useEditorStore((s) => s.activeMediaAssetPreview)
   const project = useEditorStore((s) => s.project)
   const closeEditor = useEditorStore((s) => s.closeEditor)
   const updateFileContent = useEditorStore((s) => s.updateFileContent)
@@ -109,7 +110,8 @@ export const CodeEditorPanel = memo(function CodeEditorPanel() {
   // Panel title: show filename when a file is active
   const panelTitle = activeFile
     ? (activeFile.path.split('/').pop() ?? 'Code Editor')
-    : 'Code Editor'
+    : (activeMediaAssetPreview?.filename ?? 'Code Editor')
+  const hasActivePreview = Boolean(activeFile || activeMediaAssetPreview)
 
   return (
     <aside
@@ -121,7 +123,7 @@ export const CodeEditorPanel = memo(function CodeEditorPanel() {
       onClick={(e) => e.stopPropagation()}
       // panelPositionStyle injects --panel-x / --panel-y CSS vars (whitelisted)
       style={panelPositionStyle}
-      className={cn(styles.panel, (!activeEditorFileId || !codeEditorPanelOpen) && styles.panelHidden)}
+      className={cn(styles.panel, (!hasActivePreview || !codeEditorPanelOpen) && styles.panelHidden)}
     >
       <div className={styles.inner}>
         {/* ── Shared Panel Header ──────────────────────────────────────────── */}
@@ -134,7 +136,10 @@ export const CodeEditorPanel = memo(function CodeEditorPanel() {
 
         {/* ── Editor body ─────────────────────────────────────────────────── */}
         <div className={styles.editorBody}>
-          {!activeFile ? (
+          {activeMediaAssetPreview ? (
+            <RemoteAssetPreview asset={activeMediaAssetPreview} />
+
+          ) : !activeFile ? (
             /* No file selected — show empty state */
             <div className={styles.emptyState}>
               <p>Select a file to edit</p>

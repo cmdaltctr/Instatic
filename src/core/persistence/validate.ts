@@ -22,6 +22,7 @@ import { isSafePath, normalizePath } from '../files/pathValidation'
 import { validateComponentName } from '../visualComponents/nameValidation'
 import { sanitizeRichtext, isRichtextPropKey } from '../sanitize'
 import { normalizeProjectPackageJson } from '../project-dependencies/manifest'
+import { pageSlugDuplicateError, pageSlugError } from '../page-tree/slugs'
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -406,6 +407,16 @@ export function validateProject(raw: unknown): Project {
   // Must have at least one page
   if (pages.length === 0) {
     throw new ValidationError('project must have at least one page', 'project.pages')
+  }
+
+  for (let i = 0; i < pages.length; i++) {
+    const slugError = pageSlugError(pages[i].slug)
+    if (slugError) throw new ValidationError(slugError, `project.pages[${i}].slug`)
+
+    const duplicateError = pageSlugDuplicateError(pages[i].slug, pages, pages[i].id)
+    if (duplicateError) {
+      throw new ValidationError(`duplicate slug: ${duplicateError}`, `project.pages[${i}].slug`)
+    }
   }
 
   // Validate projectMode — coerce any legacy projects that lack this field to 'html'.

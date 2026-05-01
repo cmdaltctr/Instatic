@@ -9,6 +9,10 @@ import { ProjectExplorerPanel } from '../ProjectExplorerPanel'
 import { SidebarResizeHandle } from '../shared/SidebarResizeHandle'
 import styles from './LeftSidebar.module.css'
 
+interface LeftSidebarProps {
+  mediaMode?: 'project' | 'cms'
+}
+
 function selectActiveLeftSidebarPanel(state: ReturnType<typeof useEditorStore.getState>): LeftSidebarPanelId | null {
   if (state.projectExplorerPanelOpen) return 'project'
   if (state.dependenciesPanelOpen) return 'dependencies'
@@ -17,7 +21,7 @@ function selectActiveLeftSidebarPanel(state: ReturnType<typeof useEditorStore.ge
   return null
 }
 
-export function LeftSidebar() {
+export function LeftSidebar({ mediaMode = 'project' }: LeftSidebarProps) {
   const sidebarRef = useRef<HTMLElement | null>(null)
   const activePanel = useEditorStore(selectActiveLeftSidebarPanel)
   const leftSidebarWidth = useEditorStore((s) => s.leftSidebarWidth)
@@ -48,7 +52,7 @@ export function LeftSidebar() {
           <DomPanel variant="docked" />
         </div>
         <div className={styles.panelMount} hidden={activePanel !== 'project'}>
-          <ProjectExplorerPanel variant="docked" />
+          <ProjectExplorerPanel variant="docked" mediaMode={mediaMode} />
         </div>
         <div className={styles.panelMount} hidden={activePanel !== 'dependencies'}>
           <DependenciesPanel variant="docked" />

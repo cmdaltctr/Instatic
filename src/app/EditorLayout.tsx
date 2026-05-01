@@ -49,11 +49,11 @@ export default function EditorLayout({ persistenceMode = 'local' }: EditorLayout
   const persistenceAdapter = persistenceMode === 'cms' ? cmsAdapter : localAdapter
   const requestedProjectId = persistenceMode === 'cms' ? 'default' : projectId
   const persistenceOptions = persistenceMode === 'cms'
-    ? { rememberLastProject: false }
+    ? { rememberLastProject: false, markNewProjectUnsaved: true }
     : undefined
 
   // J12 — wire persistence: load, auto-save, toolbar Save, Cmd+S.
-  const saveProject = usePersistence(
+  const persistence = usePersistence(
     requestedProjectId,
     persistenceAdapter,
     persistenceOptions,
@@ -63,7 +63,11 @@ export default function EditorLayout({ persistenceMode = 'local' }: EditorLayout
   return (
     <div className={styles.shell}>
       {/* ── Top toolbar (z-60, Guideline #374) ───────────────────────────── */}
-      <Toolbar onSave={saveProject} publishEnabled={persistenceMode === 'cms'} />
+      <Toolbar
+        onSave={persistence.saveProject}
+        saveStatus={persistence.saveStatus}
+        publishEnabled={persistenceMode === 'cms'}
+      />
 
       {/* ── Canvas + floating overlay panels ──────────────────────────────── */}
       {/*
@@ -72,7 +76,7 @@ export default function EditorLayout({ persistenceMode = 'local' }: EditorLayout
         flex is kept so CanvasRoot's flex:1 fills the full width.
       */}
       <div className={styles.editorBody}>
-        <LeftSidebar />
+        <LeftSidebar mediaMode={persistenceMode === 'cms' ? 'cms' : 'project'} />
         <div
           className={'relative ' + styles.canvasStage + (rightSidebarExpanded ? ` ${styles.canvasStageRightSidebarOpen}` : '')}
           data-right-sidebar-expanded={rightSidebarExpanded ? 'true' : 'false'}

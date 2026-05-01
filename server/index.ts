@@ -1,7 +1,9 @@
 import { createPgPool } from './cms/db'
 import { runMigrations } from './cms/migrations'
 import { readServerConfig } from './config'
-import { handleServerRequest } from './router'
+
+await import('./domEnvironment')
+const { handleServerRequest } = await import('./router')
 
 const config = readServerConfig()
 const db = createPgPool(config.databaseUrl)
@@ -36,7 +38,11 @@ Bun.serve({
     }
 
     try {
-      const res = await handleServerRequest(req, { db, staticDir: config.staticDir })
+      const res = await handleServerRequest(req, {
+        db,
+        staticDir: config.staticDir,
+        uploadsDir: config.uploadsDir,
+      })
       for (const [k, v] of Object.entries(cors)) {
         res.headers.set(k, v)
       }
