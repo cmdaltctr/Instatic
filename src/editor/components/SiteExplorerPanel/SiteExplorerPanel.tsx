@@ -1,0 +1,483 @@
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { useEditorStore } from '@core/editor-store/store'
+import type { SiteFile } from '@core/files/types'
+import { PanelHeader } from '../shared/PanelHeader'
+import { Button } from '@ui/components/Button'
+import type { IconComponent } from '@ui/icons/types'
+import { FilePlusIcon } from '@ui/icons/icons/file-plus'
+import { FileTextIcon } from '@ui/icons/icons/file-text'
+import { BracesIcon } from '@ui/icons/icons/braces'
+import { PaintBucketIcon } from '@ui/icons/icons/paint-bucket'
+import { CodeIcon } from '@ui/icons/icons/code'
+import { cn } from '@ui/cn'
+import {
+  SiteCreateDialog,
+  buildScriptPath,
+  buildStylePath,
+  slugifySiteItemName,
+  toPascalCaseSiteItemName,
+  type SiteCreatePayload,
+  type SiteCreateKind,
+} from '../SiteCreateDialog'
+import { ExplorerItemContextMenu, ExplorerRenameDialog, type ExplorerRenamePayload } from '../ExplorerPanelActions'
+import styles from './SiteExplorerPanel.module.css'
+
+interface SiteExplorerPanelProps {
+  variant?: 'docked'
+}
+
+type FileBucket = 'styles' | 'scripts'
+
+type SiteExplorerContextTarget =
+  | { kind: 'page'; id: string; title: string; slug: string }
+  | { kind: 'component'; id: string; name: string }
+  | { kind: 'file'; id: string; path: string }
+
+interface ContextMenuState {
+  x: number
+  y: number
+  target: SiteExplorerContextTarget
+}
+
+const EMPTY_FILES: SiteFile[] = []
+
+function fileName(path: string) {
+  return path.split('/').pop() ?? path
+}
+
+function fileExtension(path: string) {
+  const name = fileName(path)
+  const index = name.lastIndexOf('.')
+  return index >= 0 ? name.slice(index) : ''
+}
+
+function pathFromRenameInput(currentPath: string, value: string) {
+  const trimmed = value.trim()
+  if (trimmed.includes('/')) return trimmed
+
+  const slash = currentPath.lastIndexOf('/')
+  const directory = slash >= 0 ? currentPath.slice(0, slash + 1) : ''
+  const extension = fileExtension(currentPath)
+  const nextName = extension && !trimmed.endsWith(extension) ? `${trimmed}${extension}` : trimmed
+  return `${directory}${nextName}`
+}
+
+function keyboardMenuPosition(element: HTMLElement) {
+  const rect = element.getBoundingClientRect()
+  return {
+    x: rect.left + Math.min(rect.width - 8, 24),
+    y: rect.top + Math.min(rect.height - 8, 24),
+  }
+}
+
+function groupSiteFiles(files: SiteFile[]) {
+  const visible = files.filter((file) => !file.generated || file.ejected)
+  return {
+    styles: visible.filter((file) => file.type === 'style'),
+    scripts: visible.filter((file) => file.type === 'script'),
+  } satisfies Record<FileBucket, SiteFile[]>
+}
+
+export function SiteExplorerPanel({
+  variant = 'docked',
+}: SiteExplorerPanelProps) {
+  const isOpen = useEditorStore((s) => s.siteExplorerPanelOpen)
+  const site = useEditorStore((s) => s.site)
+  const activePageId = useEditorStore((s) => s.activePageId)
+  const activeDocument = useEditorStore((s) => s.activeDocument)
+  const setSiteExplorerPanelOpen = useEditorStore((s) => s.setSiteExplorerPanelOpen)
+  const openPageInCanvas = useEditorStore((s) => s.openPageInCanvas)
+  const setActiveDocument = useEditorStore((s) => s.setActiveDocument)
+  const addPage = useEditorStore((s) => s.addPage)
+  const renamePage = useEditorStore((s) => s.renamePage)
+  const deletePage = useEditorStore((s) => s.deletePage)
+  const createVisualComponent = useEditorStore((s) => s.createVisualComponent)
+  const renameVisualComponent = useEditorStore((s) => s.renameVisualComponent)
+  const deleteVisualComponent = useEditorStore((s) => s.deleteVisualComponent)
+  const createFile = useEditorStore((s) => s.createFile)
+  const renameFile = useEditorStore((s) => s.renameFile)
+  const deleteFile = useEditorStore((s) => s.deleteFile)
+  const openInEditor = useEditorStore((s) => s.openInEditor)
+  const [createKind, setCreateKind] = useState<SiteCreateKind | null>(null)
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [renameTarget, setRenameTarget] = useState<SiteExplorerContextTarget | null>(null)
+  const panelRef = useRef<HTMLElement>(null)
+
+  const files = site?.files ?? EMPTY_FILES
+  const fileBuckets = useMemo(() => groupSiteFiles(files), [files])
+
+  useEffect(() => {
+    if (isOpen) {
+      requestAnimationFrame(() => panelRef.current?.focus())
+    }
+  }, [isOpen])
+
+  if (!isOpen || variant !== 'docked') return null
+
+  function handleCreate({ name, slug }: SiteCreatePayload) {
+    if (!createKind) return
+
+    try {
+      if (createKind === 'page') {
+        const page = addPage(name, slug ?? slugifySiteItemName(name))
+        openPageInCanvas(page.id)
+      } else if (createKind === 'component') {
+        const vcId = createVisualComponent(toPascalCaseSiteItemName(name))
+        setActiveDocument({ kind: 'visualComponent', vcId })
+      } else if (createKind === 'style') {
+        const fileId = createFile(buildStylePath(name), 'style', '')
+        openInEditor(fileId)
+      } else {
+        const fileId = createFile(buildScriptPath(name), 'script', '')
+        openInEditor(fileId)
+      }
+      setCreateKind(null)
+    } catch (err) {
+      console.error('[SiteExplorerPanel] create site item error:', err)
+    }
+  }
+
+  const pages = site?.pages ?? []
+  const components = site?.visualComponents ?? []
+
+  function openContextMenu(target: SiteExplorerContextTarget, event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu({ x: event.clientX, y: event.clientY, target })
+  }
+
+  function openKeyboardContextMenu(target: SiteExplorerContextTarget, event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu({ ...keyboardMenuPosition(event.currentTarget), target })
+  }
+
+  function handleRename(payload: ExplorerRenamePayload) {
+    if (!renameTarget) return
+
+    if (renameTarget.kind === 'page') {
+      renamePage(renameTarget.id, payload.value, payload.slug)
+    } else if (renameTarget.kind === 'component') {
+      renameVisualComponent(renameTarget.id, toPascalCaseSiteItemName(payload.value))
+    } else {
+      renameFile(renameTarget.id, pathFromRenameInput(renameTarget.path, payload.value))
+    }
+
+    setRenameTarget(null)
+  }
+
+  function handleDelete(target: SiteExplorerContextTarget) {
+    if (target.kind === 'page') {
+      deletePage(target.id)
+    } else if (target.kind === 'component') {
+      deleteVisualComponent(target.id)
+      if (activeDocument?.kind === 'visualComponent' && activeDocument.vcId === target.id) {
+        setActiveDocument(null)
+      }
+    } else {
+      deleteFile(target.id)
+    }
+    setContextMenu(null)
+  }
+
+  return (
+    <>
+      <aside
+        ref={panelRef}
+        role="complementary"
+        aria-label="Site Explorer"
+        data-panel=""
+        data-testid="site-explorer-panel"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        className={styles.panel}
+      >
+        <PanelHeader
+          panelId="site-explorer"
+          title="Site"
+          onClose={() => setSiteExplorerPanelOpen(false)}
+        />
+
+        <div className={styles.content}>
+          {!site ? (
+            <div className={styles.emptyState}>Loading site...</div>
+          ) : (
+            <>
+              <ExplorerSection
+                title="Pages"
+                count={pages.length}
+                actionLabel="New page"
+                actionIcon={FilePlusIcon}
+                onAction={() => setCreateKind('page')}
+              >
+                {pages.map((page) => (
+                  <ExplorerRow
+                    key={page.id}
+                    icon={FileTextIcon}
+                    label={page.title}
+                    meta={page.slug === 'index' ? '/' : `/${page.slug}`}
+                    active={page.id === activePageId && activeDocument?.kind !== 'visualComponent'}
+                    ariaLabel={`Open page ${page.title}`}
+                    onClick={() => openPageInCanvas(page.id)}
+                    onContextMenu={(event) => openContextMenu({
+                      kind: 'page',
+                      id: page.id,
+                      title: page.title,
+                      slug: page.slug,
+                    }, event)}
+                    onKeyDown={(event) => openKeyboardContextMenu({
+                      kind: 'page',
+                      id: page.id,
+                      title: page.title,
+                      slug: page.slug,
+                    }, event)}
+                  />
+                ))}
+              </ExplorerSection>
+
+              <ExplorerSection
+                title="Components"
+                count={components.length}
+                actionLabel="New component"
+                actionIcon={BracesIcon}
+                onAction={() => setCreateKind('component')}
+              >
+                {components.map((component) => (
+                  <ExplorerRow
+                    key={component.id}
+                    icon={BracesIcon}
+                    label={component.name}
+                    meta={`${component.params.length} props`}
+                    active={activeDocument?.kind === 'visualComponent' && activeDocument.vcId === component.id}
+                    ariaLabel={`Open component ${component.name}`}
+                    onClick={() => setActiveDocument({ kind: 'visualComponent', vcId: component.id })}
+                    onContextMenu={(event) => openContextMenu({
+                      kind: 'component',
+                      id: component.id,
+                      name: component.name,
+                    }, event)}
+                    onKeyDown={(event) => openKeyboardContextMenu({
+                      kind: 'component',
+                      id: component.id,
+                      name: component.name,
+                    }, event)}
+                  />
+                ))}
+              </ExplorerSection>
+
+              <ExplorerSection
+                title="Styles"
+                count={fileBuckets.styles.length}
+                actionLabel="New stylesheet"
+                actionIcon={PaintBucketIcon}
+                onAction={() => setCreateKind('style')}
+              >
+                <FileRows
+                  files={fileBuckets.styles}
+                  icon={PaintBucketIcon}
+                  onOpen={openInEditor}
+                  onContextMenu={(file, event) => openContextMenu({
+                    kind: 'file',
+                    id: file.id,
+                    path: file.path,
+                  }, event)}
+                  onKeyDown={(file, event) => openKeyboardContextMenu({
+                    kind: 'file',
+                    id: file.id,
+                    path: file.path,
+                  }, event)}
+                />
+              </ExplorerSection>
+
+              <ExplorerSection
+                title="Scripts"
+                count={fileBuckets.scripts.length}
+                actionLabel="New script"
+                actionIcon={CodeIcon}
+                onAction={() => setCreateKind('script')}
+              >
+                <FileRows
+                  files={fileBuckets.scripts}
+                  icon={CodeIcon}
+                  onOpen={openInEditor}
+                  onContextMenu={(file, event) => openContextMenu({
+                    kind: 'file',
+                    id: file.id,
+                    path: file.path,
+                  }, event)}
+                  onKeyDown={(file, event) => openKeyboardContextMenu({
+                    kind: 'file',
+                    id: file.id,
+                    path: file.path,
+                  }, event)}
+                />
+              </ExplorerSection>
+            </>
+          )}
+        </div>
+      </aside>
+
+      {createKind && (
+        <SiteCreateDialog
+          kind={createKind}
+          pages={pages}
+          onCancel={() => setCreateKind(null)}
+          onCreate={handleCreate}
+        />
+      )}
+
+      {contextMenu && (
+        <ExplorerItemContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          ariaLabel="Site item options"
+          deleteDisabled={contextMenu.target.kind === 'page' && pages.length <= 1}
+          onClose={() => setContextMenu(null)}
+          onRename={() => {
+            setRenameTarget(contextMenu.target)
+            setContextMenu(null)
+          }}
+          onDelete={() => handleDelete(contextMenu.target)}
+        />
+      )}
+
+      {renameTarget && (
+        <ExplorerRenameDialog
+          title={
+            renameTarget.kind === 'page'
+              ? 'Rename page'
+              : renameTarget.kind === 'component'
+                ? 'Rename component'
+                : 'Rename file'
+          }
+          fieldLabel={renameTarget.kind === 'file' ? 'Path' : 'Name'}
+          initialValue={
+            renameTarget.kind === 'page'
+              ? renameTarget.title
+              : renameTarget.kind === 'component'
+                ? renameTarget.name
+                : renameTarget.path
+          }
+          initialSlug={renameTarget.kind === 'page' ? renameTarget.slug : undefined}
+          pageId={renameTarget.kind === 'page' ? renameTarget.id : undefined}
+          pages={pages}
+          onCancel={() => setRenameTarget(null)}
+          onRename={handleRename}
+        />
+      )}
+    </>
+  )
+}
+
+interface ExplorerSectionProps {
+  title: string
+  count: number
+  actionLabel: string
+  actionIcon: IconComponent
+  onAction?: () => void
+  emptyLabel?: string
+  children: ReactNode
+}
+
+function ExplorerSection({
+  title,
+  count,
+  actionLabel,
+  actionIcon,
+  onAction,
+  emptyLabel = 'None yet',
+  children,
+}: ExplorerSectionProps) {
+  const ActionIcon = actionIcon
+  return (
+    <section className={styles.section} aria-labelledby={`site-section-${title.toLowerCase()}`}>
+      <div className={styles.sectionHeader}>
+        <h2 id={`site-section-${title.toLowerCase()}`} className={styles.sectionTitle}>
+          {title}
+        </h2>
+        <span className={styles.sectionCount}>{count}</span>
+        <Button
+          variant="ghost"
+          size="xs"
+          iconOnly
+          aria-label={actionLabel}
+          title={actionLabel}
+          onClick={onAction}
+        >
+          <ActionIcon size={13} />
+        </Button>
+      </div>
+      <div className={styles.rows}>
+        {count === 0 ? <div className={styles.sectionEmpty}>{emptyLabel}</div> : children}
+      </div>
+    </section>
+  )
+}
+
+interface ExplorerRowProps {
+  icon: IconComponent
+  label: string
+  meta?: string
+  active?: boolean
+  ariaLabel: string
+  onClick: () => void
+  onContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void
+  onKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void
+}
+
+function ExplorerRow({
+  icon,
+  label,
+  meta,
+  active = false,
+  ariaLabel,
+  onClick,
+  onContextMenu,
+  onKeyDown,
+}: ExplorerRowProps) {
+  const RowIcon = icon
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={cn(styles.row, active && styles.rowActive)}
+      aria-label={ariaLabel}
+      aria-current={active ? 'page' : undefined}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      onKeyDown={onKeyDown}
+    >
+      <RowIcon size={13} />
+      <span className={styles.rowLabel}>{label}</span>
+      {meta && <span className={styles.rowMeta}>{meta}</span>}
+    </Button>
+  )
+}
+
+function FileRows({
+  files,
+  icon,
+  onOpen,
+  onContextMenu,
+  onKeyDown,
+}: {
+  files: SiteFile[]
+  icon: IconComponent
+  onOpen: (fileId: string) => void
+  onContextMenu: (file: SiteFile, event: MouseEvent<HTMLButtonElement>) => void
+  onKeyDown: (file: SiteFile, event: KeyboardEvent<HTMLButtonElement>) => void
+}) {
+  return files.map((file) => (
+    <ExplorerRow
+      key={file.id}
+      icon={icon}
+      label={fileName(file.path)}
+      meta={file.path}
+      ariaLabel={`Open ${fileName(file.path)}`}
+      onClick={() => onOpen(file.id)}
+      onContextMenu={(event) => onContextMenu(file, event)}
+      onKeyDown={(event) => onKeyDown(file, event)}
+    />
+  ))
+}

@@ -24,8 +24,8 @@ function validateName(name: string): string | null {
 // ─── ColorsSection ────────────────────────────────────────────────────────────
 
 export function ColorsSection() {
-  const project = useEditorStore((state) => state.project)
-  const updateProjectSettings = useEditorStore((state) => state.updateProjectSettings)
+  const site = useEditorStore((state) => state.site)
+  const updateSiteSettings = useEditorStore((state) => state.updateSiteSettings)
 
   const [newName, setNewName] = useState('--color-')
   const [newValue, setNewValue] = useState('#000000')
@@ -37,24 +37,24 @@ export function ColorsSection() {
     if (confirmDeleteKey) confirmBtnRef.current?.focus()
   }, [confirmDeleteKey])
 
-  const colorTokens = project?.settings.colorTokens ?? EMPTY_COLOR_TOKENS
+  const colorTokens = site?.settings.colorTokens ?? EMPTY_COLOR_TOKENS
   const entries = Object.entries(colorTokens)
 
   const handleUpdateValue = useCallback(
     (key: string, value: string) => {
-      updateProjectSettings({ colorTokens: { ...colorTokens, [key]: value } })
+      updateSiteSettings({ colorTokens: { ...colorTokens, [key]: value } })
     },
-    [colorTokens, updateProjectSettings],
+    [colorTokens, updateSiteSettings],
   )
 
   const handleDelete = useCallback(
     (key: string) => {
       const rest = { ...colorTokens }
       delete rest[key]
-      updateProjectSettings({ colorTokens: rest })
+      updateSiteSettings({ colorTokens: rest })
       setConfirmDeleteKey(null)
     },
-    [colorTokens, updateProjectSettings],
+    [colorTokens, updateSiteSettings],
   )
 
   const handleAdd = useCallback(() => {
@@ -67,13 +67,13 @@ export function ColorsSection() {
       return
     }
     setNameError(null)
-    updateProjectSettings({ colorTokens: { ...colorTokens, [name]: value } })
+    updateSiteSettings({ colorTokens: { ...colorTokens, [name]: value } })
     setNewName('--color-')
     setNewValue('#000000')
-  }, [newName, newValue, colorTokens, updateProjectSettings])
+  }, [newName, newValue, colorTokens, updateSiteSettings])
 
-  if (!project) {
-    return <div className={s.noProject}>No project loaded.</div>
+  if (!site) {
+    return <div className={s.noSite}>Loading site...</div>
   }
 
   return (

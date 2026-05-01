@@ -47,7 +47,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       iconOnly = false,
       pressed,
       active = false,
-      accentFill = false,
+      accentFill: _accentFill = false,
       fullWidth = false,
       menuItem = false,
       navItem = false,

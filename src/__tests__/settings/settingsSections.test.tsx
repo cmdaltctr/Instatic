@@ -25,7 +25,7 @@ import { PagesSection } from '../../editor/components/Settings/sections/PagesSec
 import { BreakpointsSection } from '../../editor/components/Settings/sections/BreakpointsSection'
 import { PreferencesSection } from '../../editor/components/Settings/sections/PreferencesSection'
 import { useEditorStore } from '../../core/editor-store/store'
-import { makeProject, makePage } from '../fixtures'
+import { makeSite, makePage } from '../fixtures'
 
 // ---------------------------------------------------------------------------
 // Store reset helpers
@@ -34,7 +34,7 @@ import { makeProject, makePage } from '../fixtures'
 function resetStore() {
   localStorage.clear()
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     selectedNodeId: null,
     hoveredNodeId: null,
@@ -52,24 +52,24 @@ function resetStore() {
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-/** Load a project with exactly N pages into the store. */
-function loadProjectWithPages(pageCount: number) {
+/** Load a site with exactly N pages into the store. */
+function loadSiteWithPages(pageCount: number) {
   const pages = Array.from({ length: pageCount }, (_, i) =>
     makePage({ id: `page-${i + 1}`, title: `Page ${i + 1}`, slug: `page-${i + 1}` })
   )
-  const project = makeProject({ pages })
+  const site = makeSite({ pages })
   useEditorStore.setState({
-    project,
+    site,
     activePageId: pages[0].id,
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-/** Load a project with the default breakpoints into the store. */
-function loadProjectWithBreakpoints(activeBreakpointId = 'desktop') {
-  const project = makeProject()
+/** Load a site with the default breakpoints into the store. */
+function loadSiteWithBreakpoints(activeBreakpointId = 'desktop') {
+  const site = makeSite()
   useEditorStore.setState({
-    project,
-    activePageId: project.pages[0].id,
+    site,
+    activePageId: site.pages[0].id,
     activeBreakpointId,
   } as Parameters<typeof useEditorStore.setState>[0])
 }
@@ -83,14 +83,14 @@ afterEach(cleanup)
 
 describe('PagesSection — Delete button aria-disabled pattern', () => {
   it('Delete button has aria-disabled="true" when only one page exists', () => {
-    loadProjectWithPages(1)
+    loadSiteWithPages(1)
     render(<PagesSection />)
     const deleteBtn = screen.getByRole('button', { name: /delete page/i })
     expect(deleteBtn.getAttribute('aria-disabled')).toBe('true')
   })
 
   it('Delete button does NOT have aria-disabled when multiple pages exist', () => {
-    loadProjectWithPages(2)
+    loadSiteWithPages(2)
     render(<PagesSection />)
     const deleteBtns = screen.getAllByRole('button', { name: /^delete page/i })
     expect(deleteBtns.length).toBe(2)
@@ -102,7 +102,7 @@ describe('PagesSection — Delete button aria-disabled pattern', () => {
   it('Delete button is NOT disabled attribute (remains keyboard-focusable) when aria-disabled', () => {
     // The key difference from `disabled`: keyboard users can still tab to the button
     // and read the tooltip explaining why deletion is blocked (Guideline #224).
-    loadProjectWithPages(1)
+    loadSiteWithPages(1)
     render(<PagesSection />)
     const deleteBtn = screen.getByRole('button', { name: /delete page/i })
     expect(deleteBtn.hasAttribute('disabled')).toBe(false)
@@ -110,7 +110,7 @@ describe('PagesSection — Delete button aria-disabled pattern', () => {
   })
 
   it('Delete button has a title tooltip explaining the restriction when aria-disabled', () => {
-    loadProjectWithPages(1)
+    loadSiteWithPages(1)
     render(<PagesSection />)
     const deleteBtn = screen.getByRole('button', { name: /delete page/i })
     const title = deleteBtn.getAttribute('title')
@@ -119,13 +119,13 @@ describe('PagesSection — Delete button aria-disabled pattern', () => {
   })
 
   it('clicking the aria-disabled Delete button does NOT open the confirm UI', () => {
-    loadProjectWithPages(1)
+    loadSiteWithPages(1)
     render(<PagesSection />)
     const deleteBtn = screen.getByRole('button', { name: /delete page/i })
     fireEvent.click(deleteBtn)
     // No confirm button should appear — onClick is undefined when aria-disabled
     expect(screen.queryByRole('button', { name: /confirm delete/i })).toBeNull()
-    expect(useEditorStore.getState().project!.pages.length).toBe(1)
+    expect(useEditorStore.getState().site!.pages.length).toBe(1)
   })
 })
 
@@ -134,8 +134,8 @@ describe('PagesSection — Delete button aria-disabled pattern', () => {
 // ---------------------------------------------------------------------------
 
 describe('PagesSection — inline delete confirmation flow', () => {
-  it('clicking Delete on a multi-page project shows Confirm and Cancel buttons', () => {
-    loadProjectWithPages(2)
+  it('clicking Delete on a multi-page site shows Confirm and Cancel buttons', () => {
+    loadSiteWithPages(2)
     render(<PagesSection />)
     const deleteBtns = screen.getAllByRole('button', { name: /^delete page/i })
     fireEvent.click(deleteBtns[0])
@@ -144,22 +144,22 @@ describe('PagesSection — inline delete confirmation flow', () => {
   })
 
   it('clicking Confirm deletes the page', () => {
-    loadProjectWithPages(2)
+    loadSiteWithPages(2)
     render(<PagesSection />)
     const deleteBtns = screen.getAllByRole('button', { name: /^delete page/i })
     fireEvent.click(deleteBtns[0])
     fireEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
-    expect(useEditorStore.getState().project!.pages.length).toBe(1)
+    expect(useEditorStore.getState().site!.pages.length).toBe(1)
   })
 
   it('clicking Cancel dismisses confirm UI without deleting', () => {
-    loadProjectWithPages(2)
+    loadSiteWithPages(2)
     render(<PagesSection />)
     const deleteBtns = screen.getAllByRole('button', { name: /^delete page/i })
     fireEvent.click(deleteBtns[0])
     fireEvent.click(screen.getByRole('button', { name: /cancel delete/i }))
     // Page count unchanged; confirm UI gone
-    expect(useEditorStore.getState().project!.pages.length).toBe(2)
+    expect(useEditorStore.getState().site!.pages.length).toBe(2)
     expect(screen.queryByRole('button', { name: /confirm delete/i })).toBeNull()
   })
 })
@@ -170,14 +170,14 @@ describe('PagesSection — inline delete confirmation flow', () => {
 
 describe('BreakpointsSection — Activate button aria-disabled pattern', () => {
   it('Activate button has aria-disabled="true" for the currently active breakpoint', () => {
-    loadProjectWithBreakpoints('desktop')
+    loadSiteWithBreakpoints('desktop')
     render(<BreakpointsSection />)
     const activateBtn = screen.getByRole('button', { name: /set desktop as active/i })
     expect(activateBtn.getAttribute('aria-disabled')).toBe('true')
   })
 
   it('Activate button does NOT have aria-disabled for inactive breakpoints', () => {
-    loadProjectWithBreakpoints('desktop')
+    loadSiteWithBreakpoints('desktop')
     render(<BreakpointsSection />)
     const allActivateBtns = screen.getAllByRole('button', { name: /set .* as active/i })
     const inactiveBtns = allActivateBtns.filter(
@@ -190,7 +190,7 @@ describe('BreakpointsSection — Activate button aria-disabled pattern', () => {
   })
 
   it('Activate button is NOT disabled attribute (remains keyboard-focusable) for active breakpoint', () => {
-    loadProjectWithBreakpoints('desktop')
+    loadSiteWithBreakpoints('desktop')
     render(<BreakpointsSection />)
     const activateBtn = screen.getByRole('button', { name: /set desktop as active/i })
     expect(activateBtn.hasAttribute('disabled')).toBe(false)
@@ -198,7 +198,7 @@ describe('BreakpointsSection — Activate button aria-disabled pattern', () => {
   })
 
   it('Activate button has a title tooltip for the already-active breakpoint', () => {
-    loadProjectWithBreakpoints('desktop')
+    loadSiteWithBreakpoints('desktop')
     render(<BreakpointsSection />)
     const activateBtn = screen.getByRole('button', { name: /set desktop as active/i })
     const title = activateBtn.getAttribute('title')
@@ -207,7 +207,7 @@ describe('BreakpointsSection — Activate button aria-disabled pattern', () => {
   })
 
   it('clicking the aria-disabled Activate button does NOT change the active breakpoint', () => {
-    loadProjectWithBreakpoints('desktop')
+    loadSiteWithBreakpoints('desktop')
     render(<BreakpointsSection />)
     const activeIdBefore = useEditorStore.getState().activeBreakpointId
     const activateBtn = screen.getByRole('button', { name: /set desktop as active/i })
@@ -216,7 +216,7 @@ describe('BreakpointsSection — Activate button aria-disabled pattern', () => {
   })
 
   it('clicking an inactive breakpoints Activate button DOES update the active breakpoint', () => {
-    loadProjectWithBreakpoints('desktop')
+    loadSiteWithBreakpoints('desktop')
     render(<BreakpointsSection />)
     const allActivateBtns = screen.getAllByRole('button', { name: /set .* as active/i })
     const inactiveBtn = allActivateBtns.find(
@@ -234,7 +234,7 @@ describe('BreakpointsSection — Activate button aria-disabled pattern', () => {
 
 describe('BreakpointsSection — inline remove confirmation flow', () => {
   it('clicking Remove shows Confirm and Cancel buttons', () => {
-    loadProjectWithBreakpoints()
+    loadSiteWithBreakpoints()
     render(<BreakpointsSection />)
     const removeBtns = screen.getAllByRole('button', { name: /remove .* breakpoint/i })
     fireEvent.click(removeBtns[0])
@@ -243,23 +243,23 @@ describe('BreakpointsSection — inline remove confirmation flow', () => {
   })
 
   it('clicking Confirm removes the breakpoint', () => {
-    loadProjectWithBreakpoints()
+    loadSiteWithBreakpoints()
     render(<BreakpointsSection />)
-    const bpCountBefore = useEditorStore.getState().project!.breakpoints.length
+    const bpCountBefore = useEditorStore.getState().site!.breakpoints.length
     const removeBtns = screen.getAllByRole('button', { name: /remove .* breakpoint/i })
     fireEvent.click(removeBtns[0])
     fireEvent.click(screen.getByRole('button', { name: /confirm remove/i }))
-    expect(useEditorStore.getState().project!.breakpoints.length).toBe(bpCountBefore - 1)
+    expect(useEditorStore.getState().site!.breakpoints.length).toBe(bpCountBefore - 1)
   })
 
   it('clicking Cancel dismisses confirm UI without removing the breakpoint', () => {
-    loadProjectWithBreakpoints()
+    loadSiteWithBreakpoints()
     render(<BreakpointsSection />)
-    const bpCountBefore = useEditorStore.getState().project!.breakpoints.length
+    const bpCountBefore = useEditorStore.getState().site!.breakpoints.length
     const removeBtns = screen.getAllByRole('button', { name: /remove .* breakpoint/i })
     fireEvent.click(removeBtns[0])
     fireEvent.click(screen.getByRole('button', { name: /cancel remove/i }))
-    expect(useEditorStore.getState().project!.breakpoints.length).toBe(bpCountBefore)
+    expect(useEditorStore.getState().site!.breakpoints.length).toBe(bpCountBefore)
     expect(screen.queryByRole('button', { name: /confirm remove/i })).toBeNull()
   })
 })
@@ -281,7 +281,7 @@ describe('Settings Sections — aria-disabled source enforcement (Guideline #224
   it('PagesSection Delete button uses aria-disabled (not the disabled attribute)', () => {
     expect(pagesSrc).toContain('aria-disabled')
     // Must not fall back to the `disabled` attribute on the delete button
-    expect(pagesSrc).not.toMatch(/disabled=\{project\.pages\.length <= 1\}/)
+    expect(pagesSrc).not.toMatch(/disabled=\{site\.pages\.length <= 1\}/)
   })
 
   it('BreakpointsSection Activate button uses aria-disabled (not the disabled attribute)', () => {
@@ -290,7 +290,7 @@ describe('Settings Sections — aria-disabled source enforcement (Guideline #224
   })
 
   it('PagesSection aria-disabled is conditional on page count', () => {
-    expect(pagesSrc).toMatch(/aria-disabled=\{project\.pages\.length <= 1[^}]*\}/)
+    expect(pagesSrc).toMatch(/aria-disabled=\{site\.pages\.length <= 1[^}]*\}/)
   })
 
   it('BreakpointsSection aria-disabled is conditional on active breakpoint ID', () => {
@@ -298,7 +298,7 @@ describe('Settings Sections — aria-disabled source enforcement (Guideline #224
   })
 
   it('PagesSection Delete onClick is undefined when aria-disabled (true no-op)', () => {
-    expect(pagesSrc).toMatch(/onClick=\{project\.pages\.length <= 1 \? undefined/)
+    expect(pagesSrc).toMatch(/onClick=\{site\.pages\.length <= 1 \? undefined/)
   })
 
   it('BreakpointsSection Activate onClick is undefined when aria-disabled (true no-op)', () => {
@@ -343,40 +343,40 @@ describe('Settings Sections — no window.confirm() (Task #244)', () => {
 // ---------------------------------------------------------------------------
 // 7 — BreakpointsSection — minimum breakpoint guard (Task #241 item 3)
 //
-// Removing the last breakpoint leaves project.breakpoints = [], causing
+// Removing the last breakpoint leaves site.breakpoints = [], causing
 // CanvasRoot to render nothing. The Remove button must be aria-disabled
 // when only 1 breakpoint remains.
 // ---------------------------------------------------------------------------
 
-/** Load a project with exactly 1 breakpoint. */
-function loadProjectWithOneBreakpoint() {
-  const project = makeProject({
+/** Load a site with exactly 1 breakpoint. */
+function loadSiteWithOneBreakpoint() {
+  const site = makeSite({
     breakpoints: [{ id: 'desktop', label: 'Desktop', width: 1440, icon: 'monitor' }],
   })
   useEditorStore.setState({
-    project,
-    activePageId: project.pages[0].id,
+    site,
+    activePageId: site.pages[0].id,
     activeBreakpointId: 'desktop',
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
 describe('BreakpointsSection — minimum breakpoint guard (Task #241)', () => {
   it('Remove button has aria-disabled="true" when only 1 breakpoint exists', () => {
-    loadProjectWithOneBreakpoint()
+    loadSiteWithOneBreakpoint()
     render(<BreakpointsSection />)
     const removeBtn = screen.getByRole('button', { name: /remove desktop breakpoint/i })
     expect(removeBtn.getAttribute('aria-disabled')).toBe('true')
   })
 
   it('Remove button is NOT the disabled attribute (stays keyboard-focusable)', () => {
-    loadProjectWithOneBreakpoint()
+    loadSiteWithOneBreakpoint()
     render(<BreakpointsSection />)
     const removeBtn = screen.getByRole('button', { name: /remove desktop breakpoint/i })
     expect(removeBtn.hasAttribute('disabled')).toBe(false)
   })
 
   it('Remove button has a title tooltip when only 1 breakpoint remains', () => {
-    loadProjectWithOneBreakpoint()
+    loadSiteWithOneBreakpoint()
     render(<BreakpointsSection />)
     const removeBtn = screen.getByRole('button', { name: /remove desktop breakpoint/i })
     const title = removeBtn.getAttribute('title')
@@ -385,16 +385,16 @@ describe('BreakpointsSection — minimum breakpoint guard (Task #241)', () => {
   })
 
   it('clicking the aria-disabled Remove button does NOT open the confirm UI', () => {
-    loadProjectWithOneBreakpoint()
+    loadSiteWithOneBreakpoint()
     render(<BreakpointsSection />)
     const removeBtn = screen.getByRole('button', { name: /remove desktop breakpoint/i })
     fireEvent.click(removeBtn)
     expect(screen.queryByRole('button', { name: /confirm remove/i })).toBeNull()
-    expect(useEditorStore.getState().project!.breakpoints.length).toBe(1)
+    expect(useEditorStore.getState().site!.breakpoints.length).toBe(1)
   })
 
   it('Remove button does NOT have aria-disabled when multiple breakpoints exist', () => {
-    loadProjectWithBreakpoints() // loads default 2+ breakpoints
+    loadSiteWithBreakpoints() // loads default 2+ breakpoints
     render(<BreakpointsSection />)
     const removeBtns = screen.getAllByRole('button', { name: /remove .* breakpoint/i })
     expect(removeBtns.length).toBeGreaterThan(0)
@@ -466,7 +466,7 @@ describe('PreferencesSection — reducedMotion OS detection (Task #241)', () => 
 
 describe('PagesSection — inline confirm focus management (Task #256)', () => {
   it('Confirm button receives focus when confirmation state appears', () => {
-    loadProjectWithPages(2)
+    loadSiteWithPages(2)
     render(<PagesSection />)
     const deleteBtns = screen.getAllByRole('button', { name: /^delete page/i })
     fireEvent.click(deleteBtns[0])
@@ -476,7 +476,7 @@ describe('PagesSection — inline confirm focus management (Task #256)', () => {
   })
 
   it('Escape key on Confirm button dismisses the confirmation state', () => {
-    loadProjectWithPages(2)
+    loadSiteWithPages(2)
     render(<PagesSection />)
     const deleteBtns = screen.getAllByRole('button', { name: /^delete page/i })
     fireEvent.click(deleteBtns[0])
@@ -485,11 +485,11 @@ describe('PagesSection — inline confirm focus management (Task #256)', () => {
     fireEvent.keyDown(confirmBtn, { key: 'Escape' })
     expect(screen.queryByRole('button', { name: /confirm delete/i })).toBeNull()
     // Page must not have been deleted
-    expect(useEditorStore.getState().project!.pages.length).toBe(2)
+    expect(useEditorStore.getState().site!.pages.length).toBe(2)
   })
 
   it('Escape key on Cancel button also dismisses the confirmation state', () => {
-    loadProjectWithPages(2)
+    loadSiteWithPages(2)
     render(<PagesSection />)
     const deleteBtns = screen.getAllByRole('button', { name: /^delete page/i })
     fireEvent.click(deleteBtns[0])
@@ -499,7 +499,7 @@ describe('PagesSection — inline confirm focus management (Task #256)', () => {
   })
 
   it('Confirm button accessible name includes the page name (not just "Confirm")', () => {
-    loadProjectWithPages(2) // creates Page 1 and Page 2
+    loadSiteWithPages(2) // creates Page 1 and Page 2
     render(<PagesSection />)
     const deleteBtns = screen.getAllByRole('button', { name: /^delete page/i })
     fireEvent.click(deleteBtns[0])
@@ -516,7 +516,7 @@ describe('PagesSection — inline confirm focus management (Task #256)', () => {
 
 describe('BreakpointsSection — inline confirm focus management (Task #256)', () => {
   it('Confirm button receives focus when confirmation state appears', () => {
-    loadProjectWithBreakpoints()
+    loadSiteWithBreakpoints()
     render(<BreakpointsSection />)
     const removeBtns = screen.getAllByRole('button', { name: /remove .* breakpoint/i })
     fireEvent.click(removeBtns[0])
@@ -525,20 +525,20 @@ describe('BreakpointsSection — inline confirm focus management (Task #256)', (
   })
 
   it('Escape key on Confirm button dismisses the confirmation state', () => {
-    loadProjectWithBreakpoints()
+    loadSiteWithBreakpoints()
     render(<BreakpointsSection />)
-    const bpCountBefore = useEditorStore.getState().project!.breakpoints.length
+    const bpCountBefore = useEditorStore.getState().site!.breakpoints.length
     const removeBtns = screen.getAllByRole('button', { name: /remove .* breakpoint/i })
     fireEvent.click(removeBtns[0])
     const confirmBtn = screen.getByRole('button', { name: /confirm remove/i })
     fireEvent.keyDown(confirmBtn, { key: 'Escape' })
     expect(screen.queryByRole('button', { name: /confirm remove/i })).toBeNull()
     // Breakpoint must not have been removed
-    expect(useEditorStore.getState().project!.breakpoints.length).toBe(bpCountBefore)
+    expect(useEditorStore.getState().site!.breakpoints.length).toBe(bpCountBefore)
   })
 
   it('Escape key on Cancel button also dismisses the confirmation state', () => {
-    loadProjectWithBreakpoints()
+    loadSiteWithBreakpoints()
     render(<BreakpointsSection />)
     const removeBtns = screen.getAllByRole('button', { name: /remove .* breakpoint/i })
     fireEvent.click(removeBtns[0])
@@ -548,7 +548,7 @@ describe('BreakpointsSection — inline confirm focus management (Task #256)', (
   })
 
   it('Confirm button accessible name includes the breakpoint label (not just "Confirm")', () => {
-    loadProjectWithBreakpoints()
+    loadSiteWithBreakpoints()
     render(<BreakpointsSection />)
     const removeBtns = screen.getAllByRole('button', { name: /remove .* breakpoint/i })
     fireEvent.click(removeBtns[0])

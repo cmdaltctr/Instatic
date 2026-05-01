@@ -1,0 +1,224 @@
+.panel {
+    position: relative;
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    background: transparent;
+    outline: none;
+}
+
+.content {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 10px;
+    overflow: auto;
+    padding: 8px;
+}
+
+.mediaToolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mediaSearch {
+    width: 100%;
+}
+
+.mediaControlRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: center;
+}
+
+.mediaFilterGroup,
+.mediaViewGroup {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 2px;
+}
+
+.mediaFilterGroup {
+    overflow: hidden;
+}
+
+.mediaFilterGroup button {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.mediaViewGroup {
+    flex-shrink: 0;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sectionHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 6px;
+}
+
+.sectionTitle {
+    margin: 0;
+    overflow: hidden;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sectionCount {
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    line-height: 1;
+}
+
+.rows {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.mediaGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.row {
+    display: grid;
+    width: 100%;
+    min-height: 28px;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--editor-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    letter-spacing: 0;
+    line-height: 1.2;
+    padding: 0 8px;
+    text-align: left;
+}
+
+.row:hover {
+    background: var(--editor-surface);
+}
+
+.row:focus-visible {
+    outline: 2px solid var(--editor-accent);
+    outline-offset: -2px;
+}
+
+.rowActive {
+    background: var(--editor-surface);
+    color: var(--editor-text);
+}
+
+.rowLabel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rowMeta {
+    max-width: 110px;
+    overflow: hidden;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mediaTile {
+    text-align: left;
+    white-space: normal;
+    border-radius: 8px;
+    background: var(--editor-surface);
+    gap: 0;
+    width: 100%;
+    height: auto;
+    min-height: 122px;
+    padding: 0;
+    display: grid;
+    overflow: hidden;
+}
+
+.mediaTilePreview {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    overflow: hidden;
+    background: var(--editor-surface);
+    color: var(--editor-text-muted);
+}
+
+.mediaTileImage,
+.mediaTileVideo {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.mediaTileBody {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+    padding: 6px;
+}
+
+.mediaTileLabel,
+.mediaTileMeta {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mediaTileLabel {
+    color: var(--editor-text);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.mediaTileMeta {
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.sectionEmpty,
+.emptyState {
+    color: var(--editor-text-muted);
+    background: var(--editor-surface);
+    border-radius: 8px;
+    grid-column: 1 / -1;
+    padding: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+}

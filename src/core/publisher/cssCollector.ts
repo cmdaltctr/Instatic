@@ -18,27 +18,27 @@
  * Reference: Performance analysis in Contribution #308.
  */
 
-import type { Project } from '../page-tree/types'
+import type { SiteDocument } from '../page-tree/types'
 import { generateClassCSS } from './classCss'
 
 /**
  * Collect all CSS class declarations for the classes referenced across a
- * project's pages. Used by the publisher to include class styles inline in
+ * site's pages. Used by the publisher to include class styles inline in
  * the published HTML `<style>` block.
  *
  * Only emits CSS for classes actually used by at least one node (tree-shaking).
  * Sanitised via sanitizeModuleCSS (Constraint #228).
  *
- * @param project The project containing the class registry and page nodes.
+ * @param site The site containing the class registry and page nodes.
  * @returns A CSS string of all `.mc-{id}` rules, or empty string if none.
  */
-export function collectClassCSS(project: Project): string {
+export function collectClassCSS(site: SiteDocument): string {
   // Defensive guard: corrupted/partial snapshots may have classes undefined
-  if (!project.classes) return ''
+  if (!site.classes) return ''
 
   // Collect the set of used classIds across all pages
   const usedClassIds = new Set<string>()
-  for (const page of project.pages) {
+  for (const page of site.pages) {
     for (const node of Object.values(page.nodes)) {
       if (node.classIds) {
         for (const id of node.classIds) {
@@ -51,14 +51,14 @@ export function collectClassCSS(project: Project): string {
   if (usedClassIds.size === 0) return ''
 
   // Build a filtered class map containing only classes that are actually used
-  const usedClasses: Project['classes'] = {}
+  const usedClasses: SiteDocument['classes'] = {}
   for (const id of usedClassIds) {
-    if (project.classes[id]) {
-      usedClasses[id] = project.classes[id]
+    if (site.classes[id]) {
+      usedClasses[id] = site.classes[id]
     }
   }
 
-  const css = generateClassCSS(usedClasses, project.breakpoints)
+  const css = generateClassCSS(usedClasses, site.breakpoints)
   return sanitizeModuleCSS(css)
 }
 

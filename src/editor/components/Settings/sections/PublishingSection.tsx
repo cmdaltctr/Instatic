@@ -5,10 +5,10 @@ import { useEditorStore } from '../../../../core/editor-store/store'
 import s from '../Settings.module.css'
 
 export function PublishingSection() {
-  const project = useEditorStore((state) => state.project)
+  const site = useEditorStore((state) => state.site)
 
-  if (!project) {
-    return <div className={s.noProject}>No project loaded.</div>
+  if (!site) {
+    return <div className={s.noSite}>Loading site...</div>
   }
 
   return (

@@ -14,7 +14,7 @@
  */
 
 import { useState } from "react";
-import { Icon } from "../../../ui/icons/Icon";
+import type { IconComponent } from "@ui/icons/types";
 import { cn } from "@ui/cn";
 import styles from "./Section.module.css";
 
@@ -24,7 +24,7 @@ export interface SectionProps {
   defaultOpen?: boolean;
   /** Render a small accent dot next to the title (e.g. 'bp' = breakpoint active). */
   indicator?: "bp" | undefined;
-  icon?: string;
+  icon?: IconComponent;
   meta?: React.ReactNode;
   forceOpen?: boolean;
 }
@@ -34,7 +34,7 @@ export function Section({
   children,
   defaultOpen = false,
   indicator,
-  icon,
+  icon: SectionIcon,
   meta,
   forceOpen = false,
 }: SectionProps) {
@@ -50,9 +50,9 @@ export function Section({
         className={styles.sectionToggle}
         aria-expanded={expanded}
       >
-        {icon && (
+        {SectionIcon && (
           <span className={styles.sectionIcon}>
-            <Icon name={icon} size={13} />
+            <SectionIcon size={13} />
           </span>
         )}
         <span className={styles.sectionTitle}>{title}</span>

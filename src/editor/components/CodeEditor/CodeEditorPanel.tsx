@@ -22,7 +22,7 @@
  * UX spec: Contributions 611 and 612 — center-stage default, 800x500.
  * Guideline 410 — floating panels must use shared PanelHeader
  * Constraint 402 — no inline styles (except CSS-var panelPositionStyle)
- * Guideline 376 — achromatic palette only
+ * Editor chrome stays neutral; CodeMirror syntax uses GitHub Dark-style tokens.
  */
 
 import { Suspense, lazy, memo, useEffect, useRef } from 'react'
@@ -55,13 +55,13 @@ export const CodeEditorPanel = memo(function CodeEditorPanel() {
   const activeEditorFileId = useEditorStore((s) => s.activeEditorFileId)
   const codeEditorPanelOpen = useEditorStore((s) => s.codeEditorPanelOpen)
   const activeMediaAssetPreview = useEditorStore((s) => s.activeMediaAssetPreview)
-  const project = useEditorStore((s) => s.project)
+  const site = useEditorStore((s) => s.site)
   const closeEditor = useEditorStore((s) => s.closeEditor)
   const updateFileContent = useEditorStore((s) => s.updateFileContent)
 
-  // Find the active file (null when no file is open or no project loaded)
-  const activeFile = activeEditorFileId && project
-    ? (project.files.find((f) => f.id === activeEditorFileId) ?? null)
+  // Find the active file (null when no file is open or loading site)
+  const activeFile = activeEditorFileId && site
+    ? (site.files.find((f) => f.id === activeEditorFileId) ?? null)
     : null
 
   // ── Draggable panel position ─────────────────────────────────────────────

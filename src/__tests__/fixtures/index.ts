@@ -7,12 +7,12 @@
  * - Factories produce structurally valid objects that match the canonical types
  *
  * Usage:
- *   import { makeModule, makePage, makeProject } from '../fixtures'
+ *   import { makeModule, makePage, makeSite } from '../fixtures'
  */
 
 import { nanoid } from 'nanoid'
-import type { Page, PageNode, Project } from '../../core/page-tree/types'
-import { DEFAULT_BREAKPOINTS, DEFAULT_PROJECT_SETTINGS } from '../../core/page-tree/types'
+import type { Page, PageNode, SiteDocument } from '../../core/page-tree/types'
+import { DEFAULT_BREAKPOINTS, DEFAULT_SITE_SETTINGS } from '../../core/page-tree/types'
 import type { AnyModuleDefinition } from '../../core/module-engine/types'
 import { isSafeUrl } from '../../core/publisher/utils'
 
@@ -211,28 +211,24 @@ export function makePageWithTree(
 }
 
 // ---------------------------------------------------------------------------
-// Project factory
+// SiteDocument factory
 // ---------------------------------------------------------------------------
 
-/** Creates a minimal valid Project. */
-export function makeProject(overrides: Partial<Project> = {}): Project {
+/** Creates a minimal valid SiteDocument. */
+export function makeSite(overrides: Partial<SiteDocument> = {}): SiteDocument {
   return {
-    id: overrides.id ?? 'project-1',
-    name: overrides.name ?? 'Test Project',
-    // projectMode is a required field on Project — default to 'html'.
-    // Previously omitted, causing TypeScript-invalid objects that masked CSS
-    // class pipeline tests (same bug class fixed in publisher/helpers.ts Task #427).
-    projectMode: overrides.projectMode ?? 'html',
+    id: overrides.id ?? 'site-1',
+    name: overrides.name ?? 'Test SiteDocument',
     pages: overrides.pages ?? [makePage()],
     breakpoints: overrides.breakpoints ?? DEFAULT_BREAKPOINTS,
-    settings: overrides.settings ?? DEFAULT_PROJECT_SETTINGS,
-    // classes is required on Project — default to empty map.
-    // Previously omitted, causing project.classes === undefined which crashes
+    settings: overrides.settings ?? DEFAULT_SITE_SETTINGS,
+    // classes is required on SiteDocument — default to empty map.
+    // Previously omitted, causing site.classes === undefined which crashes
     // collectClassCSS unless the caller uses the Bug C guard added in Task #427.
     classes: overrides.classes ?? {},
-    // files is required on Project (Contribution #595 §1 — files data layer).
+    // files is required on SiteDocument (Contribution #595 §1 — files data layer).
     files: overrides.files ?? [],
-    // visualComponents is required on Project; default to no reusable components.
+    // visualComponents is required on SiteDocument; default to no reusable components.
     visualComponents: overrides.visualComponents ?? [],
     createdAt: overrides.createdAt ?? 1_700_000_000_000,
     updatedAt: overrides.updatedAt ?? 1_700_000_000_000,

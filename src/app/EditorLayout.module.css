@@ -26,3 +26,28 @@
 .canvasStageRightSidebarOpen {
   border-top-right-radius: 12px;
 }
+
+.bootstrapError {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  gap: 10px;
+  padding: 32px;
+  background: var(--editor-bg);
+  color: var(--editor-text);
+  text-align: center;
+}
+
+.bootstrapError h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.bootstrapError p {
+  max-width: 460px;
+  margin: 0;
+  color: var(--editor-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}

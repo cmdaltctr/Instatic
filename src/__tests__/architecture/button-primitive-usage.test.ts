@@ -117,17 +117,11 @@ describe('BTN-3 — Button primitive usage gate', () => {
     expect(violations).toEqual([])
   })
 
-  it('Dashboard does not keep local button primitive classes', () => {
-    const css = readFileSync(join(APP_ROOT, 'Dashboard.module.css'), 'utf-8')
-
-    expect(css).not.toMatch(/\.(btnPrimary|btnDelete)\b/)
-  })
-
   it('Button primitive owns the shared 44px touch-target size', () => {
     const source = readFileSync(join(SRC_ROOT, 'ui/components/Button/Button.tsx'), 'utf-8')
     const css = readFileSync(join(SRC_ROOT, 'ui/components/Button/Button.module.css'), 'utf-8')
 
-    expect(source).toContain("'lg'")
+    expect(source).toMatch(/["']lg["']/)
     expect(css).toMatch(/\.size-lg\s*\{[\s\S]*height:\s*44px/)
     expect(css).toMatch(/\.size-lg\.iconOnly\s*\{[\s\S]*width:\s*44px/)
   })

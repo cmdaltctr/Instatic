@@ -14,8 +14,15 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useEditorStore } from '../../../core/editor-store/store'
 import { Button } from '@ui/components/Button'
 import { Separator } from '@ui/components/Separator'
-import { Icon } from '../../../ui/icons/Icon'
 import { CloseIcon } from '@ui/icons/icons/close'
+import { SettingsCogIcon } from '@ui/icons/icons/settings-cog'
+import { FileTextIcon } from '@ui/icons/icons/file-text'
+import { SmartphoneIcon } from '@ui/icons/icons/smartphone'
+import { TextAlignLeftIcon } from '@ui/icons/icons/text-align-left'
+import { PaintBucketIcon } from '@ui/icons/icons/paint-bucket'
+import { CommandIcon } from '@ui/icons/icons/command'
+import { UploadIcon } from '@ui/icons/icons/upload'
+import { SlidersHorizontalIcon } from '@ui/icons/icons/sliders-horizontal'
 import { GeneralSection } from './sections/GeneralSection'
 import { BreakpointsSection } from './sections/BreakpointsSection'
 import { PagesSection } from './sections/PagesSection'
@@ -29,14 +36,14 @@ import s from './Settings.module.css'
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { id: 'general',     label: 'General',     icon: 'settings-cog'       },
-  { id: 'pages',       label: 'Pages',       icon: 'file-text'          },
-  { id: 'breakpoints', label: 'Breakpoints', icon: 'smartphone'         },
-  { id: 'typography',  label: 'Typography',  icon: 'text-align-left'    },
-  { id: 'colors',      label: 'Colors',      icon: 'paint-bucket'       },
-  { id: 'shortcuts',   label: 'Shortcuts',   icon: 'command'            },
-  { id: 'publishing',  label: 'Publishing',  icon: 'upload'             },
-  { id: 'preferences', label: 'Preferences', icon: 'sliders-horizontal' },
+  { id: 'general',     label: 'General',     icon: SettingsCogIcon       },
+  { id: 'pages',       label: 'Pages',       icon: FileTextIcon          },
+  { id: 'breakpoints', label: 'Breakpoints', icon: SmartphoneIcon        },
+  { id: 'typography',  label: 'Typography',  icon: TextAlignLeftIcon     },
+  { id: 'colors',      label: 'Colors',      icon: PaintBucketIcon       },
+  { id: 'shortcuts',   label: 'Shortcuts',   icon: CommandIcon           },
+  { id: 'publishing',  label: 'Publishing',  icon: UploadIcon            },
+  { id: 'preferences', label: 'Preferences', icon: SlidersHorizontalIcon },
 ] as const
 
 type SectionId = typeof NAV_ITEMS[number]['id']
@@ -160,7 +167,7 @@ export function SettingsModal() {
         <div className={s.dialog}>
           {/* Screen-reader description */}
           <p id="settings-modal-desc" className={s.srOnly}>
-            Project-level configuration. Press Escape to close.
+            Site-level configuration. Press Escape to close.
           </p>
           {/* WCAG 2.4.7 — visible focus ring on inputs inside the modal */}
           <style>{`
@@ -187,19 +194,12 @@ export function SettingsModal() {
               </h2>
 
               {NAV_ITEMS.map((item) => (
-                <Button
+                <SettingsNavButton
                   key={item.id}
-                  variant="ghost"
-                  size="lg"
-                  navItem
+                  item={item}
                   active={activeSection === item.id}
                   onClick={() => handleSetSection(item.id)}
-                  aria-current={activeSection === item.id ? 'page' : undefined}
-                  className={s.navItem}
-                >
-                  <Icon name={item.icon} size={14} aria-hidden="true" />
-                  {item.label}
-                </Button>
+                />
               ))}
             </nav>
 
@@ -242,4 +242,30 @@ export function SettingsModal() {
 
 function normalizeSection(section: string | null | undefined): SectionId {
   return NAV_ITEMS.some((item) => item.id === section) ? (section as SectionId) : 'general'
+}
+
+function SettingsNavButton({
+  item,
+  active,
+  onClick,
+}: {
+  item: (typeof NAV_ITEMS)[number]
+  active: boolean
+  onClick: () => void
+}) {
+  const NavIcon = item.icon
+  return (
+    <Button
+      variant="ghost"
+      size="lg"
+      navItem
+      active={active}
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={s.navItem}
+    >
+      <NavIcon size={14} aria-hidden="true" />
+      {item.label}
+    </Button>
+  )
 }

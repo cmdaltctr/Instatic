@@ -4,24 +4,22 @@ import type { LeftSidebarPanelId } from '@core/editor-store/slices/uiSlice'
 import { AgentPanel } from '../AgentPanel'
 import { DependenciesPanel } from '../DependenciesPanel'
 import { DomPanel } from '../DomPanel'
+import { MediaExplorerPanel } from '../MediaExplorerPanel'
 import { PanelRail } from '../PanelRail'
-import { ProjectExplorerPanel } from '../ProjectExplorerPanel'
+import { SiteExplorerPanel } from '../SiteExplorerPanel'
 import { SidebarResizeHandle } from '../shared/SidebarResizeHandle'
 import styles from './LeftSidebar.module.css'
 
-interface LeftSidebarProps {
-  mediaMode?: 'project' | 'cms'
-}
-
 function selectActiveLeftSidebarPanel(state: ReturnType<typeof useEditorStore.getState>): LeftSidebarPanelId | null {
-  if (state.projectExplorerPanelOpen) return 'project'
+  if (state.siteExplorerPanelOpen) return 'site'
+  if (state.mediaExplorerPanelOpen) return 'media'
   if (state.dependenciesPanelOpen) return 'dependencies'
   if (!state.domTreePanel.collapsed) return 'layers'
   if (state.isAgentOpen) return 'agent'
   return null
 }
 
-export function LeftSidebar({ mediaMode = 'project' }: LeftSidebarProps) {
+export function LeftSidebar() {
   const sidebarRef = useRef<HTMLElement | null>(null)
   const activePanel = useEditorStore(selectActiveLeftSidebarPanel)
   const leftSidebarWidth = useEditorStore((s) => s.leftSidebarWidth)
@@ -51,8 +49,11 @@ export function LeftSidebar({ mediaMode = 'project' }: LeftSidebarProps) {
         <div className={styles.panelMount} hidden={activePanel !== 'layers'}>
           <DomPanel variant="docked" />
         </div>
-        <div className={styles.panelMount} hidden={activePanel !== 'project'}>
-          <ProjectExplorerPanel variant="docked" mediaMode={mediaMode} />
+        <div className={styles.panelMount} hidden={activePanel !== 'site'}>
+          <SiteExplorerPanel variant="docked" />
+        </div>
+        <div className={styles.panelMount} hidden={activePanel !== 'media'}>
+          <MediaExplorerPanel variant="docked" />
         </div>
         <div className={styles.panelMount} hidden={activePanel !== 'dependencies'}>
           <DependenciesPanel variant="docked" />

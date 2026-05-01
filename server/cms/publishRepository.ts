@@ -1,12 +1,12 @@
 import { nanoid } from 'nanoid'
-import type { Project } from '../../src/core/page-tree/types'
+import type { SiteDocument } from '../../src/core/page-tree/types'
 import type { DbClient } from './db'
-import { loadDraftProject } from './projectRepository'
+import { loadDraftSite } from './siteRepository'
 
 export interface PublishedPageSnapshot {
   cmsSnapshotVersion: 1
   pageId: string
-  project: Project
+  site: SiteDocument
 }
 
 export interface PublishResult {
@@ -40,17 +40,17 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
-function createSnapshot(project: Project, pageId: string): PublishedPageSnapshot {
+function createSnapshot(site: SiteDocument, pageId: string): PublishedPageSnapshot {
   return {
     cmsSnapshotVersion: 1,
     pageId,
-    project: structuredClone(project),
+    site: structuredClone(site),
   }
 }
 
 export async function getDraftPublishStatus(db: DbClient): Promise<DraftPublishStatus> {
-  const project = await loadDraftProject(db)
-  if (!project) {
+  const site = await loadDraftSite(db)
+  if (!site) {
     return {
       hasPublishedVersion: false,
       draftMatchesPublished: false,
@@ -71,13 +71,13 @@ export async function getDraftPublishStatus(db: DbClient): Promise<DraftPublishS
   )
 
   const publishedRows = result.rows
-  const draftProjectJson = canonicalJson(project)
-  const draftPageIds = new Set(project.pages.map((page) => page.id))
+  const draftSiteJson = canonicalJson(site)
+  const draftPageIds = new Set(site.pages.map((page) => page.id))
   const draftMatchesPublished =
-    publishedRows.length === project.pages.length &&
+    publishedRows.length === site.pages.length &&
     publishedRows.every((row) =>
       draftPageIds.has(row.page_id) &&
-      canonicalJson(row.snapshot_json.project) === draftProjectJson
+      canonicalJson(row.snapshot_json.site) === draftSiteJson
     )
   const lastPublishedAt = publishedRows
     .map((row) => new Date(row.published_at).getTime())
@@ -87,22 +87,22 @@ export async function getDraftPublishStatus(db: DbClient): Promise<DraftPublishS
   return {
     hasPublishedVersion: publishedRows.length > 0,
     draftMatchesPublished,
-    draftPages: project.pages.length,
+    draftPages: site.pages.length,
     publishedPages: publishedRows.length,
     ...(lastPublishedAt ? { lastPublishedAt: new Date(lastPublishedAt).toISOString() } : {}),
   }
 }
 
-export async function publishDraftProject(
+export async function publishDraftSite(
   db: DbClient,
   adminUserId: string,
 ): Promise<PublishResult> {
   await db.query('begin')
   try {
-    const project = await loadDraftProject(db)
-    if (!project) throw new Error('Draft project not found')
+    const site = await loadDraftSite(db)
+    if (!site) throw new Error('draft site not found')
 
-    for (const page of project.pages) {
+    for (const page of site.pages) {
       const versionResult = await db.query<{ next_version: number }>(
         `select coalesce(max(version), 0)::int + 1 as next_version
          from page_versions
@@ -115,7 +115,7 @@ export async function publishDraftProject(
       await db.query(
         `insert into page_versions (id, page_id, version, snapshot_json, published_by)
          values ($1, $2, $3, $4, $5)`,
-        [versionId, page.id, version, createSnapshot(project, page.id), adminUserId],
+        [versionId, page.id, version, createSnapshot(site, page.id), adminUserId],
       )
       await db.query(
         `update pages
@@ -128,7 +128,7 @@ export async function publishDraftProject(
     }
 
     await db.query('commit')
-    return { publishedPages: project.pages.length }
+    return { publishedPages: site.pages.length }
   } catch (err) {
     await db.query('rollback')
     throw err

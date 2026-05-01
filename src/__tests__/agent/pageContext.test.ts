@@ -43,9 +43,9 @@ const dynamicModule: AnyModuleDefinition = {
   render: () => ({ html: '' }),
 }
 
-function freshProject() {
+function freshSite() {
   useEditorStore.setState({
-    project: null,
+    site: null,
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,
@@ -55,8 +55,8 @@ function freshProject() {
     hasUnsavedChanges: false,
   })
   const state = useEditorStore.getState()
-  const project = state.createProject('Agent Context')
-  return project.pages[0]
+  const site = state.createSite('Agent Context')
+  return site.pages[0]
 }
 
 beforeEach(() => {
@@ -69,7 +69,7 @@ afterEach(() => {
 
 describe('buildPageContext — dynamic module registry', () => {
   it('includes runtime-registered modules with defaults and schema metadata', () => {
-    const page = freshProject()
+    const page = freshSite()
     const context = buildPageContext(useEditorStore.getState(), page)
 
     const moduleContext = context.availableModules.find((mod) => mod.id === DYNAMIC_MODULE_ID)
@@ -90,7 +90,7 @@ describe('buildPageContext — dynamic module registry', () => {
   })
 
   it('adds typography style hints for text modules without requiring module-owned style bindings', () => {
-    const page = freshProject()
+    const page = freshSite()
     const context = buildPageContext(useEditorStore.getState(), page)
 
     const textContext = context.availableModules.find((mod) => mod.id === 'base.text')
@@ -106,7 +106,7 @@ describe('buildPageContext — dynamic module registry', () => {
   })
 
   it('includes existing class styles so the agent can inspect what reusable styles actually do', () => {
-    const page = freshProject()
+    const page = freshSite()
     const created = useEditorStore.getState().createClass('hero-dark', {
       backgroundColor: '#111827',
       color: '#ffffff',
@@ -126,7 +126,7 @@ describe('buildPageContext — dynamic module registry', () => {
   })
 
   it('includes configured breakpoints and the active breakpoint', () => {
-    const page = freshProject()
+    const page = freshSite()
     useEditorStore.getState().setActiveBreakpoint('mobile')
 
     const context = buildPageContext(useEditorStore.getState(), page)

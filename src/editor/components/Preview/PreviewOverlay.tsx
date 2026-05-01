@@ -20,7 +20,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useEditorStore, selectActivePage } from '../../../core/editor-store/store'
 import { publishPage } from '../../../core/publisher/render'
 import { registry } from '../../../core/module-engine/registry'
-import { Icon } from '../../../ui/icons/Icon'
+import { EyeIcon } from '@ui/icons/icons/eye'
 import { CloseIcon } from '@ui/icons/icons/close'
 import { Button } from '@ui/components/Button'
 import styles from './PreviewOverlay.module.css'
@@ -28,7 +28,7 @@ import styles from './PreviewOverlay.module.css'
 export function PreviewOverlay() {
   const open = useEditorStore((s) => s.previewOpen)
   const closePreview = useEditorStore((s) => s.closePreview)
-  const project = useEditorStore((s) => s.project)
+  const site = useEditorStore((s) => s.site)
   const activePage = useEditorStore(selectActivePage)
 
   const closeBtnRef = useRef<HTMLButtonElement>(null)
@@ -58,9 +58,9 @@ export function PreviewOverlay() {
     [closePreview],
   )
 
-  if (!open || !project || !activePage) return null
+  if (!open || !site || !activePage) return null
 
-  const { html } = publishPage(activePage, project, registry)
+  const { html } = publishPage(activePage, site, registry)
 
   return (
     <>
@@ -84,7 +84,7 @@ export function PreviewOverlay() {
         <div className={styles.card}>
           {/* ── Header bar ──────────────────────────────────────────────── */}
           <div className={styles.header}>
-            <Icon name="eye" size={14} color="var(--editor-text-secondary)" className={styles.headerIcon} />
+            <EyeIcon size={14} color="var(--editor-text-secondary)" className={styles.headerIcon} />
             <span className={styles.headerTitle}>
               Preview — {activePage.title}
             </span>

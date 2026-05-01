@@ -16,7 +16,7 @@
  * @see Guideline #376 — achromatic palette
  */
 
-import type { ProjectFile } from '../../../core/files/types'
+import type { SiteFile } from '../../../core/files/types'
 import type { MediaAssetPreview } from '../../../core/editor-store/slices/uiSlice'
 import styles from './imagePreview.module.css'
 
@@ -44,7 +44,7 @@ function formatBytes(bytes: number): string {
 // ---------------------------------------------------------------------------
 
 interface ImagePreviewProps {
-  file: ProjectFile
+  file: SiteFile
 }
 
 export function ImagePreview({ file }: ImagePreviewProps) {
@@ -148,7 +148,7 @@ function AssetMetaFooter({
 // ---------------------------------------------------------------------------
 
 interface ImageRendererProps {
-  file: ProjectFile
+  file: SiteFile
   blob: { mimeType: string; base64: string }
 }
 

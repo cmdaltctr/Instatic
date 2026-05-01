@@ -1,16 +1,16 @@
 import { nanoid } from 'nanoid'
-import type { Page, PageNode, Project } from './types'
+import type { Page, PageNode, SiteDocument } from './types'
 import { getParent, isAncestor } from './selectors'
 import { normalizePageSlug } from './slugs'
 
 /**
  * Pure Immer-compatible mutation helpers for the page tree.
  *
- * These are called inside Zustand's Immer middleware — they mutate a draft Page/Project directly.
+ * These are called inside Zustand's Immer middleware — they mutate a draft Page/SiteDocument directly.
  * Every function here is also safe to call as a pure function when given a structuredClone'd object.
  *
  * Naming convention: functions that mutate pages take a `Page` draft as first arg.
- * Functions that mutate the project take a `Project` draft.
+ * Functions that mutate the site take a `SiteDocument` draft.
  */
 
 // ---------------------------------------------------------------------------
@@ -277,10 +277,10 @@ export function wrapNode(
 }
 
 // ---------------------------------------------------------------------------
-// Page-level mutations (called on Project draft)
+// Page-level mutations (called on SiteDocument draft)
 // ---------------------------------------------------------------------------
 
-export function addPage(project: Project, title: string, slug: string): Page {
+export function addPage(site: SiteDocument, title: string, slug: string): Page {
   const rootNode = createNode('base.root')
   const page: Page = {
     id: nanoid(),
@@ -289,26 +289,26 @@ export function addPage(project: Project, title: string, slug: string): Page {
     rootNodeId: rootNode.id,
     nodes: { [rootNode.id]: rootNode },
   }
-  project.pages.push(page)
+  site.pages.push(page)
   return page
 }
 
-export function deletePage(project: Project, pageId: string): void {
-  if (project.pages.length <= 1) {
-    throw new Error(`[PageTree] Cannot delete the last page in a project.`)
+export function deletePage(site: SiteDocument, pageId: string): void {
+  if (site.pages.length <= 1) {
+    throw new Error(`[PageTree] Cannot delete the last page in a site.`)
   }
-  project.pages = project.pages.filter((p) => p.id !== pageId)
+  site.pages = site.pages.filter((p) => p.id !== pageId)
 }
 
-export function renamePage(project: Project, pageId: string, title: string, slug?: string): void {
-  const page = project.pages.find((p) => p.id === pageId)
+export function renamePage(site: SiteDocument, pageId: string, title: string, slug?: string): void {
+  const page = site.pages.find((p) => p.id === pageId)
   if (!page) throw new Error(`[PageTree] Page "${pageId}" not found`)
   page.title = title
   if (slug !== undefined) page.slug = normalizePageSlug(slug)
 }
 
-export function reorderPages(project: Project, fromIndex: number, toIndex: number): void {
-  const pages = project.pages
+export function reorderPages(site: SiteDocument, fromIndex: number, toIndex: number): void {
+  const pages = site.pages
   const [moved] = pages.splice(fromIndex, 1)
   pages.splice(toIndex, 0, moved)
 }

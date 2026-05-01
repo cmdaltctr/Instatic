@@ -8,7 +8,7 @@
  *  2. Must match PascalCase: /^[A-Z][A-Za-z0-9]*$/
  *  3. Must not be a reserved React/JS name (Fragment, Suspense, etc.)
  *  4. Must not collide with a base module display name (Button, Text, etc.)
- *  5. Must be unique within the project (by name, selfId skips own entry on rename)
+ *  5. Must be unique within the site (by name, selfId skips own entry on rename)
  *
  * Pattern mirrors isSafePath() in core/files/pathValidation.ts.
  *
@@ -164,7 +164,7 @@ export const RESERVED_JS_KEYWORDS: ReadonlySet<string> = new Set([
  * Validate a proposed Visual Component name.
  *
  * @param name       - The proposed name string.
- * @param existing   - All existing VCs in the project (for uniqueness check).
+ * @param existing   - All existing VCs in the site (for uniqueness check).
  * @param selfId     - When renaming, pass the VC's own id to skip it in the
  *                     duplicate check (prevents false PROJECT_DUPLICATE on
  *                     renaming a VC to its current name).
@@ -212,7 +212,7 @@ export function validateComponentName(
     }
   }
 
-  // Rule 5 — must be unique within the project (skip own entry on rename via selfId)
+  // Rule 5 — must be unique within the site (skip own entry on rename via selfId)
   const duplicate = existing.find((vc) => vc.id !== selfId && vc.name === name)
   if (duplicate) {
     return {

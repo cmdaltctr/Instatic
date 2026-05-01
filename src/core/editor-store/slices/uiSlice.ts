@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { EditorStore } from '../store'
 
 export type FocusedPanel = 'canvas' | 'domTree' | 'properties' | null
-export type LeftSidebarPanelId = 'project' | 'dependencies' | 'layers' | 'agent'
+export type LeftSidebarPanelId = 'site' | 'media' | 'dependencies' | 'layers' | 'agent'
 export type PropertiesPanelMode = 'docked' | 'floating'
 
 export const SIDEBAR_MIN_WIDTH = 260
@@ -56,8 +56,9 @@ export interface UiSlice {
   insertPickerOpen: boolean
   insertPickerParentId: string | null
 
-  // Project Explorer — user-facing project concepts, not generated source files
-  projectExplorerPanelOpen: boolean
+  // Site explorer — user-facing site concepts, not generated source files
+  siteExplorerPanelOpen: boolean
+  mediaExplorerPanelOpen: boolean
   dependenciesPanelOpen: boolean
 
   // CodeEditorPanel (Task #433) — whether the code editor floating panel is visible
@@ -88,7 +89,8 @@ export interface UiSlice {
   openInsertPicker: (parentId: string) => void
   closeInsertPicker: () => void
 
-  setProjectExplorerPanelOpen: (open: boolean) => void
+  setSiteExplorerPanelOpen: (open: boolean) => void
+  setMediaExplorerPanelOpen: (open: boolean) => void
   setDependenciesPanelOpen: (open: boolean) => void
   setLeftSidebarPanel: (panel: LeftSidebarPanelId | null) => void
   toggleLeftSidebarPanel: (panel: LeftSidebarPanelId) => void
@@ -96,7 +98,7 @@ export interface UiSlice {
   /** Show / hide the CodeEditor floating panel. */
   setCodeEditorPanelOpen: (open: boolean) => void
 
-  /** Open a ProjectFile in the CodeEditor panel. Sets activeEditorFileId and auto-shows the panel. */
+  /** Open a SiteFile in the CodeEditor panel. Sets activeEditorFileId and auto-shows the panel. */
   openInEditor: (fileId: string) => void
   /** Open a CMS media asset in the same draggable CodeEditor preview panel. */
   openMediaAssetPreview: (asset: MediaAssetPreview) => void
@@ -140,7 +142,8 @@ export function clampSidebarWidth(width: number) {
 }
 
 function getActiveLeftSidebarPanel(state: EditorStore): LeftSidebarPanelId | null {
-  if (state.projectExplorerPanelOpen) return 'project'
+  if (state.siteExplorerPanelOpen) return 'site'
+  if (state.mediaExplorerPanelOpen) return 'media'
   if (state.dependenciesPanelOpen) return 'dependencies'
   if (!state.domTreePanel.collapsed) return 'layers'
   if (state.isAgentOpen) return 'agent'
@@ -159,7 +162,8 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
   hasUnsavedChanges: false,
   insertPickerOpen: false,
   insertPickerParentId: null,
-  projectExplorerPanelOpen: false,
+  siteExplorerPanelOpen: false,
+  mediaExplorerPanelOpen: false,
   dependenciesPanelOpen: false,
   codeEditorPanelOpen: false,
   activeEditorFileId: null,
@@ -246,13 +250,16 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
   closeInsertPicker: () =>
     set({ insertPickerOpen: false, insertPickerParentId: null }),
 
-  setProjectExplorerPanelOpen: (open) => set({ projectExplorerPanelOpen: open }),
+  setSiteExplorerPanelOpen: (open) => set({ siteExplorerPanelOpen: open }),
+
+  setMediaExplorerPanelOpen: (open) => set({ mediaExplorerPanelOpen: open }),
 
   setDependenciesPanelOpen: (open) => set({ dependenciesPanelOpen: open }),
 
   setLeftSidebarPanel: (panel) =>
     set((state) => ({
-      projectExplorerPanelOpen: panel === 'project',
+      siteExplorerPanelOpen: panel === 'site',
+      mediaExplorerPanelOpen: panel === 'media',
       dependenciesPanelOpen: panel === 'dependencies',
       domTreePanel: {
         ...state.domTreePanel,

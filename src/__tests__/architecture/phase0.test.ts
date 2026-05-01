@@ -1,21 +1,21 @@
 /**
- * Architecture Gate Tests — Phase 0: Project Scaffold
+ * Architecture Gate Tests — Phase 0: SiteDocument Scaffold
  *
- * Pre-registered gate tests for Phase 0 — Project Scaffold (Task #173).
+ * Pre-registered gate tests for Phase 0 — SiteDocument Scaffold (Task #173).
  * Uses the adaptive-skip pattern — tests activate automatically when
  * `settingsSlice.ts` is created (the last of the four canonical Phase 0 slices),
  * indicating the Phase 0 scaffold is in place per the spec in Contribution #457.
  *
  * ENFORCED CONSTRAINTS (from Contribution #457 / Guideline #193 / Guideline #337):
  *
- * 1. No runtime `react` imports in `src/core/**` (excluding `react-publisher/`).
+ * 1. No runtime `react` imports in `src/core/**`.
  *    The core layer — module-engine, publisher, persistence — must be framework-
- *    agnostic. React belongs in `src/editor/` and `src/core/react-publisher/`.
+ *    agnostic. React belongs in `src/editor/`.
  *    Type-only imports (`import type`) are allowed (zero runtime cost).
  *    (Constraints #179, #190 — "No React in core engine")
  *
  * 2. The six canonical Phase 0 slices must exist in `src/core/editor-store/slices/`.
- *    Required: `projectSlice.ts`, `canvasSlice.ts`, `classSlice.ts`, `settingsSlice.ts`,
+ *    Required: `siteSlice.ts`, `canvasSlice.ts`, `classSlice.ts`, `settingsSlice.ts`,
  *    `selectionSlice.ts`, `uiSlice.ts`.
  *    `selectionSlice.ts` and `uiSlice.ts` were pre-approved by Guideline #341 (posted
  *    after the original Guideline #193 spec). A seventh slice — `domTreeSlice.ts` —
@@ -27,7 +27,7 @@
  * The canonical store path is `src/core/editor-store/` — NOT `src/editor-store/`.
  * Any reference to the old path in code or tests is a bug; see Guideline #337.
  *
- * @see Contribution #457 — Phase 0 Project Scaffold: Architectural Specification (Architect)
+ * @see Contribution #457 — Phase 0 SiteDocument Scaffold: Architectural Specification (Architect)
  * @see Guideline #193    — Original Zustand slices specification (4 slices)
  * @see Guideline #341    — Zustand Store Slice Set Addendum (adds selectionSlice + uiSlice → 6 slices)
  * @see Guideline #337    — Phase 0 Scaffold Addendum (store path correction + domTreeSlice pre-approval)
@@ -45,7 +45,7 @@ const SLICES_DIR = join(SRC_ROOT, 'core/editor-store/slices')
 // ---------------------------------------------------------------------------
 // Phase 0 activation check
 //
-// The canonical four Phase 0 slices are: projectSlice, canvasSlice, classSlice,
+// The canonical four Phase 0 slices are: siteSlice, canvasSlice, classSlice,
 // settingsSlice. We treat settingsSlice.ts as the "Phase 0 complete" signal
 // because it is the most likely to be absent until a canonical scaffold is applied
 // (the other three accumulate from earlier development iterations).
@@ -73,7 +73,7 @@ function collectTs(dir: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Gate 1 — No runtime React imports in src/core/ (excluding react-publisher/)
+// Gate 1 — No runtime React imports in src/core/
 //
 // Context: Constraints #179 / #190 — "No React in core engine".
 // The core layer is framework-agnostic: module-engine, publisher (HTML/CSS path),
@@ -83,8 +83,6 @@ function collectTs(dir: string): string[] {
 //
 // Allowed:
 //   - `import type { ... } from 'react'` — zero runtime cost, type-only
-//   - Any import in `src/core/react-publisher/` — that IS the React layer
-//
 // Blocked:
 //   - `import React from 'react'`
 //   - `import { useState, ... } from 'react'`  (runtime React hooks/APIs in core)
@@ -106,17 +104,9 @@ describe('Phase 0 Gate 1 — No runtime React imports in src/core/ (Constraints 
       return
     }
 
-    // Exclude react-publisher/ — that directory IS the React layer by design.
-    const REACT_PUBLISHER_DIR = join(CORE_DIR, 'react-publisher')
-
     const violations: string[] = []
 
     for (const file of collectTs(CORE_DIR)) {
-      // Skip the React publisher — it is intentionally React-coupled
-      if (file.startsWith(REACT_PUBLISHER_DIR + '/') || file === REACT_PUBLISHER_DIR) {
-        continue
-      }
-
       let src: string
       try { src = readFileSync(file, 'utf8') } catch { continue }
 
@@ -142,8 +132,7 @@ describe('Phase 0 Gate 1 — No runtime React imports in src/core/ (Constraints 
     if (violations.length > 0) {
       throw new Error(
         '[Phase 0 / Constraints #179 + #190] Runtime React imports found in src/core/ files.\n' +
-        'The core layer must be framework-agnostic. React belongs in src/editor/ and\n' +
-        'src/core/react-publisher/ (the explicit React integration layer).\n' +
+        'The core layer must be framework-agnostic. React belongs in src/editor/.\n' +
         'Type-only imports (`import type { ... } from "react"`) are allowed — zero runtime cost.\n' +
         'If src/core/persistence/usePersistence.ts is flagged, move it to src/editor/hooks/.\n' +
         'See Contribution #457 (Phase 0 spec) and Constraints #179, #190.\n' +
@@ -161,7 +150,7 @@ describe('Phase 0 Gate 1 — No runtime React imports in src/core/ (Constraints 
 //
 // Context: Guideline #193 (original 4 slices) + Guideline #341 (addendum — 2 more).
 // Contribution #457 specifies the canonical split:
-//   projectSlice / canvasSlice / classSlice / settingsSlice
+//   siteSlice / canvasSlice / classSlice / settingsSlice
 // Guideline #341 (posted after the original gate was written) pre-approved two more:
 //   selectionSlice / uiSlice
 //
@@ -177,7 +166,7 @@ describe('Phase 0 Gate 1 — No runtime React imports in src/core/ (Constraints 
 // ---------------------------------------------------------------------------
 
 const CANONICAL_PHASE0_SLICES = [
-  'projectSlice.ts',
+  'siteSlice.ts',
   'canvasSlice.ts',
   'classSlice.ts',
   'settingsSlice.ts',
@@ -188,10 +177,10 @@ const CANONICAL_PHASE0_SLICES = [
 // Slices approved for phases after Phase 0 — not a violation when present
 const PRE_APPROVED_FUTURE_SLICES = new Set([
   'domTreeSlice.ts',          // Phase 3 (Guideline #337 / Guideline #321)
-  'projectPanelSlice.ts',     // Phase E+ (Task #364 / Guideline #341 addendum / Architect message #1558)
+  'sitePanelSlice.ts',     // Phase E+ (Task #364 / Guideline #341 addendum / Architect message #1558)
   'settingsModalSlice.ts',    // Phase 6 (Task #183 — Settings Modal; open state may live in uiSlice but a dedicated slice is also permitted)
-  'filesSlice.ts',            // File system data layer (Contribution #595 §6 / msg #1844 — CRUD actions for project.files[])
-  'visualComponentsSlice.ts', // Visual Components data layer (Contribution #619 §10 / Task #436 — CRUD actions for project.visualComponents[])
+  'filesSlice.ts',            // File system data layer (Contribution #595 §6 / msg #1844 — CRUD actions for site.files[])
+  'visualComponentsSlice.ts', // Visual Components data layer (Contribution #619 §10 / Task #436 — CRUD actions for site.visualComponents[])
 ])
 
 describe('Phase 0 Gate 2 — Canonical six slices in src/core/editor-store/slices/ (Guideline #193 + #341)', () => {
@@ -218,7 +207,7 @@ describe('Phase 0 Gate 2 — Canonical six slices in src/core/editor-store/slice
       throw new Error(
         '[Phase 0 / Guideline #193 + #341] Missing canonical Phase 0 slices.\n' +
         'The Phase 0 scaffold must include all six Zustand slices:\n' +
-        '  projectSlice.ts, canvasSlice.ts, classSlice.ts, settingsSlice.ts,\n' +
+        '  siteSlice.ts, canvasSlice.ts, classSlice.ts, settingsSlice.ts,\n' +
         '  selectionSlice.ts (Guideline #341), uiSlice.ts (Guideline #341)\n' +
         'See Contribution #457 (Phase 0 spec), Guideline #193, and Guideline #341.\n' +
         'Missing:\n' +
@@ -251,7 +240,7 @@ describe('Phase 0 Gate 2 — Canonical six slices in src/core/editor-store/slice
     if (unexpected.length > 0) {
       throw new Error(
         '[Phase 0 / Guideline #193 + #341] Unexpected slice files found in src/core/editor-store/slices/.\n' +
-        'Phase 0 canonical slices: projectSlice, canvasSlice, classSlice, settingsSlice,\n' +
+        'Phase 0 canonical slices: siteSlice, canvasSlice, classSlice, settingsSlice,\n' +
         '  selectionSlice (Guideline #341), uiSlice (Guideline #341).\n' +
         'Phase 3 pre-approved addition: domTreeSlice (Guideline #337 / Guideline #321).\n' +
         'Any slice outside these sets should be reviewed against the architecture spec before adding.\n' +

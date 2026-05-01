@@ -65,7 +65,7 @@ const SRC_ROOT = join(import.meta.dir, '../../')
 // Phase 2 canvas implementation directory (expected location)
 // Adjust if Full Stack Engineer places it elsewhere.
 const CANVAS_DIRS = [
-  join(SRC_ROOT, 'editor/components/Canvas'), // actual project layout
+  join(SRC_ROOT, 'editor/components/Canvas'), // actual site layout
   join(SRC_ROOT, 'components/Canvas'),
   join(SRC_ROOT, 'editor/Canvas'),
   join(SRC_ROOT, 'ui/Canvas'),

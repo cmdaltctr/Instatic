@@ -2,11 +2,16 @@
  * BreakpointsSection — add / edit / remove canvas breakpoints.
  *
  * Changes reflect on the canvas immediately because CanvasRoot reads
- * `project.breakpoints` from the store.
+ * `site.breakpoints` from the store.
  */
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useEditorStore } from '../../../../core/editor-store/store'
-import { Icon } from '../../../../ui/icons/Icon'
+import { SmartphoneIcon } from '@ui/icons/icons/smartphone'
+import { TabletIcon } from '@ui/icons/icons/tablet'
+import { MonitorIcon } from '@ui/icons/icons/monitor'
+import { LaptopIcon } from '@ui/icons/icons/laptop'
+import { TvIcon } from '@ui/icons/icons/tv'
+import { PlusIcon } from '@ui/icons/icons/plus'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
@@ -14,15 +19,15 @@ import type { Breakpoint } from '../../../../core/page-tree/types'
 import s from '../Settings.module.css'
 
 const ICON_OPTIONS = [
-  { value: 'smartphone', label: 'Smartphone', icon: 'smartphone' },
-  { value: 'tablet', label: 'Tablet', icon: 'tablet' },
-  { value: 'monitor', label: 'Monitor', icon: 'monitor' },
-  { value: 'laptop', label: 'Laptop', icon: 'laptop' },
-  { value: 'tv', label: 'TV', icon: 'tv' },
+  { value: 'smartphone', label: 'Smartphone', icon: <SmartphoneIcon size={13} /> },
+  { value: 'tablet', label: 'Tablet', icon: <TabletIcon size={13} /> },
+  { value: 'monitor', label: 'Monitor', icon: <MonitorIcon size={13} /> },
+  { value: 'laptop', label: 'Laptop', icon: <LaptopIcon size={13} /> },
+  { value: 'tv', label: 'TV', icon: <TvIcon size={13} /> },
 ]
 
 export function BreakpointsSection() {
-  const project = useEditorStore((state) => state.project)
+  const site = useEditorStore((state) => state.site)
   const addBreakpoint = useEditorStore((state) => state.addBreakpoint)
   const updateBreakpoint = useEditorStore((state) => state.updateBreakpoint)
   const removeBreakpoint = useEditorStore((state) => state.removeBreakpoint)
@@ -74,8 +79,8 @@ export function BreakpointsSection() {
     setConfirmRemoveId(null)
   }
 
-  if (!project) {
-    return <div className={s.noProject}>No project loaded.</div>
+  if (!site) {
+    return <div className={s.noSite}>Loading site...</div>
   }
 
   return (
@@ -87,7 +92,7 @@ export function BreakpointsSection() {
       </p>
 
       <ul role="list" className={s.list}>
-        {project.breakpoints.map((bp) => (
+        {site.breakpoints.map((bp) => (
           <li key={bp.id}>
             {editingId === bp.id ? (
               <div className={s.bpEditForm}>
@@ -124,9 +129,8 @@ export function BreakpointsSection() {
             ) : (
               <div className={s.listItem}>
                 <div className={s.row}>
-                  <Icon
+                  <BreakpointIcon
                     name={bp.icon}
-                    size={14}
                     color={bp.id === activeBreakpointId ? 'var(--editor-text)' : 'var(--editor-text-subtle)'}
                   />
                   <div className={s.listItemContent}>
@@ -186,10 +190,10 @@ export function BreakpointsSection() {
                     <Button
                       variant="destructive"
                       size="md"
-                      onClick={project.breakpoints.length <= 1 ? undefined : () => setConfirmRemoveId(bp.id)}
-                      aria-disabled={project.breakpoints.length <= 1 ? 'true' : undefined}
+                      onClick={site.breakpoints.length <= 1 ? undefined : () => setConfirmRemoveId(bp.id)}
+                      aria-disabled={site.breakpoints.length <= 1 ? 'true' : undefined}
                       aria-label={`Remove ${bp.label} breakpoint`}
-                      title={project.breakpoints.length <= 1 ? 'Cannot remove the last breakpoint' : undefined}
+                      title={site.breakpoints.length <= 1 ? 'Cannot remove the last breakpoint' : undefined}
                     >
                       Remove
                     </Button>
@@ -236,10 +240,27 @@ export function BreakpointsSection() {
             onClick={handleAdd}
             disabled={!newLabel.trim() || newWidth <= 0}
           >
-            + Add
+            <PlusIcon size={13} aria-hidden="true" />
+            Add
           </Button>
         </div>
       </div>
     </div>
   )
+}
+
+function BreakpointIcon({ name, color }: { name: string; color: string }) {
+  switch (name) {
+    case 'smartphone':
+      return <SmartphoneIcon size={14} color={color} />
+    case 'tablet':
+      return <TabletIcon size={14} color={color} />
+    case 'laptop':
+      return <LaptopIcon size={14} color={color} />
+    case 'tv':
+      return <TvIcon size={14} color={color} />
+    case 'monitor':
+    default:
+      return <MonitorIcon size={14} color={color} />
+  }
 }

@@ -21,8 +21,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { PropertyControlRenderer } from '../../editor/components/PropertyControls/PropertyControlRenderer'
 import type { PropertyControl } from '../../core/module-engine/types'
+import type { CmsMediaAsset } from '../../core/persistence/cmsMedia'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+})
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,6 +45,38 @@ function renderControl(
     />
   )
 }
+
+function installMediaFetchStub(assets: CmsMediaAsset[]): () => void {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    if (String(input).endsWith('/api/cms/media')) {
+      return new Response(JSON.stringify({ assets }), { status: 200 })
+    }
+    throw new Error(`Unexpected fetch: ${String(input)}`)
+  }) as typeof fetch
+  return () => {
+    globalThis.fetch = originalFetch
+  }
+}
+
+const mediaAssets: CmsMediaAsset[] = [
+  {
+    id: 'asset-image',
+    filename: 'hero.png',
+    mimeType: 'image/png',
+    sizeBytes: 1234,
+    publicPath: '/uploads/hero.png',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'asset-video',
+    filename: 'intro.mp4',
+    mimeType: 'video/mp4',
+    sizeBytes: 4321,
+    publicPath: '/uploads/intro.mp4',
+    createdAt: '2026-01-02T00:00:00.000Z',
+  },
+]
 
 // ---------------------------------------------------------------------------
 // 1 — data-testid and minHeight wrapper (Guideline #221 / WCAG 2.5.5)
@@ -145,6 +180,100 @@ describe('PropertyControlRenderer — type dispatch', () => {
     const html = renderControl({ type: 'image', label: 'Image Source' }, 'src', '')
     expect(html.length).toBeGreaterThan(0)
     expect(html).toContain('data-testid="property-control-src"')
+  })
+
+  it('image → defaults to CMS image media and stores the selected public path', async () => {
+    const restoreFetch = installMediaFetchStub(mediaAssets)
+    const changes: Array<{ key: string; value: unknown }> = []
+    try {
+      render(
+        <PropertyControlRenderer
+          propKey="src"
+          control={{ type: 'image', label: 'Image Source' }}
+          value=""
+          onChange={(key, value) => changes.push({ key, value })}
+        />
+      )
+
+      const imageAsset = await screen.findByRole('button', { name: /select media hero\.png/i })
+      expect(screen.queryByRole('button', { name: /select media intro\.mp4/i })).toBeNull()
+
+      fireEvent.click(imageAsset)
+      expect(changes).toContainEqual({ key: 'src', value: '/uploads/hero.png' })
+    } finally {
+      restoreFetch()
+    }
+  })
+
+  it('image → keeps custom URL entry as a fallback mode', async () => {
+    const restoreFetch = installMediaFetchStub(mediaAssets)
+    const changes: Array<{ key: string; value: unknown }> = []
+    try {
+      render(
+        <PropertyControlRenderer
+          propKey="src"
+          control={{ type: 'image', label: 'Image Source' }}
+          value=""
+          onChange={(key, value) => changes.push({ key, value })}
+        />
+      )
+
+      await screen.findByRole('button', { name: /select media hero\.png/i })
+      fireEvent.click(screen.getByRole('button', { name: /custom url/i }))
+      fireEvent.change(screen.getByLabelText('Image Source'), {
+        target: { value: 'https://example.com/photo.png' },
+      })
+
+      expect(changes).toContainEqual({ key: 'src', value: 'https://example.com/photo.png' })
+    } finally {
+      restoreFetch()
+    }
+  })
+
+  it('media → filters and selects CMS video assets', async () => {
+    const restoreFetch = installMediaFetchStub(mediaAssets)
+    const changes: Array<{ key: string; value: unknown }> = []
+    try {
+      render(
+        <PropertyControlRenderer
+          propKey="videoUrl"
+          control={{ type: 'media', mediaKind: 'video', label: 'Video file' }}
+          value=""
+          onChange={(key, value) => changes.push({ key, value })}
+        />
+      )
+
+      const videoAsset = await screen.findByRole('button', { name: /select media intro\.mp4/i })
+      expect(screen.queryByRole('button', { name: /select media hero\.png/i })).toBeNull()
+
+      fireEvent.click(videoAsset)
+      expect(changes).toContainEqual({ key: 'videoUrl', value: '/uploads/intro.mp4' })
+    } finally {
+      restoreFetch()
+    }
+  })
+
+  it('image → expired CMS sessions show a sign-in message instead of local media fallback', async () => {
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    }) as typeof fetch
+
+    try {
+      render(
+        <PropertyControlRenderer
+          propKey="src"
+          control={{ type: 'image', label: 'Image Source' }}
+          value=""
+          onChange={() => {}}
+        />
+      )
+
+      expect(await screen.findByText('Sign in again to use CMS media.')).toBeDefined()
+      expect(screen.queryByText('Unauthorized')).toBeNull()
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   })
 
   it('url → renders <input type="url"> or URL control', () => {

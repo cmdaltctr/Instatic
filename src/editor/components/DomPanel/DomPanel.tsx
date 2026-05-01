@@ -14,7 +14,7 @@
  * Guideline #318 (Phase 3 Perf):
  * - Per-node Zustand selectors: only affected rows re-render on selection/hover
  * - DnD drag position tracked via refs; store updated once on dragEnd
- * - expandedNodeIds lives in DomTreeContext (UI-only) — never in projectSlice
+ * - expandedNodeIds lives in DomTreeContext (UI-only) — never in siteSlice
  *
  * Guideline #321 (Phase 3 Architecture):
  * - DndContext wraps the whole tree; SortableContexts are per-parent group
@@ -50,6 +50,15 @@ import { SearchBar } from '@ui/components/SearchBar'
 import { PanelHeader } from '../shared/PanelHeader'
 import { useDraggablePanel } from '../../hooks/useDraggablePanel'
 import { cn } from '@ui/cn'
+import type { IconComponent } from '@ui/icons/types'
+import { LayoutIcon } from '@ui/icons/icons/layout'
+import { TypeIcon } from '@ui/icons/icons/type'
+import { ImageIcon } from '@ui/icons/icons/image'
+import { SquareIcon } from '@ui/icons/icons/square'
+import { LinkIcon } from '@ui/icons/icons/link'
+import { ListBoxIcon } from '@ui/icons/icons/list-box'
+import { FileTextIcon } from '@ui/icons/icons/file-text'
+import { VideoIcon } from '@ui/icons/icons/video'
 import styles from './DomPanel.module.css'
 
 const PANEL_STORAGE_KEY = 'pb-dom-panel'
@@ -94,7 +103,7 @@ function SearchResults({ rows, onSelect }: SearchResultsProps) {
             }
           }}
         >
-          <TreeIconSlot iconName={getModuleIconName(moduleId)} iconSize={11} />
+          <TreeIconSlot icon={getModuleIcon(moduleId)} iconSize={11} />
           <TreeLabel>
             {displayName}
           </TreeLabel>
@@ -261,7 +270,7 @@ function DomPanelInner({ variant = 'floating' }: { variant?: PanelVariant }) {
       {dnd.activeId && dnd.activeLabel && dnd.activeModuleId ? (
         <TreeRow depth={0} className={styles.dragOverlayRow}>
           <TreeIconSlot
-            iconName={getModuleIconName(dnd.activeModuleId)}
+            icon={getModuleIcon(dnd.activeModuleId)}
             iconSize={11}
             iconColor="var(--editor-text-subtle)"
           />
@@ -317,7 +326,7 @@ function DomPanelInner({ variant = 'floating' }: { variant?: PanelVariant }) {
         <div ref={treeAreaRef} className={styles.treeArea}>
           {!page ? (
             <div className={styles.emptyMsg}>
-              No project loaded
+              Loading site...
             </div>
           ) : searchQuery.trim() ? (
             /* ── Search results mode: flat filtered list ── */
@@ -375,19 +384,24 @@ export function DomPanel({ variant = 'floating' }: { variant?: PanelVariant }) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getModuleIconName(moduleId: string): string {
-  const icons: Record<string, string> = {
-    'base.container': 'layout',
-    'base.text':      'type',
-    'base.image':     'image',
-    'base.button':    'square',
-    'base.link':      'link',
-    'base.spacer':    'arrows-vertical',
-    'base.divider':   'minus',
-    'base.list':      'list-box',
-    'base.root':      'file-text',
-    'base.video':     'video',
-    'base.columns':   'layout',
+function getModuleIcon(moduleId: string): IconComponent {
+  switch (moduleId) {
+    case 'base.container':
+      return LayoutIcon
+    case 'base.text':
+      return TypeIcon
+    case 'base.image':
+      return ImageIcon
+    case 'base.link':
+      return LinkIcon
+    case 'base.list':
+      return ListBoxIcon
+    case 'base.root':
+      return FileTextIcon
+    case 'base.video':
+      return VideoIcon
+    case 'base.button':
+    default:
+      return SquareIcon
   }
-  return icons[moduleId] ?? 'square'
 }

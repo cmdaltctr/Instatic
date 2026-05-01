@@ -33,7 +33,8 @@ import {
   ContextMenuSeparator,
 } from '@ui/components/ContextMenu'
 import { Input } from '@ui/components/Input'
-import { Icon } from '../../../ui/icons/Icon'
+import { ChevronUpIcon } from '@ui/icons/icons/chevron-up'
+import { ChevronDownIcon } from '@ui/icons/icons/chevron-down'
 import { CloseIcon } from '@ui/icons/icons/close'
 import { cn } from '@ui/cn'
 import { isUserVisibleClass } from '../../../core/page-tree/classUtils'
@@ -67,10 +68,10 @@ interface ClassPickerProps {
 }
 
 export function ClassPicker({ nodeId }: ClassPickerProps) {
-  const project = useEditorStore((s) => s.project)
+  const site = useEditorStore((s) => s.site)
   const node = useEditorStore(
     useCallback(
-      (s) => s.project?.pages.find((p) => p.nodes[nodeId])?.nodes[nodeId] ?? null,
+      (s) => s.site?.pages.find((p) => p.nodes[nodeId])?.nodes[nodeId] ?? null,
       [nodeId],
     ),
   )
@@ -93,8 +94,8 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const assignedIds = node?.classIds ?? []
-  const visibleAssignedIds = assignedIds.filter((id) => isUserVisibleClass(project?.classes[id]))
-  const allClasses = Object.values(project?.classes ?? {}).filter(isUserVisibleClass)
+  const visibleAssignedIds = assignedIds.filter((id) => isUserVisibleClass(site?.classes[id]))
+  const allClasses = Object.values(site?.classes ?? {}).filter(isUserVisibleClass)
 
   const suggestions = allClasses.filter(
     (c) =>
@@ -200,7 +201,7 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
       {visibleAssignedIds.length > 0 && (
         <div className={styles.pillsContainer}>
           {visibleAssignedIds.map((id, idx) => {
-            const cls = project?.classes[id]
+            const cls = site?.classes[id]
             if (!cls) return null
             const isActive = activeClassId === id
             return (
@@ -240,7 +241,7 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
                     }}
                     aria-label={`Move class ${cls.name} up in cascade`}
                   >
-                    <Icon name="chevron-up" size={8} />
+                    <ChevronUpIcon size={8} />
                   </Button>
                   <Button
                     variant="ghost"
@@ -252,7 +253,7 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
                     }}
                     aria-label={`Move class ${cls.name} down in cascade`}
                   >
-                    <Icon name="chevron-down" size={8} />
+                    <ChevronDownIcon size={8} />
                   </Button>
                 </span>
 

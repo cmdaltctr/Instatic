@@ -12,7 +12,7 @@
  * Call `sanitizeRichtext(value)` at EVERY write path that stores a richtext prop:
  *   - PropertyControlRenderer: onChange for richtext/textarea controls
  *   - useSandboxBridge: PROP_CHANGE messages from community module iframes
- *   - LocalAdapter: loadProject() deserialization (before store hydration)
+ *   - CMS draft hydration before store load
  *   - Phase D agent dispatcher: setProps tool calls for richtext-typed props
  *
  * Never trust that "the UI already sanitized it" — sanitize at every write path.

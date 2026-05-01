@@ -21,7 +21,7 @@
  *    (Guideline #225 — `onKeyDown` with `e.key === 'Escape'` check)
  *
  * 5. Settings modal open state tracked in Zustand store (uiSlice or equivalent).
- *    (Task #183 — "All settings persisted to projectStore")
+ *    (Task #183 — "All settings persisted to site store")
  *
  * 6. Backdrop must not receive focus — `aria-hidden="true"` or `inert` on overlay.
  *    (Guideline #225 — "Backdrop must NOT receive focus")
@@ -155,7 +155,7 @@ describe('Phase 6 Gate 1 — SettingsModal must have correct ARIA dialog attribu
         violations.push(
           `${rel} — missing aria-describedby ` +
           '(screen readers read the dialog description on focus — add an sr-only <p id="settings-modal-desc"> ' +
-          'with content like "Project-level configuration. Press Escape to close." and reference it here)'
+          'with content like "SiteDocument-level configuration. Press Escape to close." and reference it here)'
         )
       }
 
@@ -180,7 +180,7 @@ describe('Phase 6 Gate 1 — SettingsModal must have correct ARIA dialog attribu
         '  >\n' +
         '    <h2 id="settings-modal-title">Settings</h2>\n' +
         '    <p id="settings-modal-desc" className="sr-only">\n' +
-        '      Project-level configuration. Press Escape to close.\n' +
+        '      SiteDocument-level configuration. Press Escape to close.\n' +
         '    </p>\n' +
         '    ...\n' +
         '  </div>\n' +
@@ -388,7 +388,7 @@ describe('Phase 6 Gate 4 — SettingsModal must handle Escape key to close (Guid
 // ---------------------------------------------------------------------------
 // Gate 5 — Settings modal open state must be tracked in Zustand store
 //
-// Context: Task #183 — "All settings persisted to projectStore / IndexedDB".
+// Context: Task #183 — settings state is owned by the editor store.
 // The modal open/close state must be accessible from the Zustand store so
 // that any part of the editor (toolbar button, Ctrl+, shortcut, external
 // trigger) can open the settings modal via the same action.

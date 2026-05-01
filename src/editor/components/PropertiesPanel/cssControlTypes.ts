@@ -10,6 +10,15 @@
  */
 
 import type { CSSPropertyBag } from '../../../core/page-tree/types'
+import type { IconComponent } from '@ui/icons/types'
+import { LayoutIcon } from '@ui/icons/icons/layout'
+import { ProportionsIcon } from '@ui/icons/icons/proportions'
+import { RulerDimensionIcon } from '@ui/icons/icons/ruler-dimension'
+import { TypeIcon } from '@ui/icons/icons/type'
+import { PaintBucketIcon } from '@ui/icons/icons/paint-bucket'
+import { BoxIcon } from '@ui/icons/icons/box'
+import { SparklesIcon } from '@ui/icons/icons/sparkles'
+import { PointerIcon } from '@ui/icons/icons/pointer'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -366,7 +375,7 @@ export const PICKER_CATEGORY_ORDER: ReadonlyArray<CSSPropertyCategory> = [
 export interface ClassStyleSectionDefinition {
   id: string
   title: string
-  icon: string
+  icon: IconComponent
   defaultOpen?: boolean
   properties: ReadonlyArray<keyof CSSPropertyBag>
 }
@@ -375,7 +384,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'layout-position',
     title: 'Layout & Position',
-    icon: 'layout',
+    icon: LayoutIcon,
     defaultOpen: true,
     properties: [
       'display',
@@ -408,7 +417,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'size',
     title: 'Size',
-    icon: 'proportions',
+    icon: ProportionsIcon,
     defaultOpen: true,
     properties: [
       'width',
@@ -424,7 +433,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'spacing',
     title: 'Spacing',
-    icon: 'ruler-dimension',
+    icon: RulerDimensionIcon,
     defaultOpen: true,
     properties: [
       'padding',
@@ -442,7 +451,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'typography',
     title: 'Typography',
-    icon: 'type',
+    icon: TypeIcon,
     properties: [
       'fontFamily',
       'fontSize',
@@ -460,7 +469,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'background',
     title: 'Background',
-    icon: 'paint-bucket',
+    icon: PaintBucketIcon,
     properties: [
       'backgroundColor',
       'background',
@@ -475,7 +484,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'border',
     title: 'Border',
-    icon: 'box',
+    icon: BoxIcon,
     properties: [
       'border',
       'borderTop',
@@ -494,7 +503,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'effects',
     title: 'Effects',
-    icon: 'sparkles',
+    icon: SparklesIcon,
     properties: [
       'opacity',
       'boxShadow',
@@ -509,7 +518,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'interaction',
     title: 'Interaction',
-    icon: 'pointer',
+    icon: PointerIcon,
     properties: [
       'cursor',
       'pointerEvents',

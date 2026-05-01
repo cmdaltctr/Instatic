@@ -8,7 +8,8 @@
  */
 import { useEffect } from 'react'
 import { useCanUndo, useCanRedo, useUndo, useRedo } from '@core/editor-store/store'
-import { Icon } from '../../../ui/icons/Icon'
+import { UndoIcon } from '@ui/icons/icons/undo'
+import { RedoIcon } from '@ui/icons/icons/redo'
 import { Button } from '@ui/components/Button'
 import styles from './Toolbar.module.css'
 
@@ -59,7 +60,7 @@ export function UndoRedoButtons() {
         title="Undo (⌘Z)"
         data-testid="toolbar-undo-btn"
       >
-        <Icon name="undo" size={16} aria-hidden="true" />
+        <UndoIcon size={16} aria-hidden="true" />
       </Button>
 
       <Button
@@ -73,7 +74,7 @@ export function UndoRedoButtons() {
         title="Redo (⌘⇧Z)"
         data-testid="toolbar-redo-btn"
       >
-        <Icon name="redo" size={16} aria-hidden="true" />
+        <RedoIcon size={16} aria-hidden="true" />
       </Button>
     </div>
   )

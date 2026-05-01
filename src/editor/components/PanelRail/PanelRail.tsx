@@ -1,7 +1,12 @@
 import { useEffect } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
 import type { LeftSidebarPanelId } from '@core/editor-store/slices/uiSlice'
-import { Icon } from '../../../ui/icons/Icon'
+import type { IconComponent } from '@ui/icons/types'
+import { Bulletlist2SharpIcon } from '@ui/icons/icons/bulletlist-2-sharp'
+import { AiSettingsSolidIcon } from '@ui/icons/icons/ai-settings-solid'
+import { FilesStack2Icon } from '@ui/icons/icons/files-stack-2'
+import { ImagesIcon } from '@ui/icons/icons/images'
+import { BoxStackIcon } from '@ui/icons/icons/box-stack'
 import { Button } from '@ui/components/Button'
 import styles from './PanelRail.module.css'
 
@@ -10,7 +15,8 @@ type RailAccent = 'mint' | 'lilac' | 'sky' | 'peach'
 interface PrimaryRailItem {
   id: LeftSidebarPanelId
   label: string
-  icon: string
+  icon: IconComponent
+  iconName: string
   accent: RailAccent
   ariaKeyshortcuts?: string
   shortcutLabel?: string
@@ -19,7 +25,8 @@ interface PrimaryRailItem {
 interface RailItem {
   id: string
   label: string
-  icon: string
+  icon: IconComponent
+  iconName: string
   accent: RailAccent
   open: boolean
   disabled?: boolean
@@ -33,36 +40,48 @@ const PRIMARY_RAIL_ITEMS: PrimaryRailItem[] = [
   {
     id: 'layers',
     label: 'Layers',
-    icon: 'bulletlist-2-sharp',
+    icon: Bulletlist2SharpIcon,
+    iconName: 'bulletlist-2-sharp',
     accent: 'mint',
   },
   {
     id: 'agent',
     label: 'AI assistant',
-    icon: 'ai-settings-solid',
+    icon: AiSettingsSolidIcon,
+    iconName: 'ai-settings-solid',
     accent: 'lilac',
     ariaKeyshortcuts: 'Meta+I',
     shortcutLabel: 'Cmd+I',
   },
   {
-    id: 'project',
-    label: 'Project',
-    icon: 'files-stack-2',
+    id: 'site',
+    label: 'Site',
+    icon: FilesStack2Icon,
+    iconName: 'files-stack-2',
     accent: 'sky',
     ariaKeyshortcuts: 'Control+Shift+E',
     shortcutLabel: 'Ctrl+Shift+E',
   },
   {
+    id: 'media',
+    label: 'Media',
+    icon: ImagesIcon,
+    iconName: 'images',
+    accent: 'sky',
+  },
+  {
     id: 'dependencies',
     label: 'Dependencies',
-    icon: 'box-stack',
+    icon: BoxStackIcon,
+    iconName: 'box-stack',
     accent: 'peach',
   },
 ]
 
 export function PanelRail() {
   const domOpen = useEditorStore((s) => !s.domTreePanel.collapsed)
-  const projectOpen = useEditorStore((s) => s.projectExplorerPanelOpen)
+  const siteOpen = useEditorStore((s) => s.siteExplorerPanelOpen)
+  const mediaOpen = useEditorStore((s) => s.mediaExplorerPanelOpen)
   const dependenciesOpen = useEditorStore((s) => s.dependenciesPanelOpen)
   const agentOpen = useEditorStore((s) => s.isAgentOpen)
 
@@ -83,7 +102,10 @@ export function PanelRail() {
 
       if (e.ctrlKey && e.shiftKey && e.key === 'E') {
         e.preventDefault()
-        useEditorStore.getState().toggleLeftSidebarPanel('project')
+        useEditorStore.getState().toggleLeftSidebarPanel('site')
+      } else if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+        e.preventDefault()
+        useEditorStore.getState().toggleLeftSidebarPanel('media')
       } else if (e.ctrlKey && e.shiftKey && e.key === 'R') {
         e.preventDefault()
         useEditorStore.getState().togglePropertiesPanel()
@@ -100,7 +122,8 @@ export function PanelRail() {
   const panelOpenById = {
     layers: domOpen,
     agent: agentOpen,
-    project: projectOpen,
+    site: siteOpen,
+    media: mediaOpen,
     dependencies: dependenciesOpen,
   } satisfies Record<LeftSidebarPanelId, boolean>
 
@@ -126,6 +149,7 @@ export function PanelRail() {
 }
 
 function RailButton({ item }: { item: RailItem }) {
+  const RailIcon = item.icon
   const action = item.open ? 'Close' : 'Open'
   const title = item.disabled
     ? item.disabledTitle
@@ -144,13 +168,13 @@ function RailButton({ item }: { item: RailItem }) {
       disabled={item.disabled}
       title={title}
       data-testid={`panel-rail-${item.id}`}
-      data-icon={item.icon}
+      data-icon={item.iconName}
       data-accent={item.accent}
       onClick={item.onToggle}
       className={styles.railButton}
     >
       <span className={styles.activeIndicator} aria-hidden="true" />
-      <Icon name={item.icon} size={16} className={styles.railIcon} />
+      <RailIcon size={16} className={styles.railIcon} />
     </Button>
   )
 }

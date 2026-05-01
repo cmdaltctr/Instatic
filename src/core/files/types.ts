@@ -3,8 +3,8 @@
  *
  * Architecture source: Contribution #595 §1.2
  *
- * ProjectFile is stored as a flat array in project.files (parallel to
- * project.pages).  The display-layer tree is derived via buildFileTree()
+ * SiteFile is stored as a flat array in site.files (parallel to
+ * site.pages).  The display-layer tree is derived via buildFileTree()
  * in selectors.ts — the same flat-map reasoning that drives Page.nodes
  * (Decision #309 / Constraint #215).
  *
@@ -13,10 +13,10 @@
  */
 
 // ---------------------------------------------------------------------------
-// ProjectFileType
+// SiteFileType
 // ---------------------------------------------------------------------------
 
-export type ProjectFileType =
+export type SiteFileType =
   | 'component' // src/components/*.tsx — user-authored React components
   | 'script'    // src/scripts/*.ts, src/utils/*.ts, src/hooks/*.ts
   | 'style'     // src/styles/*.css — global CSS
@@ -25,22 +25,22 @@ export type ProjectFileType =
   | 'doc'       // README.md, CHANGELOG.md — markdown docs
 
 // ---------------------------------------------------------------------------
-// ProjectFile
+// SiteFile
 // ---------------------------------------------------------------------------
 
-export interface ProjectFile {
+export interface SiteFile {
   /** Unique ID — generated with nanoid() (NOT path; path is mutable on rename) */
   id: string
 
   /**
-   * POSIX-style path relative to project root.
+   * POSIX-style path relative to site root.
    * Examples: "src/components/MyButton.tsx", "public/logo.png", "package.json"
    * Validated by isSafePath() at every write boundary.
-   * Must be unique within project.files[].
+   * Must be unique within site.files[].
    */
   path: string
 
-  type: ProjectFileType
+  type: SiteFileType
 
   /**
    * Text content for component/script/style/config/doc (UTF-8).
@@ -49,8 +49,8 @@ export interface ProjectFile {
   content?: string
 
   /**
-   * For 'asset' files only — base64-encoded for IndexedDB persistence.
-   * (Blob inside Project would defeat structuredClone equality checks.)
+   * For legacy site asset files only — base64-encoded for document persistence.
+   * (Blob inside SiteDocument would defeat structuredClone equality checks.)
    */
   blob?: { mimeType: string; base64: string }
 
@@ -59,16 +59,12 @@ export interface ProjectFile {
    * vite.config.ts, src/main.tsx).  Generated files are read-only in the UI
    * until the user "ejects" them (sets ejected: true).
    *
-   * Publisher behaviour:
-   *   generated=true, ejected=false  → scaffold version emitted, this file skipped
-   *   generated=true, ejected=true   → this file emitted (user override, overwrites scaffold)
-   *   generated=false (or undefined) → always emitted (user-authored file)
+   * Generated files are hidden from normal authoring UI until ejected.
    */
   generated?: boolean
 
   /**
    * When true, the user has edited a previously-generated file.
-   * The publisher emits the user's version instead of the scaffold default.
    * Only meaningful when `generated === true`.
    */
   ejected?: boolean
@@ -86,7 +82,7 @@ export interface FileTreeNode {
   name: string
 
   /**
-   * Full path relative to project root.
+   * Full path relative to site root.
    * For synthesized directory nodes this is the directory path without trailing slash
    * (e.g. "src/components").
    */
@@ -99,5 +95,5 @@ export interface FileTreeNode {
   children: FileTreeNode[]
 
   /** Present only on file leaf nodes (isDirectory === false) */
-  file?: ProjectFile
+  file?: SiteFile
 }

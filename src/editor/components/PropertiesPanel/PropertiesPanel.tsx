@@ -33,7 +33,7 @@ import { registry } from '../../../core/module-engine/registry'
 import { evaluateCondition, resolveProps } from '../../../core/page-tree/selectors'
 import { PropertyControlRenderer } from '../PropertyControls/PropertyControlRenderer'
 import type { AnyModuleDefinition, PropertyControl } from '../../../core/module-engine/types'
-import type { CSSClass, PageNode, Project } from '../../../core/page-tree/types'
+import type { CSSClass, PageNode, SiteDocument } from '../../../core/page-tree/types'
 import { ClassPicker } from './ClassPicker'
 import { ClassComposer } from './ClassComposer'
 import { Section } from './Section'
@@ -47,7 +47,10 @@ import { PanelHeader } from '../shared/PanelHeader'
 import { useDraggablePanel } from '../../hooks/useDraggablePanel'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
-import { Icon } from '../../../ui/icons/Icon'
+import { OpenIcon } from '@ui/icons/icons/open'
+import { DockIcon } from '@ui/icons/icons/dock'
+import { Settings2Icon } from '@ui/icons/icons/settings-2'
+import { EditIcon } from '@ui/icons/icons/edit'
 import { cn } from '@ui/cn'
 import styles from './PropertiesPanel.module.css'
 
@@ -77,7 +80,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
   const setClassBreakpointStyles = useEditorStore((s) => s.setClassBreakpointStyles)
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
   const renameNode = useEditorStore((s) => s.renameNode)
-  const project = useEditorStore((s) => s.project)
+  const site = useEditorStore((s) => s.site)
   const activeClassId = useEditorStore((s) => s.activeClassId)
 
   const panelState = useEditorStore((s) => s.propertiesPanel)
@@ -125,7 +128,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
   const isNonDesktopBp = Boolean(activeBreakpointId && activeBreakpointId !== 'desktop')
   const activeClass =
     activeClassId && selectedNode?.classIds?.includes(activeClassId)
-      ? project?.classes[activeClassId]
+      ? site?.classes[activeClassId]
       : null
 
   // ─── Prop change handler ───────────────────────────────────────────────────
@@ -147,7 +150,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
       if (!selectedNodeId || !definition) return
       const cls = ensureNodeStyleClass(selectedNodeId, definition.name)
       if (!cls) return
-      const nodeStyleClass = findNodeStyleClass(project, selectedNode, selectedNodeId) ?? cls
+      const nodeStyleClass = findNodeStyleClass(site, selectedNode, selectedNodeId) ?? cls
       const currentStyles = activeBreakpointId && activeBreakpointId !== 'desktop'
         ? (nodeStyleClass.breakpointStyles[activeBreakpointId] ?? {})
         : nodeStyleClass.styles
@@ -163,7 +166,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
       selectedNodeId,
       selectedNode,
       definition,
-      project,
+      site,
       activeBreakpointId,
       ensureNodeStyleClass,
       updateClassStyles,
@@ -234,11 +237,11 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
           aria-label={modeButtonLabel}
           title={modeButtonTitle}
         >
-          <Icon
-            name={variant === 'docked' ? 'open' : 'dock'}
-            size={12}
-            aria-hidden="true"
-          />
+          {variant === 'docked' ? (
+            <OpenIcon size={12} aria-hidden="true" />
+          ) : (
+            <DockIcon size={12} aria-hidden="true" />
+          )}
         </Button>
       </PanelHeader>
 
@@ -269,7 +272,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
             <Section
               title="Module settings"
               defaultOpen
-              icon="settings-2"
+              icon={Settings2Icon}
               meta={definition.name}
               indicator={isNonDesktopBp ? 'bp' : undefined}
             >
@@ -298,7 +301,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
                 })}
                 <ModuleStyleSettings
                   moduleDefinition={definition}
-                  project={project}
+                  site={site}
                   node={selectedNode}
                   nodeId={selectedNodeId!}
                   activeBreakpointId={activeBreakpointId}
@@ -402,7 +405,7 @@ function NodeHeader({ nodeId, label, moduleName, onRename }: NodeHeaderProps) {
         aria-label={`Rename ${displayName}`}
         title="Rename element"
       >
-        <Icon name="edit" size={12} aria-hidden="true" />
+        <EditIcon size={12} aria-hidden="true" />
       </Button>
     </div>
   )
@@ -414,7 +417,7 @@ function NodeHeader({ nodeId, label, moduleName, onRename }: NodeHeaderProps) {
 
 interface ModuleStyleSettingsProps {
   moduleDefinition: AnyModuleDefinition
-  project: Project | null
+  site: SiteDocument | null
   node: PageNode
   nodeId: string
   activeBreakpointId: string | undefined
@@ -423,7 +426,7 @@ interface ModuleStyleSettingsProps {
 
 function ModuleStyleSettings({
   moduleDefinition,
-  project,
+  site,
   node,
   nodeId,
   activeBreakpointId,
@@ -432,7 +435,7 @@ function ModuleStyleSettings({
   const bindings = getModuleStyleBindings(moduleDefinition)
   if (bindings.length === 0) return null
 
-  const nodeStyleClass = findNodeStyleClass(project, node, nodeId)
+  const nodeStyleClass = findNodeStyleClass(site, node, nodeId)
   const currentStyles = activeBreakpointId && activeBreakpointId !== 'desktop'
     ? (nodeStyleClass?.breakpointStyles[activeBreakpointId] ?? {})
     : (nodeStyleClass?.styles ?? {})
@@ -454,13 +457,13 @@ function ModuleStyleSettings({
 }
 
 function findNodeStyleClass(
-  project: Project | null,
+  site: SiteDocument | null,
   node: PageNode | null,
   nodeId: string,
 ): CSSClass | null {
-  if (!project || !node?.classIds) return null
+  if (!site || !node?.classIds) return null
   for (const classId of node.classIds) {
-    const cls = project.classes[classId]
+    const cls = site.classes[classId]
     if (cls?.scope?.type === 'node' && cls.scope.nodeId === nodeId && cls.scope.role === 'module-style') {
       return cls
     }

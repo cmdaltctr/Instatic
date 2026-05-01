@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import type { AnyModuleDefinition } from '../../../core/module-engine/types'
 import { createModuleImportMap } from '../../../core/module-engine/runtimeResolver'
-import type { Project } from '../../../core/page-tree/types'
+import type { SiteDocument } from '../../../core/page-tree/types'
 import { useEditorStore } from '../../../core/editor-store/store'
 import { cn } from '../../../ui/cn'
 import { generateClassCSS } from '../../../core/publisher/classCss'
@@ -66,17 +66,17 @@ function base64EncodeUtf8(value: string): string {
   return btoa(binary)
 }
 
-function getNodeClassCSS(project: Project | null, classIds: string[] | undefined): string {
-  if (!project || !classIds?.length) return ''
+function getNodeClassCSS(site: SiteDocument | null, classIds: string[] | undefined): string {
+  if (!site || !classIds?.length) return ''
 
-  const classes: Project['classes'] = {}
+  const classes: SiteDocument['classes'] = {}
   for (const id of classIds) {
-    const cls = project.classes[id]
+    const cls = site.classes[id]
     if (cls) classes[id] = cls
   }
 
   if (Object.keys(classes).length === 0) return ''
-  return generateClassCSS(classes, project.breakpoints)
+  return generateClassCSS(classes, site.breakpoints)
 }
 
 export function createSandboxSrcDoc({
@@ -270,19 +270,19 @@ export function ModuleSandboxFrame({
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const updateFrameRef = useRef<number | null>(null)
   const pendingUpdateRef = useRef<SandboxUpdatePayload | null>(null)
-  const project = useEditorStore((s) => s.project)
+  const site = useEditorStore((s) => s.site)
   const packageJson = useEditorStore((s) => s.packageJson)
   const selectNode = useEditorStore((s) => s.selectNode)
   const setFocusedPanel = useEditorStore((s) => s.setFocusedPanel)
   const runtime = moduleDefinition.editorRuntime?.sandbox
 
   const classCSS = useMemo(
-    () => getNodeClassCSS(project, classIds),
-    [project, classIds],
+    () => getNodeClassCSS(site, classIds),
+    [site, classIds],
   )
 
   const importMap = useMemo(
-    () => createModuleImportMap(moduleDefinition, { packageJson, strictProjectManifest: true }),
+    () => createModuleImportMap(moduleDefinition, { packageJson, strictSiteManifest: true }),
     [moduleDefinition, packageJson],
   )
 

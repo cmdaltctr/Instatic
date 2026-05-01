@@ -141,8 +141,8 @@ const addPageSchema = z.object({
   slug: z.string().optional(),
 })
 
-const updateProjectSettingsSchema = z.object({
-  type: z.literal('updateProjectSettings'),
+const updateSiteSettingsSchema = z.object({
+  type: z.literal('updateSiteSettings'),
   patch: z.record(z.string(), z.unknown()),
 })
 
@@ -164,7 +164,7 @@ function resolveClassId(
   store: ReturnType<typeof useEditorStore.getState>,
   classIdOrName: string,
 ): string | null {
-  const classes = store.project?.classes
+  const classes = store.site?.classes
   if (!classes) return null
   // Direct ID match (fast path)
   if (classes[classIdOrName]) return classIdOrName
@@ -183,7 +183,7 @@ interface AgentExecutionContext {
 
 type AgentBatchSnapshot = Pick<
   EditorStore,
-  | 'project'
+  | 'site'
   | 'activePageId'
   | 'activeDocument'
   | 'selectedNodeId'
@@ -208,7 +208,7 @@ function cloneSerializable<T>(value: T): T {
 function takeBatchSnapshot(): AgentBatchSnapshot {
   const state = useEditorStore.getState()
   return {
-    project: cloneSerializable(state.project),
+    site: cloneSerializable(state.site),
     activePageId: state.activePageId,
     activeDocument: cloneSerializable(state.activeDocument),
     selectedNodeId: state.selectedNodeId,
@@ -225,7 +225,7 @@ function takeBatchSnapshot(): AgentBatchSnapshot {
 function restoreBatchSnapshot(snapshot: AgentBatchSnapshot): void {
   useEditorStore.setState({
     ...snapshot,
-    project: cloneSerializable(snapshot.project),
+    site: cloneSerializable(snapshot.site),
     activeDocument: cloneSerializable(snapshot.activeDocument),
     _historyPast: cloneSerializable(snapshot._historyPast),
     _historyFuture: cloneSerializable(snapshot._historyFuture),
@@ -321,9 +321,9 @@ function validateBreakpointId(
   store: ReturnType<typeof useEditorStore.getState>,
   breakpointId: string,
 ): string | null {
-  const project = store.project
-  if (!project) return `Breakpoint not found: ${breakpointId}`
-  return project.breakpoints.some((breakpoint) => breakpoint.id === breakpointId)
+  const site = store.site
+  if (!site) return `Breakpoint not found: ${breakpointId}`
+  return site.breakpoints.some((breakpoint) => breakpoint.id === breakpointId)
     ? null
     : `Breakpoint not found: ${breakpointId}`
 }
@@ -649,13 +649,13 @@ export async function executeAgentAction(
         return { success: true }
       }
 
-      case 'updateProjectSettings': {
-        const a = updateProjectSettingsSchema.parse(action)
-        // updateProjectSettings is a shallow merge via updateNodeProps pattern
-        // (project settings live in project.settings — use the settings slice if available)
+      case 'updateSiteSettings': {
+        const a = updateSiteSettingsSchema.parse(action)
+        // updateSiteSettings is a shallow merge via updateNodeProps pattern
+        // (site settings live in site.settings — use the settings slice if available)
         // For now, emit a warning since there's no direct store method
-        console.warn('[agent] updateProjectSettings action ignored — no store method yet', a)
-        return { success: false, error: 'updateProjectSettings not yet implemented' }
+        console.warn('[agent] updateSiteSettings action ignored — no store method yet', a)
+        return { success: false, error: 'updateSiteSettings not yet implemented' }
       }
 
       default: {

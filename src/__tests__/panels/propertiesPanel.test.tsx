@@ -22,7 +22,7 @@ import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 import { PropertiesPanel } from '../../editor/components/PropertiesPanel/PropertiesPanel'
 import { useEditorStore } from '../../core/editor-store/store'
 import { registry } from '../../core/module-engine/registry'
-import { makeProject, makePage, makeNode } from '../fixtures'
+import { makeSite, makePage, makeNode } from '../fixtures'
 // Register all base modules so registry.get() works during tests
 import '../../modules/base/index'
 
@@ -37,7 +37,7 @@ function resetStore() {
   // overriding the state we set (component reads from localStorage on mount).
   localStorage.clear()
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     activeDocument: null,
     selectedNodeId: null,
@@ -57,25 +57,25 @@ function resetStore() {
 beforeEach(resetStore)
 
 // ---------------------------------------------------------------------------
-// Project / node setup helpers
+// SiteDocument / node setup helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Load a project with one page that contains a text node.
+ * Load a site with one page that contains a text node.
  * Returns the node ID for use in tests.
  */
-function loadProjectWithHeading(): { nodeId: string; rootId: string } {
+function loadSiteWithHeading(): { nodeId: string; rootId: string } {
   const rootId = 'root-1'
   const nodeId = 'text-1'
   const rootNode = makeNode({ id: rootId, moduleId: 'base.root', children: [nodeId] })
   const textNode = makeNode({ id: nodeId, moduleId: 'base.text', props: { text: 'Hello', tag: 'h2' }, children: [] })
   const page = makePage({ id: 'page-1', rootNodeId: rootId, nodes: { [rootId]: rootNode, [nodeId]: textNode } })
-  const project = makeProject({ pages: [page] })
-  useEditorStore.setState({ project, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
+  const site = makeSite({ pages: [page] })
+  useEditorStore.setState({ site, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
   return { nodeId, rootId }
 }
 
-function loadProjectWithHeadingAndButton(): { headingId: string; buttonId: string; rootId: string } {
+function loadSiteWithHeadingAndButton(): { headingId: string; buttonId: string; rootId: string } {
   const rootId = 'root-1'
   const headingId = 'text-1'
   const buttonId = 'button-1'
@@ -91,8 +91,8 @@ function loadProjectWithHeadingAndButton(): { headingId: string; buttonId: strin
       [headingId]: headingNode,
     },
   })
-  const project = makeProject({ pages: [page] })
-  useEditorStore.setState({ project, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
+  const site = makeSite({ pages: [page] })
+  useEditorStore.setState({ site, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
   return { headingId, buttonId, rootId }
 }
 
@@ -106,7 +106,7 @@ function selectNode(nodeId: string) {
 
 describe('PropertiesPanel — data-testid (Guideline #221)', () => {
   it('renders data-testid="properties-panel"', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     expect(screen.getByTestId('properties-panel')).toBeDefined()
@@ -119,7 +119,7 @@ describe('PropertiesPanel — data-testid (Guideline #221)', () => {
 
 describe('PropertiesPanel — ARIA landmark', () => {
   it('has role="complementary" on panel container', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     // There may be multiple complementary elements (DomPanel also has one), but
@@ -129,7 +129,7 @@ describe('PropertiesPanel — ARIA landmark', () => {
   })
 
   it('has aria-label="Properties"', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     const panel = screen.getByLabelText('Properties')
@@ -143,7 +143,7 @@ describe('PropertiesPanel — ARIA landmark', () => {
 
 describe('PropertiesPanel — data-panel + stopPropagation', () => {
   it('carries data-panel attribute for event propagation guard', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     const panel = screen.getByTestId('properties-panel')
@@ -151,7 +151,7 @@ describe('PropertiesPanel — data-panel + stopPropagation', () => {
   })
 
   it('click events on the panel do NOT propagate to parent (Guideline #192)', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     let parentClicked = false
     render(
@@ -177,8 +177,8 @@ describe('PropertiesPanel — empty states', () => {
     expect(useEditorStore.getState().propertiesPanel.collapsed).toBe(true)
   })
 
-  it('stays closed when a project is loaded but nothing selected', () => {
-    loadProjectWithHeading()
+  it('stays closed when a site is loaded but nothing selected', () => {
+    loadSiteWithHeading()
     // selectedNodeId remains null
     render(<PropertiesPanel />)
     expect(screen.queryByTestId('properties-panel')).toBeNull()
@@ -187,7 +187,7 @@ describe('PropertiesPanel — empty states', () => {
   })
 
   it('closes itself when the selected node is deselected', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -208,7 +208,7 @@ describe('PropertiesPanel — empty states', () => {
 
 describe('PropertiesPanel — controls for selected node', () => {
   it('shows controls when a node with a registered module is selected', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     // Should NOT show empty state
@@ -216,7 +216,7 @@ describe('PropertiesPanel — controls for selected node', () => {
   })
 
   it('renders selected element name in the panel header without module id badge', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     expect(screen.getByRole('button', { name: /rename text/i })).toBeDefined()
@@ -224,7 +224,7 @@ describe('PropertiesPanel — controls for selected node', () => {
   })
 
   it('renders property control wrappers with data-testid="property-control-{key}" (Guideline #221)', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     // base.text has at least a "text" schema property
@@ -256,7 +256,7 @@ describe('PropertiesPanel — header rename uncontrolled input (Guideline #220)'
   })
 
   it('blurring element name input with new value calls renameNode', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -267,12 +267,12 @@ describe('PropertiesPanel — header rename uncontrolled input (Guideline #220)'
 
     // renameNode should have updated the store
     const store = useEditorStore.getState()
-    const page = store.project!.pages[0]
+    const page = store.site!.pages[0]
     expect(page.nodes[nodeId].label).toBe('New Name')
   })
 
   it('pressing Escape on the label input reverts its value', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -286,7 +286,7 @@ describe('PropertiesPanel — header rename uncontrolled input (Guideline #220)'
   })
 
   it('updates the label input when selecting a different node while the panel stays open', () => {
-    const { headingId, buttonId } = loadProjectWithHeadingAndButton()
+    const { headingId, buttonId } = loadSiteWithHeadingAndButton()
     selectNode(buttonId)
     render(<PropertiesPanel />)
 
@@ -304,7 +304,7 @@ describe('PropertiesPanel — header rename uncontrolled input (Guideline #220)'
   })
 
   it('pressing Enter on the label input blurs it (commits)', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -317,7 +317,7 @@ describe('PropertiesPanel — header rename uncontrolled input (Guideline #220)'
     fireEvent.blur(input)
 
     // onBlur → renameNode should have committed the value
-    expect(useEditorStore.getState().project!.pages[0].nodes[nodeId].label).toBe('Committed Name')
+    expect(useEditorStore.getState().site!.pages[0].nodes[nodeId].label).toBe('Committed Name')
   })
 })
 
@@ -329,7 +329,7 @@ describe('PropertiesPanel — header rename uncontrolled input (Guideline #220)'
 
 describe('PropertiesPanel — close button', () => {
   it('close button is visible when panel is open', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     const btn = screen.getByRole('button', { name: /close properties panel/i })
@@ -337,7 +337,7 @@ describe('PropertiesPanel — close button', () => {
   })
 
   it('clicking close button hides the panel (collapsed becomes true, renders null)', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     const btn = screen.getByRole('button', { name: /close properties panel/i })
@@ -356,7 +356,7 @@ describe('PropertiesPanel — close button', () => {
   })
 
   it('Properties header keeps the semantic toolbar name when panel is open', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     expect(screen.getByRole('toolbar', { name: /properties panel header/i })).toBeDefined()
@@ -369,7 +369,7 @@ describe('PropertiesPanel — close button', () => {
 
 describe('PropertiesPanel — breakpoint override hint', () => {
   it('shows breakpoint editing hint when non-desktop breakpoint is active', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     useEditorStore.setState({ activeBreakpointId: 'tablet' } as Parameters<typeof useEditorStore.setState>[0])
     render(<PropertiesPanel />)
@@ -378,7 +378,7 @@ describe('PropertiesPanel — breakpoint override hint', () => {
   })
 
   it('does NOT show breakpoint hint when desktop breakpoint is active', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     useEditorStore.setState({ activeBreakpointId: 'desktop' } as Parameters<typeof useEditorStore.setState>[0])
     render(<PropertiesPanel />)

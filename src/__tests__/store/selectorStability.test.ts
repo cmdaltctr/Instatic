@@ -20,10 +20,10 @@
  * ## Incident
  *
  * CanvasRoot.tsx had:
- *   const breakpoints = useEditorStore((s) => s.project?.breakpoints ?? [])
+ *   const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? [])
  *
- * This was latent until J12 (usePersistence) made `project` start as `null`
- * (async IndexedDB load). The crash appeared immediately on every editor load.
+ * This was latent until J12 (usePersistence) made `site` start as `null`
+ * (async CMS draft load). The crash appeared immediately on every editor load.
  *
  * ## Fix (Contribution #348 — UX Reviewer)
  *
@@ -32,10 +32,10 @@
  *
  *   // ✅ CORRECT — same identity every call
  *   const EMPTY_BREAKPOINTS: Breakpoint[] = []
- *   const breakpoints = useEditorStore((s) => s.project?.breakpoints ?? EMPTY_BREAKPOINTS)
+ *   const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? EMPTY_BREAKPOINTS)
  *
  *   // ❌ WRONG — new identity every call
- *   const breakpoints = useEditorStore((s) => s.project?.breakpoints ?? [])
+ *   const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? [])
  *
  * ## Coverage
  *
@@ -181,7 +181,7 @@ describe('Guideline #239 — Zustand selector stability', () => {
 describe('CanvasRoot — stable breakpoints selector (crash regression)', () => {
   /**
    * Regression guard for the specific crash that brought down the editor on
-   * 2026-04-28 after J12 (usePersistence) made `project` start as null.
+   * 2026-04-28 after J12 (usePersistence) made `site` start as null.
    *
    * The crash was caused by `?? []` in the breakpoints selector. The fix was
    * to define a module-level constant `EMPTY_BREAKPOINTS` and use it as the
@@ -239,7 +239,7 @@ describe('CanvasRoot — stable breakpoints selector (crash regression)', () => 
 //     multi-line selectors where the ?? fallback is on a continuation line:
 //
 //       const x = useEditorStore((s) =>
-//         s.project?.items ?? []   // ← dangerous, different line from useEditorStore
+//         s.site?.items ?? []   // ← dangerous, different line from useEditorStore
 //       )
 //
 //     Strategy: within files that use useEditorStore, flag any line that has
@@ -257,7 +257,7 @@ describe('Guideline #239 — multi-line selector fallback scan', () => {
    * This catches the split-line version of the bug:
    *
    *   const x = useEditorStore(
-   *     (s) => s.project?.breakpoints ?? []   // ← this line is flagged
+   *     (s) => s.site?.breakpoints ?? []   // ← this line is flagged
    *   )
    */
   it('no useEditorStore selector continuation line uses ?? [] fallback', () => {
@@ -330,12 +330,12 @@ describe('Guideline #239 — multi-line selector fallback scan', () => {
 //
 // useEditorStore.subscribe(selector, listener) fires the listener whenever
 // selector(state) changes. If the selector returns an inline object literal
-// `{ project: s.project, dirty: s.hasUnsavedChanges }`, a new object is
+// `{ site: s.site, dirty: s.hasUnsavedChanges }`, a new object is
 // created on every evaluation — Object.is always returns false — causing the
 // listener to fire on every single store mutation (timer leak, excess saves).
 //
 // The correct selector is a primitive: `(s) => s.hasUnsavedChanges`
-// The project snapshot is then read via getState() inside the timer callback.
+// The site snapshot is then read via getState() inside the timer callback.
 //
 // Reference: Guideline #239 / usePersistence timer-leak fix (2026-04-28)
 // ---------------------------------------------------------------------------

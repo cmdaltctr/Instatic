@@ -1,20 +1,20 @@
 /**
  * DepsSection — dependency management content.
  *
- * Migrated from ProjectPanel/DepsTab.tsx (Task #434 — Migration & ProjectPanel Cleanup).
+ * Migrated from SitePanel/DepsTab.tsx (Task #434 — Migration & SitePanel Cleanup).
  * All functionality preserved:
  *   - SAFE_PACKAGE_NAME validation on every add (Constraint #361 Rule 5 / CWE-78)
  *   - Inline remove confirmation (Guideline #258)
  *   - Search with aria-live result count (WCAG 2.1 AA)
- *   - setDependency / removeDependency store actions (projectPanelSlice)
+ *   - setDependency / removeDependency store actions (sitePanelSlice)
  *
  * When used as a standalone Dependencies panel, the body is always visible.
  * The collapsible mode remains available for any compact embedded surface.
  *
  * @see Constraint #361 — Phase G Security (Rule 5: package-name validation, CWE-78)
  * @see Guideline #258 — Inline Confirmation UI Pattern
- * @see Contribution #512 — Phase E+ Project Panel UX Spec §4
- * @see Task #434 — Migration & ProjectPanel Cleanup
+ * @see Contribution #512 — Phase E+ Site Panel UX Spec §4
+ * @see Task #434 — Migration & SitePanel Cleanup
  */
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { useEditorStore } from '../../../core/editor-store/store'
@@ -25,12 +25,12 @@ import { Switch } from '@ui/components/Switch'
 import { PackageIcon } from '@ui/icons/icons/package'
 import { PlusIcon } from '@ui/icons/icons/plus'
 import { CloseIcon } from '@ui/icons/icons/close'
-import { Icon } from '@ui/icons/Icon'
+import { ChevronRightIcon } from '@ui/icons/icons/chevron-right'
 import { cn } from '@ui/cn'
-import { isSafePackageName } from '../../../core/project-dependencies/packageNames'
+import { isSafePackageName } from '../../../core/site-dependencies/packageNames'
 import {
-  getProjectModuleDependencyUsage,
-  type ProjectModuleDependencyUsage,
+  getSiteModuleDependencyUsage,
+  type SiteModuleDependencyUsage,
 } from '../../../core/module-engine/dependencies'
 import { registry } from '../../../core/module-engine/registry'
 import styles from './DepsSection.module.css'
@@ -58,7 +58,7 @@ export function DepsSection({
   collapsible = true,
   defaultExpanded = false,
 }: DepsSectionProps) {
-  const project = useEditorStore((s) => s.project)
+  const site = useEditorStore((s) => s.site)
   const packageJson = useEditorStore((s) => s.packageJson)
   const setDependency = useEditorStore((s) => s.setDependency)
   const removeDependency = useEditorStore((s) => s.removeDependency)
@@ -94,8 +94,8 @@ export function DepsSection({
     [filterDeps, packageJson.devDependencies],
   )
   const dependencyUsage = useMemo(
-    () => getProjectModuleDependencyUsage(project, registry),
-    [project],
+    () => getSiteModuleDependencyUsage(site, registry),
+    [site],
   )
 
   const totalFiltered = filteredDeps.length + filteredDevDeps.length
@@ -118,7 +118,7 @@ export function DepsSection({
     setDependency(name, '*', addDev)
     setAddName('')
     setAddError(null)
-    // TODO(Phase G): ask the project bridge to install this in the user project.
+    // TODO(Phase G): ask the site bridge to install this in the user site.
   }, [addName, addDev, setDependency])
 
   // ── Remove confirmation (Guideline #258) ────────────────────────────────
@@ -135,7 +135,7 @@ export function DepsSection({
     if (removeConfirm) {
       removeDependency(removeConfirm.name)
       setRemoveConfirm(null)
-      // TODO(Phase G): ask the project bridge to remove this from the user project.
+      // TODO(Phase G): ask the site bridge to remove this from the user site.
     }
   }, [removeConfirm, removeDependency])
 
@@ -324,7 +324,7 @@ export function DepsSection({
         className={styles.sectionToggle}
       >
         <span aria-hidden="true" className={cn(styles.chevron, isExpanded && styles.chevronOpen)}>
-          <Icon name="chevron-right" size={10} />
+          <ChevronRightIcon size={10} />
         </span>
         <span aria-hidden="true" className={styles.sectionIcon}>
           <PackageIcon size={11} />
@@ -353,7 +353,7 @@ interface DepRowProps {
   name: string
   version: string
   dev: boolean
-  usage?: ProjectModuleDependencyUsage
+  usage?: SiteModuleDependencyUsage
   onRemove: (name: string, dev: boolean) => void
   confirmState: RemoveConfirmState | null
   cancelRef: React.RefObject<HTMLButtonElement | null>
@@ -453,7 +453,7 @@ function DepRow({
   )
 }
 
-function formatModuleUsage(usage: ProjectModuleDependencyUsage): string {
+function formatModuleUsage(usage: SiteModuleDependencyUsage): string {
   if (usage.modules.length <= 2) return usage.modules.join(', ')
   return `${usage.modules.slice(0, 2).join(', ')} +${usage.modules.length - 2}`
 }

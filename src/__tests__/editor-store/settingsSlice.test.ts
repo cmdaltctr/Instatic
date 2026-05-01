@@ -14,7 +14,7 @@
  * @see src/core/editor-store/slices/settingsSlice.ts
  * @see Guideline #193 — Zustand Store Slice Guidelines
  * @see Contribution #457 — Phase 0 Architectural Specification
- * @see Contribution #483 — Phase 0 Project Scaffold
+ * @see Contribution #483 — Phase 0 SiteDocument Scaffold
  */
 
 import { describe, it, expect, beforeEach } from 'bun:test'

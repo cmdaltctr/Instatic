@@ -5,18 +5,23 @@ import { join } from 'node:path'
 const root = process.cwd()
 
 describe('admin CMS route wiring', () => {
-  it('routes /admin to the editor in CMS persistence mode', () => {
+  it('routes /admin to the CMS editor entry and does not expose local site routes', () => {
     const router = readFileSync(join(root, 'src/app/router.ts'), 'utf8')
 
     expect(router).toContain("path: '/admin'")
     expect(router).toContain('AdminEntry')
+    expect(router).not.toContain('Dashboard')
+    expect(router).not.toContain('/editor/:projectId')
+    expect(router).not.toContain('/editor/:siteId')
   })
 
-  it('uses the server CMS adapter without local last-project tracking', () => {
+  it('uses the server CMS adapter without local site mode branching', () => {
     const editor = readFileSync(join(root, 'src/app/EditorLayout.tsx'), 'utf8')
 
     expect(editor).toContain('cmsAdapter')
-    expect(editor).toContain('rememberLastProject: false')
+    expect(editor).not.toContain('localAdapter')
+    expect(editor).not.toContain('persistenceMode')
+    expect(editor).not.toContain('mediaMode')
   })
 
   it('gates the CMS editor behind setup and login checks', () => {
@@ -26,7 +31,7 @@ describe('admin CMS route wiring', () => {
     expect(admin).toContain('probeCmsSession')
     expect(admin).toContain('setupCms')
     expect(admin).toContain('loginCms')
-    expect(admin).toContain('persistenceMode="cms"')
+    expect(admin).toContain('<EditorLayout />')
   })
 
   it('uses a submit button for setup and login forms', () => {

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { nanoid } from 'nanoid'
 import type { DbClient } from './db'
@@ -19,11 +19,16 @@ import {
   findAdminByEmail,
   getSetupStatus,
 } from './repositories'
-import { loadDraftProject, saveDraftProject } from './projectRepository'
-import { getDraftPublishStatus, publishDraftProject } from './publishRepository'
-import { createMediaAsset, listMediaAssets } from './mediaRepository'
+import { loadDraftSite, saveDraftSite } from './siteRepository'
+import { getDraftPublishStatus, publishDraftSite } from './publishRepository'
+import {
+  createMediaAsset,
+  deleteMediaAsset,
+  listMediaAssets,
+  renameMediaAsset,
+} from './mediaRepository'
 import type { AdminUserRow } from './types'
-import { validateProject, ValidationError } from '../../src/core/persistence/validate'
+import { validateSite, SiteValidationError } from '../../src/core/persistence/validate'
 import {
   badRequest,
   jsonResponse,
@@ -162,24 +167,24 @@ export async function handleCmsRequest(
     )
   }
 
-  if (url.pathname === '/api/cms/project') {
+  if (url.pathname === '/api/cms/site') {
     const admin = await getAuthenticatedAdmin(req, db)
     if (!admin) return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
 
     if (req.method === 'GET') {
-      const project = await loadDraftProject(db)
-      if (!project) return jsonResponse({ error: 'Draft project not found' }, { status: 404 })
-      return jsonResponse({ project })
+      const site = await loadDraftSite(db)
+      if (!site) return jsonResponse({ error: 'draft site not found' }, { status: 404 })
+      return jsonResponse({ site })
     }
 
     if (req.method === 'PUT') {
       const body = await readJsonObject(req)
       try {
-        const project = validateProject(body.project)
-        await saveDraftProject(db, project)
+        const site = validateSite(body.site)
+        await saveDraftSite(db, site)
         return jsonResponse({ ok: true })
       } catch (err) {
-        if (err instanceof ValidationError) return badRequest(err.message)
+        if (err instanceof SiteValidationError) return badRequest(err.message)
         throw err
       }
     }
@@ -229,12 +234,44 @@ export async function handleCmsRequest(
     return methodNotAllowed()
   }
 
+  const mediaItemMatch = url.pathname.match(/^\/api\/cms\/media\/([^/]+)$/)
+  if (mediaItemMatch) {
+    const admin = await getAuthenticatedAdmin(req, db)
+    if (!admin) return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
+
+    const assetId = decodeURIComponent(mediaItemMatch[1])
+
+    if (req.method === 'PATCH') {
+      const body = await readJsonObject(req)
+      const filename = readString(body, 'filename')
+      if (!filename) return badRequest('Filename is required')
+
+      const asset = await renameMediaAsset(db, assetId, filename)
+      if (!asset) return jsonResponse({ error: 'Media asset not found' }, { status: 404 })
+      return jsonResponse({ asset })
+    }
+
+    if (req.method === 'DELETE') {
+      if (!options.uploadsDir) {
+        return jsonResponse({ error: 'Uploads directory is not configured' }, { status: 500 })
+      }
+
+      const deleted = await deleteMediaAsset(db, assetId)
+      if (!deleted) return jsonResponse({ error: 'Media asset not found' }, { status: 404 })
+
+      await rm(join(options.uploadsDir, deleted.storagePath), { force: true })
+      return jsonResponse({ ok: true })
+    }
+
+    return methodNotAllowed()
+  }
+
   if (url.pathname === '/api/cms/publish') {
     const admin = await getAuthenticatedAdmin(req, db)
     if (!admin) return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
     if (req.method !== 'POST') return methodNotAllowed()
 
-    return jsonResponse(await publishDraftProject(db, admin.id))
+    return jsonResponse(await publishDraftSite(db, admin.id))
   }
 
   if (url.pathname === '/api/cms/publish/status') {

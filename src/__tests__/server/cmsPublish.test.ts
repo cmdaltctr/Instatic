@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'bun:test'
-import type { Project } from '../../../core/page-tree/types'
+import type { SiteDocument } from '../../../core/page-tree/types'
 import type { DbClient, DbResult } from '../../../server/cms/db'
-import { saveDraftProject } from '../../../server/cms/projectRepository'
+import { saveDraftSite } from '../../../server/cms/siteRepository'
 import {
   getDraftPublishStatus,
   getPublishedPageBySlug,
-  publishDraftProject,
+  publishDraftSite,
 } from '../../../server/cms/publishRepository'
 
 class PublishFakeDb implements DbClient {
@@ -109,11 +109,10 @@ class PublishFakeDb implements DbClient {
   }
 }
 
-function project(text: string): Project {
+function site(text: string): SiteDocument {
   return {
     id: 'project_1',
     name: 'Published Site',
-    projectMode: 'html',
     pages: [
       {
         id: 'page_home',
@@ -157,31 +156,31 @@ function project(text: string): Project {
 describe('CMS publishing', () => {
   it('publishes draft pages as immutable active snapshots', async () => {
     const db = new PublishFakeDb()
-    await saveDraftProject(db, project('Published headline'))
+    await saveDraftSite(db, site('Published headline'))
 
-    const result = await publishDraftProject(db, 'admin_1')
+    const result = await publishDraftSite(db, 'admin_1')
     const published = await getPublishedPageBySlug(db, 'index')
 
     expect(result).toMatchObject({ publishedPages: 1 })
     expect(db.versions).toHaveLength(1)
-    expect(published?.project.pages[0].nodes.text_1.props.text).toBe('Published headline')
+    expect(published?.site.pages[0].nodes.text_1.props.text).toBe('Published headline')
   })
 
   it('does not expose later draft changes until another publish occurs', async () => {
     const db = new PublishFakeDb()
-    await saveDraftProject(db, project('Public version'))
-    await publishDraftProject(db, 'admin_1')
+    await saveDraftSite(db, site('Public version'))
+    await publishDraftSite(db, 'admin_1')
 
-    await saveDraftProject(db, project('Draft only'))
+    await saveDraftSite(db, site('Draft only'))
     const published = await getPublishedPageBySlug(db, 'index')
 
-    expect(published?.project.pages[0].nodes.text_1.props.text).toBe('Public version')
+    expect(published?.site.pages[0].nodes.text_1.props.text).toBe('Public version')
   })
 
   it('reports that the current draft matches the active published snapshots after publishing', async () => {
     const db = new PublishFakeDb()
-    await saveDraftProject(db, project('Public version'))
-    await publishDraftProject(db, 'admin_1')
+    await saveDraftSite(db, site('Public version'))
+    await publishDraftSite(db, 'admin_1')
 
     const status = await getDraftPublishStatus(db)
 
@@ -196,9 +195,9 @@ describe('CMS publishing', () => {
 
   it('reports that the current draft no longer matches after a later draft save', async () => {
     const db = new PublishFakeDb()
-    await saveDraftProject(db, project('Public version'))
-    await publishDraftProject(db, 'admin_1')
-    await saveDraftProject(db, project('Draft only'))
+    await saveDraftSite(db, site('Public version'))
+    await publishDraftSite(db, 'admin_1')
+    await saveDraftSite(db, site('Draft only'))
 
     const status = await getDraftPublishStatus(db)
 

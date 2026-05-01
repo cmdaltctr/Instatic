@@ -6,7 +6,7 @@ import '../../modules/base'
 
 function freshAgentState() {
   useEditorStore.setState({
-    project: null,
+    site: null,
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,
@@ -19,12 +19,12 @@ function freshAgentState() {
     agentMessages: [],
     agentError: null,
     agentSessionId: null,
-    agentSessionProjectId: null,
+    agentSessionSiteId: null,
     hasUnsavedChanges: false,
   })
 
-  const project = useEditorStore.getState().createProject('Agent Test')
-  const rootId = project.pages[0].rootNodeId
+  const site = useEditorStore.getState().createSite('Agent Test')
+  const rootId = site.pages[0].rootNodeId
   const assistantId = 'assistant-1'
   const assistantMessage: AgentMessage = {
     id: assistantId,
@@ -185,7 +185,7 @@ describe('sendAgentMessage — SDK owns the agent loop', () => {
       isAgentStreaming: false,
       agentMessages: [],
       agentSessionId: null,
-      agentSessionProjectId: null,
+      agentSessionSiteId: null,
     })
     localStorage.clear()
 

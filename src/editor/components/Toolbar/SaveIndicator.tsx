@@ -2,7 +2,7 @@
  * SaveIndicator — shows "Saved" or "Unsaved changes" pill in the toolbar.
  *
  * Subscribes only to `hasUnsavedChanges` — re-renders on that flag only.
- * J12 (LocalAdapter) sets this flag via `setHasUnsavedChanges()` on
+ * J12 persistence sets this flag via `setHasUnsavedChanges()` on
  * auto-save and on explicit Cmd+S.
  *
  * The pill uses role="status" so screen readers announce state changes
@@ -13,7 +13,9 @@ import { useEditorStore } from '@core/editor-store/store'
 import { useEffect, useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
-import { Icon } from '../../../ui/icons/Icon'
+import { CircleAlertIcon } from '@ui/icons/icons/circle-alert'
+import { LoaderIcon } from '@ui/icons/icons/loader'
+import { SaveIcon } from '@ui/icons/icons/save'
 import {
   readAutoSavePreference,
   subscribeToEditorPrefsChanged,
@@ -63,7 +65,7 @@ export function SaveIndicator({ onSave, saveStatus }: SaveIndicatorProps) {
           disabled={!onSave || isSaving || isStatusSaving}
           data-testid="save-indicator"
         >
-          <Icon name="circle-alert" size={14} aria-hidden="true" />
+          <CircleAlertIcon size={14} aria-hidden="true" />
           <span>Save failed</span>
         </Button>
         <div role="alert" className={styles.statusToast}>
@@ -82,14 +84,18 @@ export function SaveIndicator({ onSave, saveStatus }: SaveIndicatorProps) {
       <Button
         variant="primary"
         size="sm"
-        aria-label={isStatusSaving ? 'Saving project' : 'Save project'}
+        aria-label={isStatusSaving ? 'Saving site' : 'Save site'}
         aria-busy={isSaving || isStatusSaving}
         title="Save changes"
         onClick={handleManualSave}
         disabled={!onSave || isStatusSaving}
         data-testid="save-indicator"
       >
-        <Icon name={isSaving || isStatusSaving ? 'loader' : 'save'} size={14} aria-hidden="true" />
+        {isSaving || isStatusSaving ? (
+          <LoaderIcon size={14} aria-hidden="true" />
+        ) : (
+          <SaveIcon size={14} aria-hidden="true" />
+        )}
         <span>{label}</span>
       </Button>
     )

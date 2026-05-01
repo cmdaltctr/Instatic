@@ -8,7 +8,7 @@
  *   "Element type is invalid: expected a string or class/function but got: undefined.
  *    Check the render method of ContainerEditor."
  *
- * Fix (projectSlice.ts): before calling the mutation, the store action now
+ * Fix (siteSlice.ts): before calling the mutation, the store action now
  * looks up the module definition from the registry and merges its `defaults`
  * so the new wrapper node is created with a fully-populated props object.
  *
@@ -49,12 +49,11 @@ const testContainerModule: AnyModuleDefinition = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   component: (() => null) as any,
   render: () => ({ html: '' }),
-  toJsx: () => '',
 }
 
 function freshStore() {
   useEditorStore.setState({
-    project: null,
+    site: null,
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,
@@ -68,8 +67,8 @@ function freshStore() {
 
 function setupPage() {
   const s = freshStore()
-  const project = s.createProject('Test')
-  const rootId = project.pages[0].rootNodeId
+  const site = s.createSite('Test')
+  const rootId = site.pages[0].rootNodeId
   // Insert a child node to wrap
   const childId = useEditorStore.getState().insertNode('base.heading', {}, rootId)
   return { rootId, childId }
@@ -97,11 +96,11 @@ describe('Task #414 — wrapNode defaults', () => {
   it('Gate 1a: wrapNode creates wrapper node with module defaults (not empty props)', () => {
     const { childId } = setupPage()
     const state = useEditorStore.getState()
-    const page = state.project!.pages[0]
+    const page = state.site!.pages[0]
 
     const wrapperId = state.wrapNode(childId, TEST_MODULE_ID)
 
-    const wrapper = useEditorStore.getState().project!.pages[0].nodes[wrapperId]
+    const wrapper = useEditorStore.getState().site!.pages[0].nodes[wrapperId]
     expect(wrapper).toBeDefined()
     // props must NOT be empty — module defaults must be merged in
     expect(Object.keys(wrapper.props).length).toBeGreaterThan(0)
@@ -113,7 +112,7 @@ describe('Task #414 — wrapNode defaults', () => {
 
     const wrapperId = state.wrapNode(childId, TEST_MODULE_ID)
 
-    const wrapper = useEditorStore.getState().project!.pages[0].nodes[wrapperId]
+    const wrapper = useEditorStore.getState().site!.pages[0].nodes[wrapperId]
     // This is the critical check: before the fix, props.tag was undefined,
     // causing React.createElement(undefined) → "Element type is invalid" crash
     expect(wrapper.props.tag).toBe('div')
@@ -125,7 +124,7 @@ describe('Task #414 — wrapNode defaults', () => {
 
     const wrapperId = state.wrapNode(childId, TEST_MODULE_ID, { tag: 'section', gap: 8 })
 
-    const wrapper = useEditorStore.getState().project!.pages[0].nodes[wrapperId]
+    const wrapper = useEditorStore.getState().site!.pages[0].nodes[wrapperId]
     expect(wrapper.props.tag).toBe('section')
     expect(wrapper.props.gap).toBe(8)
     // Non-overridden defaults are still present
@@ -137,7 +136,7 @@ describe('Task #414 — wrapNode defaults', () => {
     const state = useEditorStore.getState()
 
     const wrapperId = state.wrapNode(childId, TEST_MODULE_ID)
-    const afterState = useEditorStore.getState().project!.pages[0]
+    const afterState = useEditorStore.getState().site!.pages[0]
 
     // Wrapper takes the original node's slot in the parent
     expect(afterState.nodes[rootId].children).toContain(wrapperId)
@@ -148,16 +147,16 @@ describe('Task #414 — wrapNode defaults', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Gate 2 — projectSlice.wrapNode source code safety check
+// Gate 2 — siteSlice.wrapNode source code safety check
 // ---------------------------------------------------------------------------
 
-describe('Task #414 — source code guard (projectSlice)', () => {
-  it('Gate 2: projectSlice.ts wrapNode action uses registry.get() to merge defaults', async () => {
+describe('Task #414 — source code guard (siteSlice)', () => {
+  it('Gate 2: siteSlice.ts wrapNode action uses registry.get() to merge defaults', async () => {
     const path = await import('path')
     const fs = await import('fs')
     const filePath = path.resolve(
       __dirname,
-      '../../core/editor-store/slices/projectSlice.ts',
+      '../../core/editor-store/slices/siteSlice.ts',
     )
     const src = fs.readFileSync(filePath, 'utf-8')
 

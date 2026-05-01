@@ -2,7 +2,7 @@
  * Toolbar — fixed top bar for the editor.
  *
  * Layout (left → right):
- *   [Project name] [UndoRedo] [divider]
+ *   [Site name] [UndoRedo] [divider]
  *   [ZoomControls] [spacer→] [SaveIndicator/Save] [Preview] [Publish] [Settings]
  *
  * Accessibility (WCAG 2.1 AA):
@@ -30,7 +30,7 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ onSave, saveStatus, publishEnabled = true }: ToolbarProps) {
-  const projectName = useEditorStore((s) => s.project?.name ?? 'Untitled Project')
+  const siteName = useEditorStore((s) => s.site?.name ?? 'Untitled Site')
 
   return (
     <>
@@ -44,13 +44,13 @@ export function Toolbar({ onSave, saveStatus, publishEnabled = true }: ToolbarPr
       >
         {/* ── Left section ────────────────────────────────────────────────── */}
 
-        {/* Project name */}
+        {/* Site name */}
         <span
-          className={styles.projectName}
-          title={projectName}
-          aria-label={`Project: ${projectName}`}
+          className={styles.siteName}
+          title={siteName}
+          aria-label={`Site: ${siteName}`}
         >
-          {projectName}
+          {siteName}
         </span>
 
         <Divider />

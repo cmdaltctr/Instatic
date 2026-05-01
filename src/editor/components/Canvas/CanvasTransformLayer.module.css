@@ -28,8 +28,8 @@
   will-change: transform;
 }
 
-/* Empty-project placeholder */
-.noProject {
+/* Empty-site placeholder */
+.noSite {
   color: var(--editor-text-subtle);
   font-family: system-ui, sans-serif;
   font-size: 14px;

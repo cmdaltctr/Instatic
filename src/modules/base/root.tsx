@@ -5,7 +5,6 @@
 import type { ModuleDefinition, ModuleComponentProps } from '../../core/module-engine/types'
 import { registry } from '../../core/module-engine/registry'
 import { cn } from '../../ui/cn'
-import { rawBinding } from './styleBindings'
 import styles from './root.module.css'
 
 export type RootProps = Record<string, unknown>
@@ -29,11 +28,6 @@ export const RootModule: ModuleDefinition<RootProps> = {
 
   schema: {},
   defaults: {},
-
-  classStyleBindings: {
-    backgroundColor: rawBinding('backgroundColor', { type: 'color', label: 'Background' }, '#ffffff'),
-    color: rawBinding('color', { type: 'color', label: 'Text color' }, '#111827'),
-  },
 
   component: RootEditorComponent,
 

@@ -7,7 +7,7 @@ import '../../modules/base/index'
 
 beforeEach(() => {
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     selectedNodeId: null,
     hoveredNodeId: null,
@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe('useInsertModule', () => {
   it('selects the inserted module and opens Properties', () => {
-    useEditorStore.getState().createProject('Test Project')
+    useEditorStore.getState().createSite('Test SiteDocument')
     const mod = registry.get('base.text')
     expect(mod).toBeTruthy()
 

@@ -2,7 +2,7 @@
 
 Self-hosted CMS with an integrated visual page builder. The app serves the public website, admin editor, CMS API, published pages, and uploaded media from one Bun server backed by Postgres.
 
-The project is currently private and the final public repository/image name is still work in progress. Deployment files are prepared for a published GitHub Container Registry image; replace placeholder image names with the final package before the first public release.
+The site is currently private and the final public repository/image name is still work in progress. Deployment files are prepared for a published GitHub Container Registry image; replace placeholder image names with the final package before the first public release.
 
 ## Local Development
 

@@ -7,16 +7,16 @@
  *  3. selectors — getFileByPath / getFilesByType
  *  4. filesSlice CRUD — createFile / deleteFile / renameFile / updateFileContent / updateFileBlob
  *  5. filesSlice guards — invalid path throws, collision throws, rename collision throws
- *  6. validateProject — files field (default [] on missing, backward-compat, dedup)
+ *  6. validateSite — files field (default [] on missing, backward-compat, dedup)
  */
 
 import { describe, it, expect, beforeEach } from 'bun:test'
 import { isSafePath, normalizePath } from '../../core/files/pathValidation'
 import { buildFileTree, getFileByPath, getFilesByType } from '../../core/files/selectors'
-import type { ProjectFile } from '../../core/files/types'
+import type { SiteFile } from '../../core/files/types'
 import { useEditorStore } from '../../core/editor-store/store'
-import { validateProject, ValidationError } from '../../core/persistence/validate'
-import type { Project } from '../../core/page-tree/types'
+import { validateSite, SiteValidationError } from '../../core/persistence/validate'
+import type { SiteDocument } from '../../core/page-tree/types'
 
 // ============================================================================
 // 1. pathValidation
@@ -139,8 +139,8 @@ describe('isSafePath', () => {
 function makeFile(
   id: string,
   path: string,
-  type: ProjectFile['type'] = 'script',
-): ProjectFile {
+  type: SiteFile['type'] = 'script',
+): SiteFile {
   return { id, path, type, content: '', createdAt: 1000, updatedAt: 2000 }
 }
 
@@ -238,7 +238,7 @@ describe('buildFileTree', () => {
     expect(t1[0].children.map((n) => n.name)).toEqual(t2[0].children.map((n) => n.name))
   })
 
-  it('file nodes carry the original ProjectFile reference', () => {
+  it('file nodes carry the original SiteFile reference', () => {
     const file = makeFile('f-id', 'src/foo.ts')
     const tree = buildFileTree([file])
     const leaf = tree[0].children[0]
@@ -296,7 +296,7 @@ function getStore() {
 
 function freshStore() {
   useEditorStore.setState({
-    project: null,
+    site: null,
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,
@@ -308,19 +308,19 @@ function freshStore() {
   return getStore()
 }
 
-function setupProject() {
+function setupSite() {
   const s = freshStore()
-  s.createProject('Test')
+  s.createSite('Test')
   return useEditorStore.getState()
 }
 
 // ── createFile ───────────────────────────────────────────────────────────────
 
 describe('filesSlice.createFile', () => {
-  it('adds a file to project.files and returns its id', () => {
-    const s = setupProject()
+  it('adds a file to site.files and returns its id', () => {
+    const s = setupSite()
     const id = s.createFile('src/foo.ts', 'script')
-    const files = useEditorStore.getState().project!.files
+    const files = useEditorStore.getState().site!.files
     expect(files).toHaveLength(1)
     expect(files[0].id).toBe(id)
     expect(files[0].path).toBe('src/foo.ts')
@@ -328,67 +328,67 @@ describe('filesSlice.createFile', () => {
   })
 
   it('normalizes dot-segments in the path', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/./components/Button.tsx', 'component')
-    const files = useEditorStore.getState().project!.files
+    const files = useEditorStore.getState().site!.files
     expect(files.find((f) => f.id === id)?.path).toBe('src/components/Button.tsx')
   })
 
   it('initializes text content to empty string for non-asset types', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script')
-    expect(useEditorStore.getState().project!.files.find((f) => f.id === id)?.content).toBe('')
+    expect(useEditorStore.getState().site!.files.find((f) => f.id === id)?.content).toBe('')
   })
 
   it('accepts custom initial content', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script', 'export const x = 1')
-    expect(useEditorStore.getState().project!.files.find((f) => f.id === id)?.content).toBe('export const x = 1')
+    expect(useEditorStore.getState().site!.files.find((f) => f.id === id)?.content).toBe('export const x = 1')
   })
 
   it('does not set content for asset type', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('public/logo.png', 'asset')
-    expect(useEditorStore.getState().project!.files.find((f) => f.id === id)?.content).toBeUndefined()
+    expect(useEditorStore.getState().site!.files.find((f) => f.id === id)?.content).toBeUndefined()
   })
 
-  it('throws when no project is loaded', () => {
+  it('throws when no site is loaded', () => {
     freshStore()
     expect(() => getStore().createFile('src/foo.ts', 'script')).toThrow()
   })
 
   it('throws on invalid path (leading slash)', () => {
-    setupProject()
+    setupSite()
     expect(() => getStore().createFile('/absolute.ts', 'script')).toThrow()
   })
 
   it('throws on path traversal (..)', () => {
-    setupProject()
+    setupSite()
     expect(() => getStore().createFile('../evil.ts', 'script')).toThrow()
   })
 
   it('throws on reserved src/pages/ prefix', () => {
-    setupProject()
+    setupSite()
     expect(() => getStore().createFile('src/pages/Home.tsx', 'component')).toThrow()
   })
 
   it('throws on empty path', () => {
-    setupProject()
+    setupSite()
     expect(() => getStore().createFile('', 'script')).toThrow()
   })
 
   it('throws on collision (same path)', () => {
-    setupProject()
+    setupSite()
     getStore().createFile('src/foo.ts', 'script')
     expect(() => getStore().createFile('src/foo.ts', 'script')).toThrow()
   })
 
   it('records createdAt and updatedAt timestamps', () => {
     const before = Date.now()
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script')
     const after = Date.now()
-    const file = useEditorStore.getState().project!.files.find((f) => f.id === id)!
+    const file = useEditorStore.getState().site!.files.find((f) => f.id === id)!
     expect(file.createdAt).toBeGreaterThanOrEqual(before)
     expect(file.createdAt).toBeLessThanOrEqual(after)
   })
@@ -398,29 +398,29 @@ describe('filesSlice.createFile', () => {
 
 describe('filesSlice.deleteFile', () => {
   it('removes the file by id', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script')
     getStore().deleteFile(id)
-    expect(useEditorStore.getState().project!.files).toHaveLength(0)
+    expect(useEditorStore.getState().site!.files).toHaveLength(0)
   })
 
   it('is a no-op for an unknown id (does not throw)', () => {
-    setupProject()
+    setupSite()
     expect(() => getStore().deleteFile('nonexistent-id')).not.toThrow()
   })
 
   it('leaves other files intact', () => {
-    setupProject()
+    setupSite()
     const id1 = getStore().createFile('src/a.ts', 'script')
     const id2 = getStore().createFile('src/b.ts', 'script')
     getStore().deleteFile(id1)
-    const files = useEditorStore.getState().project!.files
+    const files = useEditorStore.getState().site!.files
     expect(files).toHaveLength(1)
     expect(files[0].id).toBe(id2)
   })
 
   it('clears activeEditorFileId when deleting the open file', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/open.ts', 'script')
     getStore().openInEditor(id)
 
@@ -430,7 +430,7 @@ describe('filesSlice.deleteFile', () => {
   })
 
   it('keeps activeEditorFileId when deleting a different file', () => {
-    setupProject()
+    setupSite()
     const openId = getStore().createFile('src/open.ts', 'script')
     const deleteId = getStore().createFile('src/delete.ts', 'script')
     getStore().openInEditor(openId)
@@ -445,49 +445,49 @@ describe('filesSlice.deleteFile', () => {
 
 describe('filesSlice.renameFile', () => {
   it('updates the file path', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/old.ts', 'script')
     getStore().renameFile(id, 'src/new.ts')
-    const file = useEditorStore.getState().project!.files.find((f) => f.id === id)!
+    const file = useEditorStore.getState().site!.files.find((f) => f.id === id)!
     expect(file.path).toBe('src/new.ts')
   })
 
   it('normalizes dot-segments in the new path', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script')
     getStore().renameFile(id, 'src/./bar.ts')
-    const file = useEditorStore.getState().project!.files.find((f) => f.id === id)!
+    const file = useEditorStore.getState().site!.files.find((f) => f.id === id)!
     expect(file.path).toBe('src/bar.ts')
   })
 
   it('allows renaming to the same path (no-op, no throw)', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script')
     expect(() => getStore().renameFile(id, 'src/foo.ts')).not.toThrow()
-    expect(useEditorStore.getState().project!.files.find((f) => f.id === id)?.path).toBe('src/foo.ts')
+    expect(useEditorStore.getState().site!.files.find((f) => f.id === id)?.path).toBe('src/foo.ts')
   })
 
   it('throws on collision with ANOTHER file', () => {
-    setupProject()
+    setupSite()
     getStore().createFile('src/a.ts', 'script')
     const id2 = getStore().createFile('src/b.ts', 'script')
     expect(() => getStore().renameFile(id2, 'src/a.ts')).toThrow()
   })
 
   it('throws on invalid new path (.. traversal)', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script')
     expect(() => getStore().renameFile(id, '../evil.ts')).toThrow()
   })
 
   it('throws on invalid new path (reserved src/pages/ prefix)', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script')
     expect(() => getStore().renameFile(id, 'src/pages/Foo.tsx')).toThrow()
   })
 
   it('is a no-op for an unknown id (does not throw)', () => {
-    setupProject()
+    setupSite()
     expect(() => getStore().renameFile('nonexistent-id', 'src/new.ts')).not.toThrow()
   })
 })
@@ -496,45 +496,45 @@ describe('filesSlice.renameFile', () => {
 
 describe('filesSlice.updateFileContent', () => {
   it('updates content', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script', '')
     getStore().updateFileContent(id, 'export const x = 42')
-    expect(useEditorStore.getState().project!.files.find((f) => f.id === id)?.content).toBe('export const x = 42')
+    expect(useEditorStore.getState().site!.files.find((f) => f.id === id)?.content).toBe('export const x = 42')
   })
 
   it('updates updatedAt on content change', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('src/foo.ts', 'script', '')
     const before = Date.now()
     getStore().updateFileContent(id, 'new content')
-    const updatedAt = useEditorStore.getState().project!.files.find((f) => f.id === id)!.updatedAt
+    const updatedAt = useEditorStore.getState().site!.files.find((f) => f.id === id)!.updatedAt
     const after = Date.now()
     expect(updatedAt).toBeGreaterThanOrEqual(before)
     expect(updatedAt).toBeLessThanOrEqual(after)
   })
 
   it('is a no-op for unknown id', () => {
-    setupProject()
+    setupSite()
     expect(() => getStore().updateFileContent('nonexistent', 'x')).not.toThrow()
   })
 
   it('ejects a generated file when content is edited', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('package.json', 'config', '{}')
     useEditorStore.setState((state) => ({
-      project: state.project
+      site: state.site
         ? {
-            ...state.project,
-            files: state.project.files.map((file) =>
+            ...state.site,
+            files: state.site.files.map((file) =>
               file.id === id ? { ...file, generated: true, ejected: false } : file,
             ),
           }
-        : state.project,
+        : state.site,
     }))
 
     getStore().updateFileContent(id, '{ "name": "custom" }')
 
-    const file = useEditorStore.getState().project!.files.find((f) => f.id === id)!
+    const file = useEditorStore.getState().site!.files.find((f) => f.id === id)!
     expect(file.generated).toBe(true)
     expect(file.ejected).toBe(true)
   })
@@ -544,37 +544,37 @@ describe('filesSlice.updateFileContent', () => {
 
 describe('filesSlice.updateFileBlob', () => {
   it('stores blob on an asset file', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('public/logo.png', 'asset')
     const blob = { mimeType: 'image/png', base64: 'abc123==' }
     getStore().updateFileBlob(id, blob)
-    expect(useEditorStore.getState().project!.files.find((f) => f.id === id)?.blob).toEqual(blob)
+    expect(useEditorStore.getState().site!.files.find((f) => f.id === id)?.blob).toEqual(blob)
   })
 
   it('is a no-op for unknown id', () => {
-    setupProject()
+    setupSite()
     expect(() =>
       getStore().updateFileBlob('nonexistent', { mimeType: 'image/png', base64: '' }),
     ).not.toThrow()
   })
 
   it('ejects a generated asset when blob is edited', () => {
-    setupProject()
+    setupSite()
     const id = getStore().createFile('public/logo.png', 'asset')
     useEditorStore.setState((state) => ({
-      project: state.project
+      site: state.site
         ? {
-            ...state.project,
-            files: state.project.files.map((file) =>
+            ...state.site,
+            files: state.site.files.map((file) =>
               file.id === id ? { ...file, generated: true, ejected: false } : file,
             ),
           }
-        : state.project,
+        : state.site,
     }))
 
     getStore().updateFileBlob(id, { mimeType: 'image/png', base64: 'abc123==' })
 
-    const file = useEditorStore.getState().project!.files.find((f) => f.id === id)!
+    const file = useEditorStore.getState().site!.files.find((f) => f.id === id)!
     expect(file.generated).toBe(true)
     expect(file.ejected).toBe(true)
   })
@@ -584,40 +584,40 @@ describe('filesSlice.updateFileBlob', () => {
 
 describe('filesSlice — round-trip create → read → update → delete', () => {
   it('complete CRUD cycle', () => {
-    setupProject()
+    setupSite()
     const s = getStore()
 
     // create
     const id = s.createFile('src/utils/helpers.ts', 'script', '// initial')
-    expect(useEditorStore.getState().project!.files).toHaveLength(1)
+    expect(useEditorStore.getState().site!.files).toHaveLength(1)
 
     // read
-    const file = useEditorStore.getState().project!.files.find((f) => f.id === id)!
+    const file = useEditorStore.getState().site!.files.find((f) => f.id === id)!
     expect(file.path).toBe('src/utils/helpers.ts')
     expect(file.content).toBe('// initial')
 
     // update content
     getStore().updateFileContent(id, '// updated')
-    expect(useEditorStore.getState().project!.files.find((f) => f.id === id)?.content).toBe('// updated')
+    expect(useEditorStore.getState().site!.files.find((f) => f.id === id)?.content).toBe('// updated')
 
     // rename
     getStore().renameFile(id, 'src/utils/helpers-v2.ts')
-    expect(useEditorStore.getState().project!.files.find((f) => f.id === id)?.path).toBe('src/utils/helpers-v2.ts')
+    expect(useEditorStore.getState().site!.files.find((f) => f.id === id)?.path).toBe('src/utils/helpers-v2.ts')
 
     // delete
     getStore().deleteFile(id)
-    expect(useEditorStore.getState().project!.files).toHaveLength(0)
+    expect(useEditorStore.getState().site!.files).toHaveLength(0)
   })
 })
 
 // ============================================================================
-// 6. validateProject — files field
+// 6. validateSite — files field
 // ============================================================================
 
 function minimalValidRaw(): Record<string, unknown> {
   return {
     id: 'proj-1',
-    name: 'Test Project',
+    name: 'Test SiteDocument',
     createdAt: 1000,
     updatedAt: 2000,
     breakpoints: [{ id: 'desktop', label: 'Desktop', width: 1440, icon: 'monitor' }],
@@ -636,12 +636,12 @@ function minimalValidRaw(): Record<string, unknown> {
   }
 }
 
-describe('validateProject — files field (Task #429)', () => {
+describe('validateSite — files field (Task #429)', () => {
   it('defaults missing files field to [] (backward-compat with legacy projects)', () => {
     const raw = minimalValidRaw()
     // raw has no `files` field
-    const project = validateProject(raw)
-    expect(project.files).toEqual([])
+    const site = validateSite(raw)
+    expect(site.files).toEqual([])
   })
 
   it('accepts and returns a valid files array', () => {
@@ -656,11 +656,11 @@ describe('validateProject — files field (Task #429)', () => {
         updatedAt: 2000,
       },
     ]
-    const project = validateProject(raw)
-    expect(project.files).toHaveLength(1)
-    expect(project.files[0].id).toBe('f1')
-    expect(project.files[0].path).toBe('src/foo.ts')
-    expect(project.files[0].content).toBe('export const x = 1')
+    const site = validateSite(raw)
+    expect(site.files).toHaveLength(1)
+    expect(site.files[0].id).toBe('f1')
+    expect(site.files[0].path).toBe('src/foo.ts')
+    expect(site.files[0].content).toBe('export const x = 1')
   })
 
   it('normalizes dot-segments in file paths during validation', () => {
@@ -668,19 +668,19 @@ describe('validateProject — files field (Task #429)', () => {
     raw.files = [
       { id: 'f1', path: 'src/./foo.ts', type: 'script', content: '', createdAt: 1000, updatedAt: 2000 },
     ]
-    const project = validateProject(raw)
-    expect(project.files[0].path).toBe('src/foo.ts')
+    const site = validateSite(raw)
+    expect(site.files[0].path).toBe('src/foo.ts')
   })
 
-  it('silently drops files with unsafe paths (does not reject the whole project)', () => {
+  it('silently drops files with unsafe paths (does not reject the whole site)', () => {
     const raw = minimalValidRaw()
     raw.files = [
       { id: 'bad', path: '../evil.ts', type: 'script', content: '', createdAt: 1000, updatedAt: 2000 },
       { id: 'good', path: 'src/safe.ts', type: 'script', content: '', createdAt: 1000, updatedAt: 2000 },
     ]
-    const project = validateProject(raw)
-    expect(project.files).toHaveLength(1)
-    expect(project.files[0].id).toBe('good')
+    const site = validateSite(raw)
+    expect(site.files).toHaveLength(1)
+    expect(site.files[0].id).toBe('good')
   })
 
   it('silently drops files with invalid types', () => {
@@ -689,9 +689,9 @@ describe('validateProject — files field (Task #429)', () => {
       { id: 'bad', path: 'src/foo.ts', type: 'invalid-type', content: '', createdAt: 1000, updatedAt: 2000 },
       { id: 'good', path: 'src/bar.ts', type: 'component', content: '', createdAt: 1000, updatedAt: 2000 },
     ]
-    const project = validateProject(raw)
-    expect(project.files).toHaveLength(1)
-    expect(project.files[0].id).toBe('good')
+    const site = validateSite(raw)
+    expect(site.files).toHaveLength(1)
+    expect(site.files[0].id).toBe('good')
   })
 
   it('deduplicates files with the same path (keeps first occurrence)', () => {
@@ -700,20 +700,20 @@ describe('validateProject — files field (Task #429)', () => {
       { id: 'f1', path: 'src/foo.ts', type: 'script', content: 'first', createdAt: 1000, updatedAt: 2000 },
       { id: 'f2', path: 'src/foo.ts', type: 'script', content: 'second', createdAt: 1000, updatedAt: 2000 },
     ]
-    const project = validateProject(raw)
-    expect(project.files).toHaveLength(1)
-    expect(project.files[0].id).toBe('f1')
+    const site = validateSite(raw)
+    expect(site.files).toHaveLength(1)
+    expect(site.files[0].id).toBe('f1')
   })
 
   it('does not mutate the input object destructively (existing fields preserved)', () => {
     const raw = minimalValidRaw()
     raw.files = []
-    const project = validateProject(raw)
+    const site = validateSite(raw)
     // Existing fields must be intact
-    expect(project.id).toBe('proj-1')
-    expect(project.name).toBe('Test Project')
-    expect(project.pages).toHaveLength(1)
-    expect(project.files).toEqual([])
+    expect(site.id).toBe('proj-1')
+    expect(site.name).toBe('Test SiteDocument')
+    expect(site.pages).toHaveLength(1)
+    expect(site.files).toEqual([])
   })
 
   it('validates blob field on asset files', () => {
@@ -728,9 +728,9 @@ describe('validateProject — files field (Task #429)', () => {
         updatedAt: 2000,
       },
     ]
-    const project = validateProject(raw)
-    expect(project.files[0].blob?.mimeType).toBe('image/png')
-    expect(project.files[0].blob?.base64).toBe('abc==')
+    const site = validateSite(raw)
+    expect(site.files[0].blob?.mimeType).toBe('image/png')
+    expect(site.files[0].blob?.base64).toBe('abc==')
   })
 
   it('drops malformed blob and still includes the file', () => {
@@ -745,14 +745,14 @@ describe('validateProject — files field (Task #429)', () => {
         updatedAt: 2000,
       },
     ]
-    const project = validateProject(raw)
-    expect(project.files).toHaveLength(1)
-    expect(project.files[0].blob).toBeUndefined()
+    const site = validateSite(raw)
+    expect(site.files).toHaveLength(1)
+    expect(site.files[0].blob).toBeUndefined()
   })
 
-  it('does not throw a ValidationError for an empty files array', () => {
+  it('does not throw a SiteValidationError for an empty files array', () => {
     const raw = minimalValidRaw()
     raw.files = []
-    expect(() => validateProject(raw)).not.toThrow(ValidationError)
+    expect(() => validateSite(raw)).not.toThrow(SiteValidationError)
   })
 })

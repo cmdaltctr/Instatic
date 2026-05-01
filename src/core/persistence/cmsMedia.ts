@@ -45,3 +45,36 @@ export async function uploadCmsMediaAsset(
   const payload = await res.json() as { asset: CmsMediaAsset }
   return payload.asset
 }
+
+export async function renameCmsMediaAsset(
+  assetId: string,
+  filename: string,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/api/cms',
+): Promise<CmsMediaAsset> {
+  const res = await fetchImpl(`${basePath}/media/${encodeURIComponent(assetId)}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ filename }),
+  })
+  if (!res.ok) {
+    throw new Error(await responseErrorMessage(res, `CMS media rename failed with ${res.status}`))
+  }
+  const payload = await res.json() as { asset: CmsMediaAsset }
+  return payload.asset
+}
+
+export async function deleteCmsMediaAsset(
+  assetId: string,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/api/cms',
+): Promise<void> {
+  const res = await fetchImpl(`${basePath}/media/${encodeURIComponent(assetId)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    throw new Error(await responseErrorMessage(res, `CMS media delete failed with ${res.status}`))
+  }
+}

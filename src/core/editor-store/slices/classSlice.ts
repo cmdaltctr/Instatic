@@ -1,12 +1,12 @@
 /**
  * classSlice — Phase C CSS Class System store slice.
  *
- * Manages the project's global class registry (CSSClass[]) and the
+ * Manages the site's global class registry (CSSClass[]) and the
  * per-node class assignments (node.classIds). All mutations go through
  * Immer produce() for immutability and undo-ability.
  *
  * Architecture:
- * - Classes live in project.classes (flat map, keyed by CSSClass.id)
+ * - Classes live in site.classes (flat map, keyed by CSSClass.id)
  * - Nodes reference class IDs in node.classIds (ordered array)
  * - The active class ID controls which class the Class Composer edits
  *
@@ -118,11 +118,11 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
   // ── CRUD ───────────────────────────────────────────────────────────────────
 
   createClass(name, styles = {}) {
-    const { project } = get()
-    if (!project) throw new Error('[classSlice] No project loaded')
+    const { site } = get()
+    if (!site) throw new Error('[classSlice] Site document is not initialized')
 
     // Uniqueness check
-    const existing = Object.values(project.classes).find((c) => c.name === name)
+    const existing = Object.values(site.classes).find((c) => c.name === name)
     if (existing) throw new Error(`[classSlice] A class named "${name}" already exists`)
 
     const now = Date.now()
@@ -137,9 +137,9 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        state.project.classes[newClass.id] = newClass
-        state.project.updatedAt = Date.now()
+        if (!state.site) return
+        state.site.classes[newClass.id] = newClass
+        state.site.updatedAt = Date.now()
       }),
     )
 
@@ -147,13 +147,13 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
   },
 
   updateClassStyles(classId, patch) {
-    const { project } = get()
-    if (!project?.classes[classId]) return
+    const { site } = get()
+    if (!site?.classes[classId]) return
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project?.classes[classId]) return
-        const cls = state.project.classes[classId]
+        if (!state.site?.classes[classId]) return
+        const cls = state.site.classes[classId]
         Object.assign(cls.styles, patch)
         // Remove keys explicitly set to undefined/null (allow clearing a property)
         for (const [k, v] of Object.entries(patch)) {
@@ -162,19 +162,19 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
           }
         }
         cls.updatedAt = Date.now()
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
 
   setClassBreakpointStyles(classId, breakpointId, patch) {
-    const { project } = get()
-    if (!project?.classes[classId]) return
+    const { site } = get()
+    if (!site?.classes[classId]) return
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project?.classes[classId]) return
-        const cls = state.project.classes[classId]
+        if (!state.site?.classes[classId]) return
+        const cls = state.site.classes[classId]
         if (!cls.breakpointStyles[breakpointId]) {
           cls.breakpointStyles[breakpointId] = {}
         }
@@ -186,25 +186,25 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
           }
         }
         cls.updatedAt = Date.now()
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
 
   ensureNodeStyleClass(nodeId, moduleName = 'Module') {
-    const { project } = get()
-    if (!project) return null
+    const { site } = get()
+    if (!site) return null
 
-    const page = project.pages.find((p) => p.nodes[nodeId])
+    const page = site.pages.find((p) => p.nodes[nodeId])
     const node = page?.nodes[nodeId]
     if (!node) return null
 
     const existingId = node.classIds?.find((id) => {
-      const cls = project.classes[id]
+      const cls = site.classes[id]
       return cls?.scope?.type === 'node' && cls.scope.nodeId === nodeId && cls.scope.role === 'module-style'
     })
-    if (existingId && project.classes[existingId]) {
-      return project.classes[existingId]
+    if (existingId && site.classes[existingId]) {
+      return site.classes[existingId]
     }
 
     const now = Date.now()
@@ -222,20 +222,20 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        state.project.classes[newClass.id] = newClass
-        for (const p of state.project.pages) {
+        if (!state.site) return
+        state.site.classes[newClass.id] = newClass
+        for (const p of state.site.pages) {
           const target = p.nodes[nodeId]
           if (!target) continue
           if (!target.classIds) target.classIds = []
           target.classIds = target.classIds.filter((id) => {
-            const cls = state.project?.classes[id]
+            const cls = state.site?.classes[id]
             return !(cls?.scope?.type === 'node' && cls.scope.nodeId === nodeId && cls.scope.role === 'module-style')
           })
           target.classIds.push(newClass.id)
           break
         }
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
 
@@ -243,21 +243,21 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
   },
 
   renameClass(classId, name) {
-    const { project } = get()
-    if (!project?.classes[classId]) return
+    const { site } = get()
+    if (!site?.classes[classId]) return
 
     // Uniqueness check (allow keeping same name)
-    const existing = Object.values(project.classes).find(
+    const existing = Object.values(site.classes).find(
       (c) => c.name === name && c.id !== classId,
     )
     if (existing) throw new Error(`[classSlice] A class named "${name}" already exists`)
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project?.classes[classId]) return
-        state.project.classes[classId].name = name
-        state.project.classes[classId].updatedAt = Date.now()
-        state.project.updatedAt = Date.now()
+        if (!state.site?.classes[classId]) return
+        state.site.classes[classId].name = name
+        state.site.classes[classId].updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
@@ -265,18 +265,18 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
   deleteClass(classId) {
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
+        if (!state.site) return
         // Remove from registry
-        delete state.project.classes[classId]
+        delete state.site.classes[classId]
         // Remove from all nodes on all pages
-        for (const page of state.project.pages) {
+        for (const page of state.site.pages) {
           for (const node of Object.values(page.nodes)) {
             if (node.classIds && node.classIds.includes(classId)) {
               node.classIds = node.classIds.filter((id) => id !== classId)
             }
           }
         }
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
         // Clear activeClassId if it pointed to the deleted class
         if (state.activeClassId === classId) {
           state.activeClassId = null
@@ -288,56 +288,56 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
   // ── Node ↔ class assignment ────────────────────────────────────────────────
 
   addNodeClass(nodeId, classId) {
-    const { project } = get()
-    if (!project) return
+    const { site } = get()
+    if (!site) return
     // Find the node across pages
-    const page = project.pages.find((p) => p.nodes[nodeId])
+    const page = site.pages.find((p) => p.nodes[nodeId])
     if (!page?.nodes[nodeId]) return
     // No-op if already assigned
     if (page.nodes[nodeId].classIds?.includes(classId)) return
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        for (const p of state.project.pages) {
+        if (!state.site) return
+        for (const p of state.site.pages) {
           if (p.nodes[nodeId]) {
             if (!p.nodes[nodeId].classIds) p.nodes[nodeId].classIds = []
             p.nodes[nodeId].classIds!.push(classId)
             break
           }
         }
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
 
   removeNodeClass(nodeId, classId) {
-    const { project } = get()
-    if (!project) return
+    const { site } = get()
+    if (!site) return
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        for (const p of state.project.pages) {
+        if (!state.site) return
+        for (const p of state.site.pages) {
           if (p.nodes[nodeId] && p.nodes[nodeId].classIds) {
             p.nodes[nodeId].classIds = p.nodes[nodeId].classIds!.filter((id) => id !== classId)
             break
           }
         }
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
 
   reorderNodeClasses(nodeId, fromIndex, toIndex) {
-    const { project } = get()
-    if (!project) return
+    const { site } = get()
+    if (!site) return
     if (fromIndex === toIndex) return
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        for (const p of state.project.pages) {
+        if (!state.site) return
+        for (const p of state.site.pages) {
           const node = p.nodes[nodeId]
           if (node?.classIds && node.classIds.length > Math.max(fromIndex, toIndex)) {
             const arr = node.classIds
@@ -346,15 +346,15 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
             break
           }
         }
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
 
   reorderNodeClass(nodeId, classId, direction) {
-    const { project } = get()
-    if (!project) return
-    const page = project.pages.find((p) => p.nodes[nodeId])
+    const { site } = get()
+    if (!site) return
+    const page = site.pages.find((p) => p.nodes[nodeId])
     const classIds = page?.nodes[nodeId]?.classIds
     if (!classIds || classIds.length < 2) return
     const idx = classIds.indexOf(classId)
@@ -365,8 +365,8 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        for (const p of state.project.pages) {
+        if (!state.site) return
+        for (const p of state.site.pages) {
           const node = p.nodes[nodeId]
           if (node?.classIds) {
             const arr = node.classIds
@@ -375,7 +375,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
             break
           }
         }
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },

@@ -10,9 +10,9 @@
  * - Cache key: `${moduleId}::${JSON.stringify(props)}::${children.join('||')}`
  *   NOTE: Relies on stable prop key insertion-order from the Zustand store — true for all
  *   store-derived props since slice setters always produce objects with consistent key order.
- * - `renderCache.clear()` MUST be called inside `projectSlice.loadProject()` before store
- *   hydration completes (Guideline #307). Without this, stale HTML from a previous project
- *   bleeds into the canvas on project switch.
+ * - `renderCache.clear()` MUST be called inside `siteSlice.loadSite()` before store
+ *   hydration completes (Guideline #307). Without this, stale HTML from a previous site
+ *   bleeds into the canvas on site switch.
  * - The publisher calls module `render()` directly — it bypasses this cache (intentional;
  *   publish is one-shot and the cache is editor-only).
  *
@@ -78,9 +78,9 @@ class RenderCache {
   /**
    * Clear the entire cache.
    *
-   * MUST be called inside `projectSlice.loadProject()` before store hydration
+   * MUST be called inside `siteSlice.loadSite()` before store hydration
    * completes (Guideline #307 / Architect callout in message #1216).
-   * Without this, stale HTML from a previously loaded project bleeds into the canvas.
+   * Without this, stale HTML from a previously loaded site bleeds into the canvas.
    */
   clear(): void {
     this._cache.clear()

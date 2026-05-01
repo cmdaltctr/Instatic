@@ -10,7 +10,6 @@ export type {
   ModuleDependencySpec,
   ModuleEditorRuntime,
   ModuleSandboxRuntime,
-  ModuleReactExport,
   AnyModuleDefinition,
   IModuleRegistry,
 } from './types'

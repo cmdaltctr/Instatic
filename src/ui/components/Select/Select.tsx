@@ -18,7 +18,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { ContextMenu, ContextMenuItem } from '@ui/components/ContextMenu'
-import { Icon } from '@ui/icons/Icon'
+import { ChevronDownIcon } from '@ui/icons/icons/chevron-down'
 import { cn } from '@ui/cn'
 import styles from './Select.module.css'
 
@@ -29,7 +29,7 @@ export interface SelectOption {
   value: string | number
   label: ReactNode
   textValue?: string
-  icon?: ReactNode | string
+  icon?: ReactNode
   disabled?: boolean
 }
 
@@ -37,7 +37,7 @@ interface NormalizedSelectOption {
   value: string
   label: ReactNode
   textValue: string
-  icon?: ReactNode | string
+  icon?: ReactNode
   disabled?: boolean
 }
 
@@ -255,7 +255,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       />
 
       <span aria-hidden="true" className={styles.chevron}>
-        <Icon name="chevron-down" size={12} />
+        <ChevronDownIcon size={12} />
       </span>
 
       {open && menuPosition && createPortal(
@@ -278,7 +278,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
             >
               {option.icon && (
                 <span aria-hidden="true">
-                  <SelectIcon icon={option.icon} />
+                  {option.icon}
                 </span>
               )}
               <span className={styles.optionLabel}>{option.label}</span>
@@ -345,9 +345,6 @@ function getNodeText(node: ReactNode): string {
   return ''
 }
 
-function SelectIcon({ icon }: { icon: ReactNode | string }) {
-  if (typeof icon === 'string') {
-    return <Icon name={icon} size={13} />
-  }
+function SelectIcon({ icon }: { icon: ReactNode }) {
   return icon
 }

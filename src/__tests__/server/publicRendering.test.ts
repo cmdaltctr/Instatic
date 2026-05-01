@@ -8,10 +8,9 @@ function snapshot(text: string): PublishedPageSnapshot {
   return {
     cmsSnapshotVersion: 1,
     pageId: 'page_home',
-    project: {
+    site: {
       id: 'project_1',
       name: 'Public Site',
-      projectMode: 'html',
       pages: [
         {
           id: 'page_home',

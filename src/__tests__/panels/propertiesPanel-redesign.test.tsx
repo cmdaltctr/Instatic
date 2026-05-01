@@ -33,7 +33,7 @@ import { parseCSSDeclarations } from '../../editor/components/PropertiesPanel/pa
 import { getCSSPropertyDefaultValue, ALL_CSS_PROPERTIES } from '../../editor/components/PropertiesPanel/cssControlTypes'
 import type { CSSPropertyBag } from '../../core/page-tree/types'
 import { useEditorStore } from '../../core/editor-store/store'
-import { makeProject, makePage, makeNode } from '../fixtures'
+import { makeSite, makePage, makeNode } from '../fixtures'
 import '../../modules/base/index'
 
 const SRC_ROOT = join(import.meta.dir, '../../')
@@ -48,7 +48,7 @@ afterEach(cleanup)
 function resetStore() {
   localStorage.clear()
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     activeDocument: null,
     selectedNodeId: null,
@@ -69,7 +69,7 @@ function resetStore() {
 
 beforeEach(resetStore)
 
-function loadProjectWithHeading(): { nodeId: string; rootId: string } {
+function loadSiteWithHeading(): { nodeId: string; rootId: string } {
   const rootId = 'root-1'
   const nodeId = 'text-1'
   const rootNode = makeNode({ id: rootId, moduleId: 'base.root', children: [nodeId] })
@@ -80,24 +80,24 @@ function loadProjectWithHeading(): { nodeId: string; rootId: string } {
     children: [],
   })
   const page = makePage({ id: 'page-1', rootNodeId: rootId, nodes: { [rootId]: rootNode, [nodeId]: textNode } })
-  const project = makeProject({ pages: [page] })
-  useEditorStore.setState({ project, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
+  const site = makeSite({ pages: [page] })
+  useEditorStore.setState({ site, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
   return { nodeId, rootId }
 }
 
-function loadProjectWithColumns(): { nodeId: string; rootId: string } {
+function loadSiteWithImage(): { nodeId: string; rootId: string } {
   const rootId = 'root-1'
-  const nodeId = 'columns-1'
+  const nodeId = 'image-1'
   const rootNode = makeNode({ id: rootId, moduleId: 'base.root', children: [nodeId] })
-  const columnsNode = makeNode({
+  const imageNode = makeNode({
     id: nodeId,
-    moduleId: 'base.columns',
-    props: {},
+    moduleId: 'base.image',
+    props: { src: '', alt: '', loading: 'lazy' },
     children: [],
   })
-  const page = makePage({ id: 'page-1', rootNodeId: rootId, nodes: { [rootId]: rootNode, [nodeId]: columnsNode } })
-  const project = makeProject({ pages: [page] })
-  useEditorStore.setState({ project, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
+  const page = makePage({ id: 'page-1', rootNodeId: rootId, nodes: { [rootId]: rootNode, [nodeId]: imageNode } })
+  const site = makeSite({ pages: [page] })
+  useEditorStore.setState({ site, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
   return { nodeId, rootId }
 }
 
@@ -105,9 +105,9 @@ function selectNode(nodeId: string) {
   useEditorStore.setState({ selectedNodeId: nodeId } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-/** Set up project with a node that has N classes pre-assigned. Returns nodeId + classIds. */
-function loadProjectWithClasses(count: number): { nodeId: string; classIds: string[] } {
-  const { nodeId } = loadProjectWithHeading()
+/** Set up site with a node that has N classes pre-assigned. Returns nodeId + classIds. */
+function loadSiteWithClasses(count: number): { nodeId: string; classIds: string[] } {
+  const { nodeId } = loadSiteWithHeading()
   const state = useEditorStore.getState()
   const classIds: string[] = []
   for (let i = 1; i <= count; i++) {
@@ -135,7 +135,7 @@ describe('PP-1 — No role="tablist" in PropertiesPanel.tsx', () => {
 
 describe('PP-2 — ClassPicker visible immediately on element selection', () => {
   it('class add input is visible directly under the panel header with no accordion interaction', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     const renameButton = screen.getByRole('button', { name: /rename text/i })
@@ -153,7 +153,7 @@ describe('PP-2 — ClassPicker visible immediately on element selection', () => 
 
 describe('PP-3 — Pill click toggles inline ClassComposer', () => {
   it('clicking a class pill opens ClassComposer; clicking again closes it', () => {
-    const { nodeId } = loadProjectWithClasses(1)
+    const { nodeId } = loadSiteWithClasses(1)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -175,7 +175,7 @@ describe('PP-3 — Pill click toggles inline ClassComposer', () => {
 
 describe('ClassComposer style autocomplete menu', () => {
   it('uses the shared ContextMenu semantics for style suggestions', () => {
-    const { nodeId } = loadProjectWithClasses(1)
+    const { nodeId } = loadSiteWithClasses(1)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -203,7 +203,7 @@ describe('ClassComposer style autocomplete menu', () => {
 
 describe('ClassPicker — suggestion hover preview', () => {
   it('previews an unassigned class while its suggestion is hovered and clears on leave', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const cls = useEditorStore.getState().createClass('preview-target')
     selectNode(nodeId)
     render(<PropertiesPanel />)
@@ -216,7 +216,7 @@ describe('ClassPicker — suggestion hover preview', () => {
       nodeId,
       classId: cls.id,
     })
-    expect(useEditorStore.getState().project!.pages[0].nodes[nodeId].classIds ?? []).not.toContain(cls.id)
+    expect(useEditorStore.getState().site!.pages[0].nodes[nodeId].classIds ?? []).not.toContain(cls.id)
 
     fireEvent.mouseLeave(item)
     expect(useEditorStore.getState().previewClassAssignment).toBeNull()
@@ -224,7 +224,7 @@ describe('ClassPicker — suggestion hover preview', () => {
 
   it('does not preview suggestion hovers when the preference is disabled', () => {
     localStorage.setItem('pb-editor-prefs', JSON.stringify({ classHoverPreview: false }))
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     useEditorStore.getState().createClass('no-preview')
     selectNode(nodeId)
     render(<PropertiesPanel />)
@@ -236,7 +236,7 @@ describe('ClassPicker — suggestion hover preview', () => {
   })
 
   it('consumes a hovered suggestion as a real class on click and clears the preview', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const cls = useEditorStore.getState().createClass('consume-preview')
     selectNode(nodeId)
     render(<PropertiesPanel />)
@@ -247,7 +247,7 @@ describe('ClassPicker — suggestion hover preview', () => {
     fireEvent.mouseEnter(item)
     fireEvent.click(item)
 
-    const node = useEditorStore.getState().project!.pages[0].nodes[nodeId]
+    const node = useEditorStore.getState().site!.pages[0].nodes[nodeId]
     expect(node.classIds).toContain(cls.id)
     expect(useEditorStore.getState().previewClassAssignment).toBeNull()
   })
@@ -259,7 +259,7 @@ describe('ClassPicker — suggestion hover preview', () => {
 
 describe('PP-4 — Module Section default open with controls', () => {
   it('Module section titled with definition.name is present and open by default', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     // "Text" is the definition.name for base.text
@@ -267,7 +267,7 @@ describe('PP-4 — Module Section default open with controls', () => {
   })
 
   it('Property controls are visible without interaction (module section default open)', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     // base.text has a 'text' property control — should be in DOM immediately
@@ -281,7 +281,7 @@ describe('PP-4 — Module Section default open with controls', () => {
 
 describe('PP-5 — Advanced Section removed', () => {
   it('does not render the Advanced section or Hidden/Locked toggles', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
     expect(screen.queryByRole('button', { name: /Advanced/i })).toBeNull()
@@ -313,7 +313,7 @@ describe("PP-6 — Section shared from './Section' in PropertiesPanel and ClassC
 
 describe('PP-7 — Cascade order badges on pills', () => {
   it('Three pills show ordinal superscript badges ¹ ² ³', () => {
-    const { nodeId } = loadProjectWithClasses(3)
+    const { nodeId } = loadSiteWithClasses(3)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -329,7 +329,7 @@ describe('PP-7 — Cascade order badges on pills', () => {
 
 describe('PP-8 — Reorder buttons move pill position and update badges', () => {
   it('clicking move-up on pill 2 moves it to position 1; badge becomes ¹', () => {
-    const { nodeId, classIds } = loadProjectWithClasses(3)
+    const { nodeId, classIds } = loadSiteWithClasses(3)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -339,13 +339,13 @@ describe('PP-8 — Reorder buttons move pill position and update badges', () => 
 
     // After reorder, class-2 should be at index 0 (¹)
     const state = useEditorStore.getState()
-    const page = state.project!.pages[0]
+    const page = state.site!.pages[0]
     const updatedNode = page.nodes[nodeId]
     expect(updatedNode.classIds![0]).toBe(classIds[1]) // class-2 (index 1) moved to index 0
   })
 
   it('clicking move-down on pill 2 of 3 moves it to position 3; classIds updated', () => {
-    const { nodeId, classIds } = loadProjectWithClasses(3)
+    const { nodeId, classIds } = loadSiteWithClasses(3)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -353,13 +353,13 @@ describe('PP-8 — Reorder buttons move pill position and update badges', () => 
     fireEvent.click(moveDownBtn)
 
     const state = useEditorStore.getState()
-    const page = state.project!.pages[0]
+    const page = state.site!.pages[0]
     const updatedNode = page.nodes[nodeId]
     expect(updatedNode.classIds![2]).toBe(classIds[1]) // class-2 moved to last position
   })
 
   it('no-op at boundary: move-up on first pill does not change order', () => {
-    const { nodeId, classIds } = loadProjectWithClasses(2)
+    const { nodeId, classIds } = loadSiteWithClasses(2)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -367,7 +367,7 @@ describe('PP-8 — Reorder buttons move pill position and update badges', () => 
     fireEvent.click(moveUpBtn)
 
     const state = useEditorStore.getState()
-    const updatedIds = state.project!.pages[0].nodes[nodeId].classIds!
+    const updatedIds = state.site!.pages[0].nodes[nodeId].classIds!
     expect(updatedIds[0]).toBe(classIds[0]) // class-1 still first
   })
 })
@@ -389,7 +389,7 @@ describe('PP-9 — Pill × button tooltip "Remove from this element"', () => {
 
 describe('PP-10 — Class and module style controls visible in ClassComposer', () => {
   it('a class with a fontFamily style shows a CSS property row', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const state = useEditorStore.getState()
     const cls = state.createClass('styled-class')
     state.addNodeClass(nodeId, cls.id)
@@ -405,7 +405,7 @@ describe('PP-10 — Class and module style controls visible in ClassComposer', (
   })
 
   it('no textarea element is present in ClassComposer (PP-17)', () => {
-    const { nodeId } = loadProjectWithClasses(1)
+    const { nodeId } = loadSiteWithClasses(1)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -423,7 +423,7 @@ describe('PP-10 — Class and module style controls visible in ClassComposer', (
 
 describe('PP-11 — Editing a text-type class property via TextControl updates class styles', () => {
   it('changing the fontFamily input writes the new value to the class styles in the store', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const state = useEditorStore.getState()
     const cls = state.createClass('edit-class')
     state.addNodeClass(nodeId, cls.id)
@@ -438,7 +438,7 @@ describe('PP-11 — Editing a text-type class property via TextControl updates c
     const input = screen.getByDisplayValue('serif') as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Inter, sans-serif' } })
 
-    const updatedCls = useEditorStore.getState().project!.classes[cls.id]
+    const updatedCls = useEditorStore.getState().site!.classes[cls.id]
     expect(updatedCls.styles.fontFamily).toBe('Inter, sans-serif')
   })
 })
@@ -449,7 +449,7 @@ describe('PP-11 — Editing a text-type class property via TextControl updates c
 
 describe('PP-12 — Removing a class CSS property removes it from class styles', () => {
   it('clicking the remove button for fontFamily clears it from class styles', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const state = useEditorStore.getState()
     const cls = state.createClass('remove-class')
     state.addNodeClass(nodeId, cls.id)
@@ -463,7 +463,7 @@ describe('PP-12 — Removing a class CSS property removes it from class styles',
     const removeBtn = screen.getByRole('button', { name: /remove font family property/i })
     fireEvent.click(removeBtn)
 
-    const updatedCls = useEditorStore.getState().project!.classes[cls.id]
+    const updatedCls = useEditorStore.getState().site!.classes[cls.id]
     // fontFamily should be cleared (null or undefined or '')
     expect(updatedCls.styles.fontFamily).toBeFalsy()
   })
@@ -475,7 +475,7 @@ describe('PP-12 — Removing a class CSS property removes it from class styles',
 
 describe('PP-13 — Breakpoint hint inside Module section when non-desktop bp active', () => {
   it('editing hint text visible inside module section when tablet bp active', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     useEditorStore.setState({ activeBreakpointId: 'tablet' } as Parameters<typeof useEditorStore.setState>[0])
     render(<PropertiesPanel />)
@@ -486,7 +486,7 @@ describe('PP-13 — Breakpoint hint inside Module section when non-desktop bp ac
   })
 
   it('breakpoint dot indicator appears on Module section header when non-desktop bp active', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     useEditorStore.setState({ activeBreakpointId: 'tablet' } as Parameters<typeof useEditorStore.setState>[0])
     render(<PropertiesPanel />)
@@ -497,7 +497,7 @@ describe('PP-13 — Breakpoint hint inside Module section when non-desktop bp ac
   })
 
   it('no breakpoint hint when desktop bp is active', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     useEditorStore.setState({ activeBreakpointId: 'desktop' } as Parameters<typeof useEditorStore.setState>[0])
     render(<PropertiesPanel />)
@@ -560,7 +560,7 @@ describe('HF-1 — Reorder buttons are keyboard-reachable (no tabIndex={-1})', (
   })
 
   it('rendered reorder ↑/↓ buttons do not have tabIndex -1 (DOM check)', () => {
-    const { nodeId } = loadProjectWithClasses(2)
+    const { nodeId } = loadSiteWithClasses(2)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -578,7 +578,7 @@ describe('HF-1 — Reorder buttons are keyboard-reachable (no tabIndex={-1})', (
   })
 
   it('reorder ↑ button receives focus via Tab key traversal', async () => {
-    const { nodeId } = loadProjectWithClasses(1)
+    const { nodeId } = loadSiteWithClasses(1)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -609,7 +609,7 @@ describe('HF-1 — Reorder buttons are keyboard-reachable (no tabIndex={-1})', (
 
 describe('HF-2 — Switching class pills resets ClassComposer local state', () => {
   it('property search resets and updates placeholder after switching classes (no state leak)', () => {
-    const { nodeId } = loadProjectWithClasses(2)
+    const { nodeId } = loadSiteWithClasses(2)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -636,7 +636,7 @@ describe('HF-2 — Switching class pills resets ClassComposer local state', () =
 
   it('switching to an empty class shows no property rows (Phase 3 state isolation)', () => {
     // class-1 gets a fontFamily property; class-2 is empty
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const storeState = useEditorStore.getState()
     const cls1 = storeState.createClass('class-1-isolation')
     const cls2 = storeState.createClass('class-2-isolation')
@@ -789,7 +789,7 @@ describe('PP-17 — No textarea element in ClassComposer (Phase 3)', () => {
   })
 
   it('rendered ClassComposer contains no textarea element in the DOM', () => {
-    const { nodeId } = loadProjectWithClasses(1)
+    const { nodeId } = loadSiteWithClasses(1)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -854,7 +854,7 @@ describe('PP-19 — No inline styles in ClassPropertyRow / cssControlTypes (Cons
 
 describe('PP-20 — Property search adds class-backed styles to the active class', () => {
   it('searching for "font family" and selecting it adds fontFamily to class styles', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const state = useEditorStore.getState()
     const cls = state.createClass('add-prop-class')
     state.addNodeClass(nodeId, cls.id)
@@ -876,12 +876,12 @@ describe('PP-20 — Property search adds class-backed styles to the active class
     fireEvent.click(fontFamilyBtn)
 
     // Class styles should now have fontFamily (with default value)
-    const updatedCls = useEditorStore.getState().project!.classes[cls.id]
+    const updatedCls = useEditorStore.getState().site!.classes[cls.id]
     expect('fontFamily' in updatedCls.styles).toBe(true)
   })
 
   it('breakpoint dropdown scopes added properties to the selected breakpoint', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const state = useEditorStore.getState()
     const cls = state.createClass('bp-prop-class')
     state.addNodeClass(nodeId, cls.id)
@@ -899,113 +899,30 @@ describe('PP-20 — Property search adds class-backed styles to the active class
     fireEvent.change(searchInput, { target: { value: 'fontF' } })
     fireEvent.click(screen.getByRole('menuitem', { name: /font family/i }))
 
-    const updatedCls = useEditorStore.getState().project!.classes[cls.id]
+    const updatedCls = useEditorStore.getState().site!.classes[cls.id]
     expect(updatedCls.styles.fontFamily).toBeUndefined()
     expect(updatedCls.breakpointStyles.mobile.fontFamily).toBe('inherit')
   })
 
-  it('module visual settings add class-backed CSS and respect breakpoints', () => {
-    const { nodeId } = loadProjectWithColumns()
-    const state = useEditorStore.getState()
-    const cls = state.createClass('columns-style-class')
-    state.addNodeClass(nodeId, cls.id)
-    selectNode(nodeId)
-    render(<PropertiesPanel />)
-
-    fireEvent.click(screen.getByRole('button', { name: /edit class columns-style-class/i }))
-
-    const searchInput = screen.getByRole('searchbox', { name: /search class style properties to add/i })
-    fireEvent.change(searchInput, { target: { value: 'columns' } })
-    fireEvent.click(screen.getByRole('menuitem', { name: /^columns$/i }))
-
-    let updatedCls = useEditorStore.getState().project!.classes[cls.id]
-    expect(updatedCls.styles.display).toBe('grid')
-    expect(updatedCls.styles.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
-    expect(document.querySelector('[data-testid="module-style-row-columns"]')).not.toBeNull()
-
-    fireEvent.change(screen.getByRole('combobox', { name: /class style breakpoint/i }), {
-      target: { value: 'mobile' },
-    })
-    fireEvent.change(searchInput, { target: { value: 'columns' } })
-    fireEvent.click(screen.getByRole('menuitem', { name: /^columns$/i }))
-
-    updatedCls = useEditorStore.getState().project!.classes[cls.id]
-    expect(updatedCls.breakpointStyles.mobile.display).toBe('grid')
-    expect(updatedCls.breakpointStyles.mobile.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
-  })
 })
 
 // ---------------------------------------------------------------------------
-// PP-20b: Module CSS fields are visible at instance level and class-backed
+// PP-20b: Module settings stay content/behavior-only
 // ---------------------------------------------------------------------------
 
-describe('PP-20b — Module CSS fields render in Module settings and write to node-scoped classes', () => {
-  it('Columns exposes visual fields in Module settings without opening a class', () => {
-    const { nodeId } = loadProjectWithColumns()
+describe('PP-20b — Module settings exclude visual CSS fields', () => {
+  it('Image exposes only image, alt text, and loading module settings', () => {
+    const { nodeId } = loadSiteWithImage()
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
-    expect(screen.getByRole('textbox', { name: /^columns$/i })).toBeDefined()
-    expect(screen.queryByRole('spinbutton', { name: /^columns$/i })).toBeNull()
-    expect(screen.queryByRole('slider', { name: /^columns$/i })).toBeNull()
-    expect(screen.getByLabelText(/align items/i)).toBeDefined()
-    expect(screen.getByLabelText(/justify items/i)).toBeDefined()
-  })
-
-  it('editing a module CSS length field preserves explicit units', () => {
-    const { nodeId } = loadProjectWithColumns()
-    selectNode(nodeId)
-    render(<PropertiesPanel />)
-
-    fireEvent.change(screen.getByRole('textbox', { name: /column gap/i }), {
-      target: { value: '10%' },
-    })
-
-    const state = useEditorStore.getState()
-    const node = state.project!.pages[0].nodes[nodeId]
-    const scopedClassId = node.classIds!.find((id) => state.project!.classes[id].scope?.type === 'node')
-    expect(scopedClassId).toBeDefined()
-    expect(state.project!.classes[scopedClassId!].styles.columnGap).toBe('10%')
-  })
-
-  it('editing a module CSS field creates a hidden node-scoped class', () => {
-    const { nodeId } = loadProjectWithColumns()
-    selectNode(nodeId)
-    render(<PropertiesPanel />)
-
-    fireEvent.change(screen.getByLabelText(/align items/i), {
-      target: { value: 'center' },
-    })
-
-    const state = useEditorStore.getState()
-    const node = state.project!.pages[0].nodes[nodeId]
-    const scopedClassId = node.classIds!.find((id) => state.project!.classes[id].scope?.type === 'node')
-    expect(scopedClassId).toBeDefined()
-    expect(state.project!.classes[scopedClassId!].scope).toEqual({
-      type: 'node',
-      nodeId,
-      role: 'module-style',
-    })
-    expect(state.project!.classes[scopedClassId!].styles.alignItems).toBe('center')
-    expect(screen.queryByRole('button', { name: /edit class columns instance/i })).toBeNull()
-  })
-
-  it('module CSS fields write breakpoint overrides into the same node-scoped class system', () => {
-    const { nodeId } = loadProjectWithColumns()
-    selectNode(nodeId)
-    useEditorStore.setState({ activeBreakpointId: 'mobile' } as Parameters<typeof useEditorStore.setState>[0])
-    render(<PropertiesPanel />)
-
-    fireEvent.change(screen.getByLabelText(/align items/i), {
-      target: { value: 'center' },
-    })
-
-    const state = useEditorStore.getState()
-    const node = state.project!.pages[0].nodes[nodeId]
-    const scopedClassId = node.classIds!.find((id) => state.project!.classes[id].scope?.type === 'node')
-    expect(scopedClassId).toBeDefined()
-    expect(state.project!.classes[scopedClassId!].styles.alignItems).toBeUndefined()
-    expect(state.project!.classes[scopedClassId!].breakpointStyles.mobile.alignItems).toBe('center')
+    expect(screen.getByTestId('property-control-src')).toBeDefined()
+    expect(screen.getByTestId('property-control-alt')).toBeDefined()
+    expect(screen.getByTestId('property-control-loading')).toBeDefined()
+    expect(screen.queryByTestId('property-control-width')).toBeNull()
+    expect(screen.queryByTestId('property-control-height')).toBeNull()
+    expect(screen.queryByTestId('property-control-objectFit')).toBeNull()
+    expect(screen.queryByTestId('property-control-borderRadius')).toBeNull()
   })
 })
 
@@ -1015,7 +932,7 @@ describe('PP-20b — Module CSS fields render in Module settings and write to no
 
 describe('PP-21 — Empty class shows only property search', () => {
   it('a class with no styles shows 0 property rows and no empty-state message', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const state = useEditorStore.getState()
     const cls = state.createClass('empty-cls')
     state.addNodeClass(nodeId, cls.id)
@@ -1040,7 +957,7 @@ describe('PP-21 — Empty class shows only property search', () => {
 
 describe('PP-22 — Module settings is the first visible accordion', () => {
   it('Module settings is the first accordion after the header class picker', () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
@@ -1099,7 +1016,7 @@ describe('PP-24 — ClassComposer assigned categories use shared Section', () =>
 
 describe('PP-25 — Keyboard navigation reaches ClassPropertyRow controls and remove button', () => {
   it('Tab key can reach the remove button for a class property row', async () => {
-    const { nodeId } = loadProjectWithHeading()
+    const { nodeId } = loadSiteWithHeading()
     const state = useEditorStore.getState()
     const cls = state.createClass('kb-test-class')
     state.addNodeClass(nodeId, cls.id)

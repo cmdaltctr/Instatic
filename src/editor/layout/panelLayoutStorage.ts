@@ -3,7 +3,7 @@ import type { PropertiesPanelMode } from '@core/editor-store/slices/uiSlice'
 
 export const EDITOR_LAYOUT_STORAGE_KEY = 'pb-editor-layout-v1'
 
-export type FloatingPanelId = 'dom' | 'properties' | 'project' | 'dependencies' | 'codeeditor' | 'agent'
+export type FloatingPanelId = 'dom' | 'properties' | 'site' | 'media' | 'dependencies' | 'codeeditor' | 'agent'
 
 export interface StoredPanelLayout {
   open?: boolean

@@ -73,7 +73,7 @@ function clampToViewport(pos: PanelPosition): PanelPosition {
 }
 
 /**
- * @param panelId     Unique panel identifier (e.g. "dom", "properties", "agent", "project").
+ * @param panelId     Unique panel identifier (e.g. "dom", "properties", "agent", "site").
  * @param getDefault  Called once on mount when no stored position exists.
  *                    Should return a Guideline #410 compliant default position.
  */

@@ -63,7 +63,7 @@ export function createPageBuilderMcpServer(ctx: PageContext) {
       ),
       tool(
         'list_classes',
-        'List reusable CSS classes available in this project, including their current styles.',
+        'List reusable CSS classes available in this site, including their current styles.',
         { query: z.string().optional() },
         async ({ query }) => {
           const normalizedQuery = query?.toLowerCase()
@@ -79,7 +79,7 @@ export function createPageBuilderMcpServer(ctx: PageContext) {
       ),
       tool(
         'list_breakpoints',
-        'List configured responsive breakpoints for this project, including the currently active breakpoint.',
+        'List configured responsive breakpoints for this site, including the currently active breakpoint.',
         {},
         async () => jsonToolResult({
           activeBreakpointId: snapshot.activeBreakpointId,

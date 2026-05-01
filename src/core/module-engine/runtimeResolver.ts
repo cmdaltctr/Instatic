@@ -1,17 +1,17 @@
 import type { AnyModuleDefinition } from './types'
 import {
-  getProjectDependencyVersion,
+  getSiteDependencyVersion,
   normalizeModuleDependencies,
   type NormalizedModuleDependency,
 } from './dependencies'
-import type { ProjectPackageJson } from '../project-dependencies/manifest'
+import type { SitePackageJson } from '../site-dependencies/manifest'
 
 const DEFAULT_ESM_CDN_ORIGIN = 'https://esm.sh'
 
 export interface RuntimeResolverOptions {
   origin?: string
-  packageJson?: ProjectPackageJson
-  strictProjectManifest?: boolean
+  packageJson?: SitePackageJson
+  strictSiteManifest?: boolean
 }
 
 export interface ModuleImportMap {
@@ -54,9 +54,9 @@ export function createModuleImportMap(
     if (dependency.dev) continue
 
     const manifestVersion = options.packageJson
-      ? getProjectDependencyVersion(options.packageJson, dependency)
+      ? getSiteDependencyVersion(options.packageJson, dependency)
       : null
-    if (options.strictProjectManifest && !manifestVersion) continue
+    if (options.strictSiteManifest && !manifestVersion) continue
 
     const version = manifestVersion ?? dependency.version
     const resolvedDependency = { ...dependency, version }

@@ -10,7 +10,7 @@
  *   6.  Section sync — valid/invalid section IDs from store
  *   7.  Close behaviours — close button, Escape key, backdrop click
  *   8.  Focus trap keyboard logic — Tab/Shift+Tab stays inside dialog
- *   9.  PagesSection rendering — project-null state
+ *   9.  PagesSection rendering — site-null state
  *  10.  PreferencesSection — role="switch" toggles, state update
  *  11.  WCAG 2.5.5 Touch Targets (source-scan enforcement)
  *       ⚠️  These tests FAIL until FSE applies the 3 fixes from Contribution #345.
@@ -35,7 +35,7 @@ import { render, screen, cleanup, fireEvent, act, within } from '@testing-librar
 import { readFileSync } from 'fs'
 import { SettingsModal } from '../../editor/components/Settings/SettingsModal'
 import { useEditorStore } from '../../core/editor-store/store'
-import { makeProject, makePage } from '../fixtures'
+import { makeSite, makePage } from '../fixtures'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -50,7 +50,7 @@ const MIN_TOUCH_TARGET = 44 // WCAG 2.5.5
 function resetStore() {
   localStorage.clear()
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     selectedNodeId: null,
     hoveredNodeId: null,
@@ -68,11 +68,11 @@ function resetStore() {
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-/** Open the modal and optionally load a project into the store. */
-function openModal(section = 'pages', withProject = false) {
-  if (withProject) {
-    const project = makeProject({ pages: [makePage()] })
-    useEditorStore.setState({ project, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
+/** Open the modal and optionally load a site into the store. */
+function openModal(section = 'pages', withSite = false) {
+  if (withSite) {
+    const site = makeSite({ pages: [makePage()] })
+    useEditorStore.setState({ site, activePageId: 'page-1' } as Parameters<typeof useEditorStore.setState>[0])
   }
   useEditorStore.setState({
     settingsModalOpen: true,
@@ -399,23 +399,23 @@ describe('SettingsModal — focus trap keyboard logic', () => {
 // ---------------------------------------------------------------------------
 
 describe('SettingsModal — PagesSection rendering', () => {
-  it('shows "No project loaded." when no project is in store', () => {
-    openModal('pages', false /* no project */)
+  it('shows "Loading site..." when no site is in store', () => {
+    openModal('pages', false /* no site */)
     render(<SettingsModal />)
-    expect(screen.getByText(/no project loaded/i)).toBeDefined()
+    expect(screen.getByText(/loading site/i)).toBeDefined()
   })
 
-  it('shows page list when project is loaded', () => {
-    openModal('pages', true /* with project */)
+  it('shows page list when site is loaded', () => {
+    openModal('pages', true /* with site */)
     render(<SettingsModal />)
-    // makeProject creates one page with title 'Home'
+    // makeSite creates one page with title 'Home'
     expect(screen.getByText('Home')).toBeDefined()
   })
 
-  it('Pages section heading is visible when project is loaded', () => {
-    // PagesSection returns early (no heading) when project is null.
-    // A project must be in the store for the section content to render.
-    openModal('pages', true /* withProject */)
+  it('Pages section heading is visible when site is loaded', () => {
+    // PagesSection returns early (no heading) when site is null.
+    // A site must be in the store for the section content to render.
+    openModal('pages', true /* withSite */)
     render(<SettingsModal />)
     // h3 "Pages" inside the content region (distinct from nav h2 "Settings")
     const h3 = Array.from(document.querySelectorAll('h3')).find(

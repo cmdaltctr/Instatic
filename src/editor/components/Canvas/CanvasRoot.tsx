@@ -36,7 +36,7 @@ import styles from './CanvasRoot.module.css'
 /**
  * Stable empty-breakpoints sentinel — used as the `?? fallback` in the
  * breakpoints selector so that `Object.is(prev, next)` returns `true` when
- * the project is null, preventing useSyncExternalStore from entering an
+ * the site is null, preventing useSyncExternalStore from entering an
  * infinite re-render loop.  Never use `?? []` inline in a useEditorStore
  * selector — a new array literal has a new identity on every call.
  */
@@ -49,7 +49,7 @@ export function CanvasRoot() {
 
   // Store subscriptions
   const canvasPage = useEditorStore(selectActiveCanvasPage)
-  const breakpoints = useEditorStore((s) => s.project?.breakpoints ?? EMPTY_BREAKPOINTS)
+  const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? EMPTY_BREAKPOINTS)
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
   // selectedNodeId is needed here for canvas-level keyboard shortcuts (Delete, Ctrl+D).
   // hoveredNodeId is NOT subscribed here — NodeRenderer handles its own hover state

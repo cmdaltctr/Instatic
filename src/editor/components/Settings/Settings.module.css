@@ -120,8 +120,8 @@
   margin-bottom: 4px;
 }
 
-/* ── No-project placeholder ──────────────────────────────────────────────── */
-.noProject {
+/* ── No-site placeholder ──────────────────────────────────────────────── */
+.noSite {
   color: var(--editor-text-subtle);
   font-size: 13px;
 }

@@ -51,13 +51,13 @@ export function PreferencesSection() {
     <div>
       <h3 className={s.sectionHeading}>Preferences</h3>
       <p className={s.sectionDescription}>
-        Editor preferences are stored locally on this device and do not affect the project file.
+        Editor preferences are stored locally on this device and do not affect the site file.
       </p>
 
       <div>
         <ToggleRow
           label="Auto-save"
-          description="Automatically save the project every 30 seconds."
+          description="Automatically save the site every 30 seconds."
           checked={prefs.autoSave}
           id="pref-autosave"
           onChange={(v) => update({ autoSave: v })}

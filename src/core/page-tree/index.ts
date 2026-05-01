@@ -1,9 +1,9 @@
 export type {
   PageNode,
   Page,
-  Project,
+  SiteDocument,
   Breakpoint,
-  ProjectSettings,
+  SiteSettings,
   TypeScale,
 } from './types'
 
@@ -11,7 +11,7 @@ export {
   DEFAULT_BREAKPOINTS,
   DEFAULT_COLOR_TOKENS,
   DEFAULT_TYPE_SCALE,
-  DEFAULT_PROJECT_SETTINGS,
+  DEFAULT_SITE_SETTINGS,
 } from './types'
 
 export {

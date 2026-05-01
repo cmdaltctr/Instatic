@@ -16,7 +16,8 @@ import {
 type LayoutSelection = readonly [
   domOpen: boolean,
   propertiesOpen: boolean,
-  projectOpen: boolean,
+  siteOpen: boolean,
+  mediaOpen: boolean,
   dependenciesOpen: boolean,
   codeEditorOpen: boolean,
   agentOpen: boolean,
@@ -59,7 +60,8 @@ function selectLayoutState(s: EditorStore): LayoutSelection {
   return [
     !s.domTreePanel.collapsed,
     !s.propertiesPanel.collapsed,
-    s.projectExplorerPanelOpen,
+    s.siteExplorerPanelOpen,
+    s.mediaExplorerPanelOpen,
     s.dependenciesPanelOpen,
     s.codeEditorPanelOpen,
     s.isAgentOpen,
@@ -94,7 +96,8 @@ function layoutFromSelection(
   const [
     domOpen,
     propertiesOpen,
-    projectOpen,
+    siteOpen,
+    mediaOpen,
     dependenciesOpen,
     codeEditorOpen,
     agentOpen,
@@ -113,7 +116,8 @@ function layoutFromSelection(
         ...mergePanel(existing?.panels?.properties, propertiesOpen, propertiesWidth),
         mode: propertiesMode,
       },
-      project: mergePanel(existing?.panels?.project, projectOpen),
+      site: mergePanel(existing?.panels?.site, siteOpen),
+      media: mergePanel(existing?.panels?.media, mediaOpen),
       dependencies: mergePanel(existing?.panels?.dependencies, dependenciesOpen),
       codeeditor: mergePanel(existing?.panels?.codeeditor, codeEditorOpen),
       agent: mergePanel(existing?.panels?.agent, agentOpen),
@@ -129,13 +133,16 @@ function layoutFromSelection(
 function restoreStoredLayout(layout: StoredEditorLayout) {
   useEditorStore.setState((state) => {
     const domOpen = panelOpen(layout, 'dom', !state.domTreePanel.collapsed)
-    const projectOpen = panelOpen(layout, 'project', state.projectExplorerPanelOpen)
+    const siteOpen = panelOpen(layout, 'site', state.siteExplorerPanelOpen)
+    const mediaOpen = panelOpen(layout, 'media', state.mediaExplorerPanelOpen)
     const dependenciesOpen = panelOpen(layout, 'dependencies', state.dependenciesPanelOpen)
     const agentOpen = panelOpen(layout, 'agent', state.isAgentOpen)
-    const activeLeftPanel = projectOpen
-      ? 'project'
-      : dependenciesOpen
-        ? 'dependencies'
+    const activeLeftPanel = siteOpen
+      ? 'site'
+      : mediaOpen
+        ? 'media'
+        : dependenciesOpen
+          ? 'dependencies'
       : domOpen
         ? 'layers'
         : agentOpen
@@ -160,7 +167,8 @@ function restoreStoredLayout(layout: StoredEditorLayout) {
       },
       propertiesPanelMode: propertiesMode(layout, state.propertiesPanelMode),
       leftSidebarWidth: leftSidebarWidth(layout, state.leftSidebarWidth),
-      projectExplorerPanelOpen: activeLeftPanel === 'project',
+      siteExplorerPanelOpen: activeLeftPanel === 'site',
+      mediaExplorerPanelOpen: activeLeftPanel === 'media',
       dependenciesPanelOpen: activeLeftPanel === 'dependencies',
       codeEditorPanelOpen: panelOpen(layout, 'codeeditor', state.codeEditorPanelOpen),
       isAgentOpen: activeLeftPanel === 'agent',

@@ -45,17 +45,17 @@ export const CanvasTransformLayer = forwardRef<HTMLDivElement, CanvasTransformLa
             />
           ))
         ) : (
-          <NoProjectState />
+          <NoSiteState />
         )}
       </div>
     )
   },
 )
 
-function NoProjectState() {
+function NoSiteState() {
   return (
-    <div className={styles.noProject}>
-      No project loaded
+    <div className={styles.noSite}>
+      Loading site...
     </div>
   )
 }

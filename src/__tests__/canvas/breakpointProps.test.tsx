@@ -7,7 +7,7 @@ import '../../modules/base'
 beforeEach(() => {
   cleanup()
   useEditorStore.setState({
-    project: null,
+    site: null,
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,
@@ -22,8 +22,8 @@ beforeEach(() => {
 
 describe('canvas breakpoint rendering', () => {
   it('renders node breakpoint prop overrides inside the matching breakpoint frame', () => {
-    const project = useEditorStore.getState().createProject('Breakpoint Props')
-    const page = project.pages[0]
+    const site = useEditorStore.getState().createSite('Breakpoint Props')
+    const page = site.pages[0]
     const rootId = page.rootNodeId
     const textId = useEditorStore.getState().insertNode('base.text', {
       text: 'Desktop headline',
@@ -35,7 +35,7 @@ describe('canvas breakpoint rendering', () => {
 
     render(
       <BreakpointFrame
-        page={useEditorStore.getState().project!.pages[0]}
+        page={useEditorStore.getState().site!.pages[0]}
         breakpoint={{ id: 'mobile', label: 'Mobile', width: 375, icon: 'smartphone' }}
         isActive
         onActivate={() => {}}

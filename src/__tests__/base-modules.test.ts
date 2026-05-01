@@ -31,13 +31,12 @@ import { ButtonModule } from '../modules/base/button/index.tsx'
 import { ContainerModule } from '../modules/base/container/index'
 import { ImageModule } from '../modules/base/image/index.tsx'
 import { VideoModule } from '../modules/base/video/index.tsx'
-import { ColumnsModule } from '../modules/base/columns/index.tsx'
 import { ListModule } from '../modules/base/list/index.tsx'
-import { DividerModule } from '../modules/base/divider/index.tsx'
-import { SpacerModule } from '../modules/base/spacer/index.tsx'
+import { LinkModule } from '../modules/base/link/index'
+import { RootModule } from '../modules/base/root'
 
 // ---------------------------------------------------------------------------
-// Run the full conformance suite for every canonical base module (9 total)
+// Run the full conformance suite for every canonical base module (7 total)
 // Context #338 — Canonical Base Module List
 // ---------------------------------------------------------------------------
 
@@ -46,15 +45,16 @@ runModuleConformanceSuite(ButtonModule)
 runModuleConformanceSuite(ContainerModule)
 runModuleConformanceSuite(ImageModule)
 runModuleConformanceSuite(VideoModule)
-runModuleConformanceSuite(ColumnsModule)
 runModuleConformanceSuite(ListModule)
-runModuleConformanceSuite(DividerModule)
-runModuleConformanceSuite(SpacerModule)
+runModuleConformanceSuite(LinkModule)
 
 describe('base module registration', () => {
   it('only imports available production base modules', async () => {
     const baseIndex = await Bun.file('src/modules/base/index.ts').text()
 
+    expect(baseIndex).not.toContain("import './columns'")
+    expect(baseIndex).not.toContain("import './spacer'")
+    expect(baseIndex).not.toContain("import './divider'")
     expect(baseIndex).not.toContain("import './visualComponentRef'")
     expect(baseIndex).not.toContain("import './demoCard'")
     expect(baseIndex).not.toContain("import './demoScene'")
@@ -64,6 +64,9 @@ describe('base module registration', () => {
 
   it('does not keep retired module directories around', () => {
     for (const retiredPath of [
+      'src/modules/base/columns',
+      'src/modules/base/spacer',
+      'src/modules/base/divider',
       'src/modules/base/visualComponentRef',
       'src/modules/base/demoCard',
       'src/modules/base/demoScene',
@@ -71,6 +74,21 @@ describe('base module registration', () => {
       'src/modules/base/paragraph',
     ]) {
       expect(existsSync(retiredPath)).toBe(false)
+    }
+  })
+
+  it('keeps visual styling out of all base module settings', () => {
+    for (const mod of [
+      RootModule,
+      ContainerModule,
+      TextModule,
+      ListModule,
+      ImageModule,
+      VideoModule,
+      ButtonModule,
+      LinkModule,
+    ]) {
+      expect(mod.classStyleBindings ?? {}).toEqual({})
     }
   })
 })
@@ -116,6 +134,11 @@ describe('base.text — unified text module', () => {
 // ---------------------------------------------------------------------------
 
 describe('base.button — render() specifics', () => {
+  it('has only content and behavior module settings', () => {
+    expect(Object.keys(ButtonModule.schema).sort()).toEqual(['disabled', 'href', 'label', 'target'])
+    expect(ButtonModule.classStyleBindings ?? {}).toEqual({})
+  })
+
   it('renders an <a> element when href is set', () => {
     const { html } = renderModule(ButtonModule, { href: 'https://example.com' })
     expect(html).toMatch(/<a[\s>]/)
@@ -221,10 +244,9 @@ describe('base.image — render() specifics', () => {
   // Image module returns empty HTML when src is absent (Guideline #226 —
   // no editor-only chrome in published output). Tests needing <img> must supply src.
 
-  it('exposes class-backed media sizing styles', () => {
-    expect(Object.keys(ImageModule.classStyleBindings ?? {})).toEqual(
-      expect.arrayContaining(['width', 'height', 'objectFit', 'objectPosition', 'borderRadius']),
-    )
+  it('has only content and behavior module settings', () => {
+    expect(Object.keys(ImageModule.schema).sort()).toEqual(['alt', 'loading', 'src'])
+    expect(ImageModule.classStyleBindings ?? {}).toEqual({})
   })
 
   it('returns empty html when src is empty (Guideline #226)', () => {
@@ -282,6 +304,35 @@ describe('base.image — render() specifics', () => {
 // ---------------------------------------------------------------------------
 
 describe('base.video — render() specifics', () => {
+  it('has only source and playback behavior module settings', () => {
+    expect(Object.keys(VideoModule.schema).sort()).toEqual([
+      'autoplay',
+      'controls',
+      'loop',
+      'muted',
+      'source',
+      'videoUrl',
+      'youtubeId',
+    ])
+    expect(VideoModule.classStyleBindings ?? {}).toEqual({})
+  })
+
+  it('defaults to media library video selection', () => {
+    expect(VideoModule.defaults.source).toBe('media')
+    expect(VideoModule.schema.source).toMatchObject({
+      type: 'select',
+      options: [
+        { label: 'Media library', value: 'media' },
+        { label: 'YouTube', value: 'youtube' },
+      ],
+    })
+    expect(VideoModule.schema.videoUrl).toMatchObject({
+      type: 'media',
+      mediaKind: 'video',
+      condition: { field: 'source', eq: 'media' },
+    })
+  })
+
   it('is NOT a container (canHaveChildren: false)', () => {
     expect(VideoModule.canHaveChildren).toBe(false)
   })
@@ -292,13 +343,14 @@ describe('base.video — render() specifics', () => {
     expect(html).toMatch(/<iframe/)
   })
 
-  it('renders a <video> element for source=url', () => {
-    const { html } = renderModule(VideoModule, { source: 'url', videoUrl: 'https://example.com/vid.mp4' })
+  it('renders a <video> element for source=media', () => {
+    const { html } = renderModule(VideoModule, { source: 'media', videoUrl: '/uploads/intro.mp4' })
     expect(html).toMatch(/<video/)
+    expect(html).toContain('/uploads/intro.mp4')
   })
 
   it('XSS: strips javascript: in videoUrl (url-validated by publisher)', () => {
-    const { html } = renderModule(VideoModule, { source: 'url', videoUrl: 'javascript:alert(1)' })
+    const { html } = renderModule(VideoModule, { source: 'media', videoUrl: 'javascript:alert(1)' })
     expect(html).toBeCleanHTML()
     expect(html).not.toContain('javascript:')
   })
@@ -307,7 +359,7 @@ describe('base.video — render() specifics', () => {
     // data:text/html URLs open a new browsing context with arbitrary HTML/JS,
     // bypassing the published page's CSP (isSafeUrl blocks all data: schemes).
     const { html } = renderModule(VideoModule, {
-      source: 'url',
+      source: 'media',
       videoUrl: 'data:text/html,<script>alert(1)</script>',
     })
     expect(html).not.toContain('data:text/html')
@@ -315,13 +367,13 @@ describe('base.video — render() specifics', () => {
   })
 
   it('XSS: strips vbscript: in videoUrl', () => {
-    const { html } = renderModule(VideoModule, { source: 'url', videoUrl: 'vbscript:MsgBox(1)' })
+    const { html } = renderModule(VideoModule, { source: 'media', videoUrl: 'vbscript:MsgBox(1)' })
     expect(html).not.toContain('vbscript:')
   })
 
   it('XSS: strips tab-normalised javascript: bypass in videoUrl', () => {
     // WHATWG URL parser strips \t before scheme detection — isSafeUrl mirrors this
-    const { html } = renderModule(VideoModule, { source: 'url', videoUrl: 'java\tscript:alert(1)' })
+    const { html } = renderModule(VideoModule, { source: 'media', videoUrl: 'java\tscript:alert(1)' })
     expect(html).not.toContain('alert(1)')
   })
 
@@ -340,40 +392,15 @@ describe('base.video — render() specifics', () => {
 })
 
 // ---------------------------------------------------------------------------
-// base.columns — module-specific tests
-// ---------------------------------------------------------------------------
-
-describe('base.columns — render() specifics', () => {
-  it('is a container module (canHaveChildren: true)', () => {
-    expect(ColumnsModule.canHaveChildren).toBe(true)
-  })
-
-  it('renders children inside the grid', () => {
-    const child1 = '<div>A</div>'
-    const child2 = '<div>B</div>'
-    const { html } = renderModule(ColumnsModule, { columns: 2 }, [child1, child2])
-    expect(html).toContain(child1)
-    expect(html).toContain(child2)
-  })
-
-  it('css field is props-independent — no prop interpolation (Constraint #310)', () => {
-    const out1 = ColumnsModule.render(ColumnsModule.defaults, [])
-    const out2 = ColumnsModule.render({ ...ColumnsModule.defaults, columns: 4, gap: 48 }, [])
-    expect(out1.css).toBe(out2.css)
-  })
-
-  it('does not access DOM globals', () => {
-    expect(() =>
-      withBannedGlobals(() => ColumnsModule.render(ColumnsModule.defaults, []))
-    ).not.toThrow()
-  })
-})
-
-// ---------------------------------------------------------------------------
 // base.list — module-specific tests
 // ---------------------------------------------------------------------------
 
 describe('base.list — render() specifics', () => {
+  it('has only content and semantic module settings', () => {
+    expect(Object.keys(ListModule.schema).sort()).toEqual(['items', 'listType'])
+    expect(ListModule.classStyleBindings ?? {}).toEqual({})
+  })
+
   it('renders <ul> element for listType="unordered"', () => {
     const { html } = renderModule(ListModule, { listType: 'unordered' })
     expect(html).toContain('<ul')
@@ -445,55 +472,32 @@ describe('base.list — render() specifics', () => {
 })
 
 // ---------------------------------------------------------------------------
-// base.divider — module-specific tests
+// base.link — module-specific tests
 // ---------------------------------------------------------------------------
 
-describe('base.divider — render() specifics', () => {
-  it('renders an <hr> element', () => {
-    const { html } = renderModule(DividerModule)
-    expect(html).toMatch(/<hr[\s>]/)
+describe('base.link — render() specifics', () => {
+  it('has URL, text, and target module settings', () => {
+    expect(Object.keys(LinkModule.schema).sort()).toEqual(['href', 'target', 'text'])
+    expect(LinkModule.classStyleBindings ?? {}).toEqual({})
   })
 
-  it('includes aria-hidden="true" — divider is decorative (Guideline #226)', () => {
-    // An <hr> divider is a visual decoration; hiding it from screen readers
-    // matches the same decorative treatment applied to base.spacer.
-    const { html } = renderModule(DividerModule)
-    expect(html).toContain('aria-hidden="true"')
+  it('renders target and rel for new-tab links', () => {
+    const { html } = renderModule(LinkModule, {
+      href: 'https://example.com',
+      text: 'Example',
+      target: '_blank',
+    })
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain('rel="noopener noreferrer"')
   })
 
-  it('is NOT a container module (canHaveChildren: false)', () => {
-    expect(DividerModule.canHaveChildren).toBe(false)
+  it('can contain child modules for composed link content', () => {
+    expect(LinkModule.canHaveChildren).toBe(true)
   })
 
   it('does not access DOM globals', () => {
     expect(() =>
-      withBannedGlobals(() => DividerModule.render(DividerModule.defaults, []))
-    ).not.toThrow()
-  })
-})
-
-// ---------------------------------------------------------------------------
-// base.spacer — module-specific tests
-// ---------------------------------------------------------------------------
-
-describe('base.spacer — render() specifics', () => {
-  it('renders a <div> element', () => {
-    const { html } = renderModule(SpacerModule, { height: 64 })
-    expect(html).toMatch(/<div[\s>]/)
-  })
-
-  it('includes aria-hidden="true" (spacer is decorative)', () => {
-    const { html } = renderModule(SpacerModule)
-    expect(html).toContain('aria-hidden="true"')
-  })
-
-  it('is NOT a container module (canHaveChildren: false)', () => {
-    expect(SpacerModule.canHaveChildren).toBe(false)
-  })
-
-  it('does not access DOM globals', () => {
-    expect(() =>
-      withBannedGlobals(() => SpacerModule.render(SpacerModule.defaults, []))
+      withBannedGlobals(() => LinkModule.render(LinkModule.defaults, []))
     ).not.toThrow()
   })
 })

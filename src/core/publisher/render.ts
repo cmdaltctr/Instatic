@@ -10,7 +10,7 @@
  * Decision #308: CSS dedup keyed by moduleId reduces published CSS by ~60–80% on typical pages.
  */
 
-import type { Page, PageNode, Project } from '../page-tree/types'
+import type { Page, PageNode, SiteDocument } from '../page-tree/types'
 import type { IModuleRegistry } from '../module-engine/types'
 import { resolveProps } from '../page-tree/selectors'
 import { sanitizeModuleCSS, collectClassCSS } from './cssCollector'
@@ -123,7 +123,7 @@ function injectClassIntoRootElement(html: string, classAttr: string): string {
 
 export interface RenderContext {
   page: Page
-  project: Project
+  site: SiteDocument
   registry: IModuleRegistry
   breakpointId: string | undefined
   /**
@@ -200,7 +200,7 @@ export interface PublishedPage {
  *
  * Strips `</style>` sequences to prevent breaking out of the style context
  * (same protection as sanitizeModuleCSS — applied to design-token values,
- * which are user-controlled project settings).  Also strips `{` and `}` to
+ * which are user-controlled site settings).  Also strips `{` and `}` to
  * prevent escaping the `:root {}` rule block (CSS injection, CWE-94).
  */
 function sanitizeCssTokenValue(value: string): string {
@@ -220,13 +220,13 @@ function sanitizeCssTokenValue(value: string): string {
 const CSS_CUSTOM_PROP_RE = /^--[a-zA-Z0-9_-]+$/
 
 /**
- * Generate the CSS :root block for project design tokens.
+ * Generate the CSS :root block for site design tokens.
  * Injects color tokens and typography scale as CSS custom properties.
  * Token values are sanitized to prevent CSS injection (Constraint #228 / CWE-94).
  * Token keys are validated against CSS_CUSTOM_PROP_RE to prevent key-side injection.
  */
-function buildRootCss(project: Project): string {
-  const { colorTokens, typeScale } = project.settings
+function buildRootCss(site: SiteDocument): string {
+  const { colorTokens, typeScale } = site.settings
   const tokens = {
     ...colorTokens,
     '--type-base-size': `${typeScale.baseSize}px`,
@@ -257,35 +257,35 @@ function slugToFilename(slug: string, title: string): string {
  *
  * - Walks the node tree bottom-up, collecting HTML and CSS.
  * - Deduplicates CSS across all nodes (one entry per moduleId).
- * - Injects project design tokens as CSS :root custom properties.
+ * - Injects site design tokens as CSS :root custom properties.
  * - Embeds the deduplicated CSS in a single <style> block — no external stylesheets.
  * - No editor code, no React, no framework runtime in the output.
  *
  * @param page         The page to publish
- * @param project      The project (used for settings, title, tokens)
+ * @param site      The site (used for settings, title, tokens)
  * @param registry     The module registry
  * @param breakpointId Optional breakpoint to publish at (uses breakpoint prop overrides)
  */
 export function publishPage(
   page: Page,
-  project: Project,
+  site: SiteDocument,
   registry: IModuleRegistry,
   breakpointId?: string,
 ): PublishedPage {
   const cssMap = new Map<string, string>()
-  const ctx: RenderContext = { page, project, registry, breakpointId, cssMap }
+  const ctx: RenderContext = { page, site, registry, breakpointId, cssMap }
 
   // Render entire tree from root
   const bodyHtml = renderNode(page.rootNodeId, ctx)
 
   // Assemble deduplicated CSS: design tokens, module CSS, then class CSS (Phase C)
-  const rootCss = buildRootCss(project)
+  const rootCss = buildRootCss(site)
   const moduleCss = Array.from(cssMap.values()).join('\n')
-  const classCss = collectClassCSS(project)
+  const classCss = collectClassCSS(site)
   const allCss = [rootCss, moduleCss, classCss].filter(Boolean).join('\n')
 
-  const { settings } = project
-  const pageTitle = escapeHtml(settings.metaTitle ?? page.title ?? project.name)
+  const { settings } = site
+  const pageTitle = escapeHtml(settings.metaTitle ?? page.title ?? site.name)
   const metaDesc = settings.metaDescription
     ? `\n  <meta name="description" content="${escapeHtml(settings.metaDescription)}">`
     : ''
@@ -307,7 +307,7 @@ export function publishPage(
     ` content="default-src 'self'; script-src 'none';` +
     ` style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src 'none';">`
 
-  // WCAG 2.1 AA SC 3.1.1: lang attribute must reflect the project's declared language.
+  // WCAG 2.1 AA SC 3.1.1: lang attribute must reflect the site's declared language.
   // Escape the tag value — even a BCP-47 tag is user-controlled and must be safe for HTML output.
   const langAttr = escapeHtml(settings.language ?? 'en')
 

@@ -11,8 +11,6 @@ import './root'
 
 // Layout modules
 import './container'
-import './spacer'
-import './divider'
 
 // Typography modules
 import './text'
@@ -27,6 +25,3 @@ import './link'
 
 // Media modules (extended)
 import './video'
-
-// Grid/column layout
-import './columns'

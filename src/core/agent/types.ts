@@ -25,7 +25,7 @@ export type AgentActionType =
   | 'assignClass'
   | 'removeClass'
   | 'addPage'
-  | 'updateProjectSettings'
+  | 'updateSiteSettings'
 
 export interface InsertNodeAction {
   type: 'insertNode'
@@ -158,8 +158,8 @@ export interface AddPageAction {
   slug?: string
 }
 
-export interface UpdateProjectSettingsAction {
-  type: 'updateProjectSettings'
+export interface UpdateSiteSettingsAction {
+  type: 'updateSiteSettings'
   patch: Record<string, unknown>
 }
 
@@ -175,7 +175,7 @@ export type AgentAction =
   | AssignClassAction
   | RemoveClassAction
   | AddPageAction
-  | UpdateProjectSettingsAction
+  | UpdateSiteSettingsAction
 
 // ---------------------------------------------------------------------------
 // Execution result
@@ -413,7 +413,7 @@ export interface PageContext {
   rootNodeId: string
   /** Configured breakpoint ID currently active in the editor. */
   activeBreakpointId: string
-  /** Live breakpoint configuration for the project. */
+  /** Live breakpoint configuration for the site. */
   breakpoints: AgentBreakpointContext[]
   /** All nodes on the active page (flat map, serialisable subset) */
   nodes: Array<{
@@ -431,7 +431,7 @@ export interface PageContext {
   /** Currently selected node ID, if any */
   selectedNodeId: string | null
   /**
-   * CSS class registry — all classes defined in the project.
+   * CSS class registry — all classes defined in the site.
    * Use the `id` in assignClass/updateClassStyles for existing classes.
    * For a class created in the same action batch, use its `name` as the
    * classId — the executor resolves names automatically.

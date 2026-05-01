@@ -27,6 +27,10 @@ interface MediaAssetRow {
   created_at: Date | string
 }
 
+interface DeletedMediaAssetRow {
+  storage_path: string
+}
+
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 }
@@ -69,4 +73,32 @@ export async function listMediaAssets(db: DbClient): Promise<MediaAsset[]> {
      order by created_at desc`,
   )
   return result.rows.map(mapMediaAsset)
+}
+
+export async function renameMediaAsset(
+  db: DbClient,
+  id: string,
+  filename: string,
+): Promise<MediaAsset | null> {
+  const result = await db.query<MediaAssetRow>(
+    `update media_assets set filename = $2
+     where id = $1
+     returning id, filename, mime_type, size_bytes, public_path, created_at`,
+    [id, filename],
+  )
+  return result.rows[0] ? mapMediaAsset(result.rows[0]) : null
+}
+
+export async function deleteMediaAsset(
+  db: DbClient,
+  id: string,
+): Promise<{ storagePath: string } | null> {
+  const result = await db.query<DeletedMediaAssetRow>(
+    `delete from media_assets
+     where id = $1
+     returning storage_path`,
+    [id],
+  )
+  const row = result.rows[0]
+  return row ? { storagePath: row.storage_path } : null
 }

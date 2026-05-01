@@ -20,9 +20,9 @@
  *    Position must be tracked via refs during drag; store updated only on pointerUp.
  *    Budget: drag-to-reorder must be 60fps (Guideline #318).
  *
- * 3. `expandedNodeIds` must NOT live in `projectSlice.ts`.
- *    Expand/collapse is ephemeral UI state — not part of the saved project.
- *    If stored in projectSlice, every tree expand/collapse triggers autosave and
+ * 3. `expandedNodeIds` must NOT live in `siteSlice.ts`.
+ *    Expand/collapse is ephemeral UI state — not part of the saved site.
+ *    If stored in siteSlice, every tree expand/collapse triggers autosave and
  *    appears in undo history, which is incorrect behaviour.
  *    Must live in a dedicated UI-only slice (domTreeSlice or uiSlice).
  *
@@ -37,7 +37,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join, extname } from 'path'
 
 const SRC_ROOT = join(import.meta.dir, '../../')
-const PROJECT_SLICE_PATH = join(SRC_ROOT, 'core/editor-store/slices/projectSlice.ts')
+const PROJECT_SLICE_PATH = join(SRC_ROOT, 'core/editor-store/slices/siteSlice.ts')
 
 // Phase 3 DOM Tree Panel can live in either of these directories:
 const DOM_PANEL_DIRS = [
@@ -126,7 +126,7 @@ describe('Phase 3 Gate 1 — No full-nodes-map selector in DomTreePanel (Guideli
     const FULL_MAP_PATTERNS = [
       /useEditorStore\s*\(\s*[^)]*\.nodes\b(?!\s*\[\s*\w)/,   // s.nodes (without keyed access)
       /useEditorStore\s*\(\s*s\s*=>\s*s\.currentPage\??\s*\.\s*nodes\s*\)/,  // s.currentPage.nodes
-      /useEditorStore\s*\(\s*s\s*=>\s*s\.project\??\s*\..+\.nodes\s*\)/,    // deep .nodes
+      /useEditorStore\s*\(\s*s\s*=>\s*s\.site\??\s*\..+\.nodes\s*\)/,    // deep .nodes
     ]
 
     const violations: string[] = []
@@ -258,19 +258,19 @@ describe('Phase 3 Gate 2 — No store.setState inside pointermove handlers (Guid
 })
 
 // ---------------------------------------------------------------------------
-// Gate 3 — expandedNodeIds must NOT live in projectSlice
+// Gate 3 — expandedNodeIds must NOT live in siteSlice
 //
 // Context: Guideline #318, Contribution #437.
 // Expand/collapse state is ephemeral UI state — it has no business being in
-// the project document. If stored in projectSlice:
+// the site document. If stored in siteSlice:
 //   - Every tree expand/collapse fires autosave
 //   - Expand/collapse appears in undo history (Ctrl+Z collapses a tree node!)
-//   - Project grows with UI state that has no meaning on reload
+//   - SiteDocument grows with UI state that has no meaning on reload
 // Required: expandedNodeIds lives in domTreeSlice, uiSlice, or local component state.
 // ---------------------------------------------------------------------------
 
-describe('Phase 3 Gate 3 — expandedNodeIds must NOT be in projectSlice (Guideline #318)', () => {
-  it('[gate] projectSlice.ts must not contain expandedNodeIds', () => {
+describe('Phase 3 Gate 3 — expandedNodeIds must NOT be in siteSlice (Guideline #318)', () => {
+  it('[gate] siteSlice.ts must not contain expandedNodeIds', () => {
     if (!existsSync(PROJECT_SLICE_PATH)) {
       expect(true).toBe(true)
       return
@@ -278,24 +278,24 @@ describe('Phase 3 Gate 3 — expandedNodeIds must NOT be in projectSlice (Guidel
 
     const src = readFileSync(PROJECT_SLICE_PATH, 'utf-8')
 
-    // expandedNodeIds in projectSlice means tree expand/collapse triggers
-    // project autosave and pollutes undo history — incorrect by design.
-    const hasExpandedInProject = /expandedNodeIds/.test(src)
+    // expandedNodeIds in siteSlice means tree expand/collapse triggers
+    // site autosave and pollutes undo history — incorrect by design.
+    const hasExpandedInSite = /expandedNodeIds/.test(src)
 
-    if (hasExpandedInProject) {
+    if (hasExpandedInSite) {
       throw new Error(
-        '[Phase 3 arch / Guideline #318] `expandedNodeIds` found in projectSlice.ts.\n' +
-        'Expand/collapse state is ephemeral UI state — must NOT be stored in the project.\n' +
-        'If in projectSlice:\n' +
+        '[Phase 3 arch / Guideline #318] `expandedNodeIds` found in siteSlice.ts.\n' +
+        'Expand/collapse state is ephemeral UI state — must NOT be stored in the site.\n' +
+        'If in siteSlice:\n' +
         '  - Every tree expand fires autosave (costly)\n' +
         '  - Expand/collapse appears in undo history (Ctrl+Z unexpectedly collapses a node)\n' +
-        '  - Saved project contains meaningless UI state\n' +
+        '  - Saved site contains meaningless UI state\n' +
         'Required: store expandedNodeIds in domTreeSlice (a UI-only slice) or uiSlice.\n' +
         'See Guideline #318 / Contribution #437.'
       )
     }
 
-    expect(hasExpandedInProject).toBe(false)
+    expect(hasExpandedInSite).toBe(false)
   })
 })
 

@@ -3,24 +3,24 @@
  *
  * Architecture source: Contribution #595 §6 (amended in msg #1844)
  *
- * Manages project.files[] CRUD.  State lives in project.files (owned by
- * projectSlice); this slice owns only the action methods — same pattern as
- * classSlice (project.classes).
+ * Manages site.files[] CRUD.  State lives in site.files (owned by
+ * siteSlice); this slice owns only the action methods — same pattern as
+ * classSlice (site.classes).
  *
  * Every write boundary:
  *  - Calls normalizePath() to collapse dot-segments.
  *  - Calls isSafePath() and throws on invalid input (CWE-22).
  *  - Enforces path uniqueness and throws on collision (not silent overwrite).
  *
- * Dependency direction: MUST NOT import from editor/, page-tree/mutations,
- * or react-publisher/.  This is a pure data-layer slice.
+ * Dependency direction: MUST NOT import from editor/ or page-tree/mutations.
+ * This is a pure data-layer slice.
  */
 
 import { produce } from 'immer'
 import { nanoid } from 'nanoid'
 import type { StateCreator } from 'zustand'
 import type { EditorStore } from '../store'
-import type { ProjectFile, ProjectFileType } from '../../files/types'
+import type { SiteFile, SiteFileType } from '../../files/types'
 import { isSafePath, normalizePath } from '../../files/pathValidation'
 
 // ---------------------------------------------------------------------------
@@ -33,11 +33,11 @@ export interface FilesSlice {
    * Returns the new file's id.
    *
    * Throws if:
-   * - No project is loaded.
+   * - No site is loaded.
    * - `path` fails isSafePath() (after normalization).
    * - A file at the normalized path already exists (CWE-22 / uniqueness).
    */
-  createFile(path: string, type: ProjectFileType, content?: string): string
+  createFile(path: string, type: SiteFileType, content?: string): string
 
   /**
    * Delete the file with the given id.
@@ -49,7 +49,7 @@ export interface FilesSlice {
    * Rename (move) a file to newPath.
    *
    * Throws if:
-   * - No project is loaded.
+   * - No site is loaded.
    * - `newPath` fails isSafePath() (after normalization).
    * - Another file already occupies the normalized newPath.
    */
@@ -75,8 +75,8 @@ export interface FilesSlice {
 
 export const createFilesSlice: StateCreator<EditorStore, [], [], FilesSlice> = (set, get) => ({
   createFile(path, type, content) {
-    const { project } = get()
-    if (!project) throw new Error('[filesSlice] No project loaded')
+    const { site } = get()
+    if (!site) throw new Error('[filesSlice] Site document is not initialized')
 
     const normalized = normalizePath(path)
     if (!isSafePath(normalized)) {
@@ -84,7 +84,7 @@ export const createFilesSlice: StateCreator<EditorStore, [], [], FilesSlice> = (
     }
 
     // Uniqueness — throw on collision (msg #1844 amendment)
-    if (project.files.some((f) => f.path === normalized)) {
+    if (site.files.some((f) => f.path === normalized)) {
       throw new Error(`[filesSlice] A file at path "${normalized}" already exists`)
     }
 
@@ -93,8 +93,8 @@ export const createFilesSlice: StateCreator<EditorStore, [], [], FilesSlice> = (
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        const newFile: ProjectFile = {
+        if (!state.site) return
+        const newFile: SiteFile = {
           id,
           path: normalized,
           type,
@@ -103,8 +103,8 @@ export const createFilesSlice: StateCreator<EditorStore, [], [], FilesSlice> = (
           createdAt: now,
           updatedAt: now,
         }
-        state.project.files.push(newFile)
-        state.project.updatedAt = now
+        state.site.files.push(newFile)
+        state.site.updatedAt = now
       }),
     )
 
@@ -114,19 +114,19 @@ export const createFilesSlice: StateCreator<EditorStore, [], [], FilesSlice> = (
   deleteFile(id) {
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        const idx = state.project.files.findIndex((f) => f.id === id)
+        if (!state.site) return
+        const idx = state.site.files.findIndex((f) => f.id === id)
         if (idx === -1) return
-        state.project.files.splice(idx, 1)
+        state.site.files.splice(idx, 1)
         if (state.activeEditorFileId === id) state.activeEditorFileId = null
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
 
   renameFile(id, newPath) {
-    const { project } = get()
-    if (!project) throw new Error('[filesSlice] No project loaded')
+    const { site } = get()
+    if (!site) throw new Error('[filesSlice] Site document is not initialized')
 
     const normalized = normalizePath(newPath)
     if (!isSafePath(normalized)) {
@@ -134,19 +134,19 @@ export const createFilesSlice: StateCreator<EditorStore, [], [], FilesSlice> = (
     }
 
     // Collision check — allow renaming to same path (no-op), reject if occupied by another file
-    const occupant = project.files.find((f) => f.path === normalized)
+    const occupant = site.files.find((f) => f.path === normalized)
     if (occupant && occupant.id !== id) {
       throw new Error(`[filesSlice] A file at path "${normalized}" already exists`)
     }
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        const file = state.project.files.find((f) => f.id === id)
+        if (!state.site) return
+        const file = state.site.files.find((f) => f.id === id)
         if (!file) return
         file.path = normalized
         file.updatedAt = Date.now()
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
@@ -154,13 +154,13 @@ export const createFilesSlice: StateCreator<EditorStore, [], [], FilesSlice> = (
   updateFileContent(id, content) {
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        const file = state.project.files.find((f) => f.id === id)
+        if (!state.site) return
+        const file = state.site.files.find((f) => f.id === id)
         if (!file) return
         file.content = content
         if (file.generated) file.ejected = true
         file.updatedAt = Date.now()
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
@@ -168,13 +168,13 @@ export const createFilesSlice: StateCreator<EditorStore, [], [], FilesSlice> = (
   updateFileBlob(id, blob) {
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        const file = state.project.files.find((f) => f.id === id)
+        if (!state.site) return
+        const file = state.site.files.find((f) => f.id === id)
         if (!file) return
         file.blob = blob
         if (file.generated) file.ejected = true
         file.updatedAt = Date.now()
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },

@@ -44,10 +44,10 @@ function getSelectionActiveClassId(state: EditorStore, nodeId: string | null): s
   if (!nodeId) return null
 
   const node = findSelectableNode(state, nodeId)
-  if (!node?.classIds?.length || !state.project) return null
+  if (!node?.classIds?.length || !state.site) return null
 
   const visibleClassIds = node.classIds.filter((classId) => {
-    const cls = state.project?.classes[classId]
+    const cls = state.site?.classes[classId]
     return cls && isUserVisibleClass(cls)
   })
 
@@ -59,16 +59,16 @@ function getSelectionActiveClassId(state: EditorStore, nodeId: string | null): s
 }
 
 function findSelectableNode(state: EditorStore, nodeId: string): PageNode | null {
-  if (!state.project) return null
+  if (!state.site) return null
 
   const activeDocument = state.activeDocument
   if (activeDocument?.kind === 'visualComponent') {
-    const component = state.project.visualComponents?.find((vc) => vc.id === activeDocument.vcId)
+    const component = state.site.visualComponents?.find((vc) => vc.id === activeDocument.vcId)
     const node = component ? findNodeInTree(component.rootNode as PageNode, nodeId) : null
     if (node) return node
   }
 
-  for (const page of state.project.pages) {
+  for (const page of state.site.pages) {
     const node = page.nodes[nodeId]
     if (node) return node
   }

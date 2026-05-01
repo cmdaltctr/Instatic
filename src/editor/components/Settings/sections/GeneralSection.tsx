@@ -1,9 +1,9 @@
 /**
- * GeneralSection — project-level metadata.
+ * GeneralSection — site-level metadata.
  *
- * Fields: project name, meta title, meta description, language, favicon URL.
+ * Fields: site name, meta title, meta description, language, favicon URL.
  * All changes are persisted immediately to the Zustand store and ultimately
- * to IndexedDB via the autosave pipeline (Guideline #184 / Constraint #182).
+ * to the CMS draft via the autosave pipeline.
  *
  * Inputs use onBlur + onKeyDown(Enter) so intermediate keystrokes don't
  * push undo-history entries on every keystroke (performance pattern).
@@ -13,35 +13,35 @@ import { Input, Textarea } from '@ui/components/Input'
 import s from '../Settings.module.css'
 
 export function GeneralSection() {
-  const project = useEditorStore((state) => state.project)
-  const updateProjectName = useEditorStore((state) => state.updateProjectName)
-  const updateProjectSettings = useEditorStore((state) => state.updateProjectSettings)
+  const site = useEditorStore((state) => state.site)
+  const updateSiteName = useEditorStore((state) => state.updateSiteName)
+  const updateSiteSettings = useEditorStore((state) => state.updateSiteSettings)
 
-  if (!project) {
-    return <div className={s.noProject}>No project loaded.</div>
+  if (!site) {
+    return <div className={s.noSite}>Loading site...</div>
   }
 
-  const { settings } = project
+  const { settings } = site
 
   return (
     <div>
       <h3 className={s.sectionHeading}>General</h3>
       <p className={s.sectionDescription}>
-        Project name and HTML metadata used in the exported site.
+        Site name and HTML metadata used by the published CMS pages.
       </p>
 
-      {/* ── Project name ──────────────────────────────────────────────────── */}
+      {/* ── Site name ─────────────────────────────────────────────────────── */}
       <div className={s.genFieldRow}>
         <label htmlFor="gen-proj-name" className={s.label}>
-          Project Name
+          Site Name
         </label>
         <Input
           id="gen-proj-name"
           type="text"
-          defaultValue={project.name}
+          defaultValue={site.name}
           onBlur={(e) => {
             const v = e.target.value.trim()
-            if (v) updateProjectName(v)
+            if (v) updateSiteName(v)
           }}
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
         />
@@ -58,7 +58,7 @@ export function GeneralSection() {
           defaultValue={settings.metaTitle ?? ''}
           placeholder="My Website"
           onBlur={(e) =>
-            updateProjectSettings({ metaTitle: e.target.value.trim() || undefined })
+            updateSiteSettings({ metaTitle: e.target.value.trim() || undefined })
           }
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
         />
@@ -75,7 +75,7 @@ export function GeneralSection() {
           placeholder="A short description of your website."
           rows={3}
           onBlur={(e) =>
-            updateProjectSettings({ metaDescription: e.target.value.trim() || undefined })
+            updateSiteSettings({ metaDescription: e.target.value.trim() || undefined })
           }
         />
       </div>
@@ -91,7 +91,7 @@ export function GeneralSection() {
           defaultValue={settings.language ?? 'en'}
           placeholder="en"
           onBlur={(e) =>
-            updateProjectSettings({ language: e.target.value.trim() || 'en' })
+            updateSiteSettings({ language: e.target.value.trim() || 'en' })
           }
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
         />
@@ -108,7 +108,7 @@ export function GeneralSection() {
           defaultValue={settings.faviconUrl ?? ''}
           placeholder="https://example.com/favicon.ico"
           onBlur={(e) =>
-            updateProjectSettings({ faviconUrl: e.target.value.trim() || undefined })
+            updateSiteSettings({ faviconUrl: e.target.value.trim() || undefined })
           }
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
         />

@@ -8,7 +8,6 @@
 import React from 'react'
 import { type ModuleDefinition, type ModuleComponentProps } from '../../../core/module-engine/types'
 import { registry } from '../../../core/module-engine/registry'
-import { jsxStr } from '../../../core/react-publisher/utils'
 import styles from './text.module.css'
 import { cn } from '../../../ui/cn'
 
@@ -61,7 +60,7 @@ const TextEditor: React.FC<ModuleComponentProps<TextProps>> = ({ props, mcClassN
 export const TextModule: ModuleDefinition<TextProps> = {
   id: 'base.text',
   name: 'Text',
-  description: 'A semantic text element. Typography and spacing are class-backed.',
+  description: 'A semantic text element.',
   category: 'Typography',
   version: '2.0.0',
   icon: 'type',
@@ -95,8 +94,6 @@ export const TextModule: ModuleDefinition<TextProps> = {
     tag: 'p',
   },
 
-  classStyleBindings: {},
-
   component: TextEditor,
 
   render: (props) => {
@@ -105,11 +102,6 @@ export const TextModule: ModuleDefinition<TextProps> = {
       html: `<${tag} class="${MODULE_CLASS}">${String(props.text)}</${tag}>`,
       css: `.${MODULE_CLASS}{margin:0;color:inherit;font:inherit}`,
     }
-  },
-
-  toJsx: (props) => {
-    const tag = normalizeTag(props.tag)
-    return `<${tag} className="${MODULE_CLASS}">${jsxStr(props.text)}</${tag}>`
   },
 }
 

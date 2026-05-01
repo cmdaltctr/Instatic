@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { SESSION_COOKIE_NAME, hashSessionToken } from '../../../server/cms/auth'
@@ -8,7 +8,9 @@ import type { DbClient, DbResult } from '../../../server/cms/db'
 import { handleCmsRequest } from '../../../server/cms/handlers'
 import {
   createMediaAsset,
+  deleteMediaAsset,
   listMediaAssets,
+  renameMediaAsset,
 } from '../../../server/cms/mediaRepository'
 
 class MediaFakeDb implements DbClient {
@@ -50,6 +52,18 @@ class MediaFakeDb implements DbClient {
     if (normalized.startsWith('select id, filename, mime_type')) {
       return { rows: [...this.media].reverse() as Row[], rowCount: this.media.length }
     }
+    if (normalized.startsWith('update media_assets set filename')) {
+      const row = this.media.find((asset) => asset.id === params[0])
+      if (!row) return { rows: [], rowCount: 0 }
+      row.filename = params[1]
+      return { rows: [row as Row], rowCount: 1 }
+    }
+    if (normalized.startsWith('delete from media_assets')) {
+      const index = this.media.findIndex((asset) => asset.id === params[0])
+      if (index === -1) return { rows: [], rowCount: 0 }
+      const [row] = this.media.splice(index, 1)
+      return { rows: [row as Row], rowCount: 1 }
+    }
     throw new Error(`Unhandled SQL: ${sql}`)
   }
 }
@@ -66,7 +80,7 @@ async function createCookie(db: MediaFakeDb): Promise<string> {
 
 function cmsRequest(
   url: string,
-  init: { method?: string; formData?: FormData; headers?: Record<string, string> } = {},
+  init: { method?: string; formData?: FormData; headers?: Record<string, string>; body?: string } = {},
 ): Request {
   const headers = new Map(
     Object.entries(init.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
@@ -81,6 +95,9 @@ function cmsRequest(
     },
     async formData() {
       return init.formData ?? new FormData()
+    },
+    async json() {
+      return init.body ? JSON.parse(init.body) : {}
     },
   } as Request
 }
@@ -108,6 +125,42 @@ describe('CMS media repository', () => {
       publicPath: '/uploads/asset_1-hero.png',
       createdAt: '2026-01-03T00:00:00.000Z',
     }])
+  })
+
+  it('renames media asset metadata', async () => {
+    const db = new MediaFakeDb()
+
+    await createMediaAsset(db, {
+      id: 'asset_1',
+      filename: 'hero.png',
+      mimeType: 'image/png',
+      sizeBytes: 12,
+      storagePath: 'asset_1-hero.png',
+      publicPath: '/uploads/asset_1-hero.png',
+    })
+
+    const asset = await renameMediaAsset(db, 'asset_1', 'Hero renamed.png')
+
+    expect(asset?.filename).toBe('Hero renamed.png')
+    expect(db.media[0].filename).toBe('Hero renamed.png')
+  })
+
+  it('deletes media asset metadata and returns its storage path', async () => {
+    const db = new MediaFakeDb()
+
+    await createMediaAsset(db, {
+      id: 'asset_1',
+      filename: 'hero.png',
+      mimeType: 'image/png',
+      sizeBytes: 12,
+      storagePath: 'asset_1-hero.png',
+      publicPath: '/uploads/asset_1-hero.png',
+    })
+
+    const deleted = await deleteMediaAsset(db, 'asset_1')
+
+    expect(deleted?.storagePath).toBe('asset_1-hero.png')
+    expect(db.media).toHaveLength(0)
   })
 })
 
@@ -176,5 +229,65 @@ describe('CMS media handlers', () => {
     expect(await res.json()).toMatchObject({
       assets: [{ filename: 'hero.png', publicPath: '/uploads/asset_1-hero.png' }],
     })
+  })
+
+  it('renames uploaded media assets for authenticated admins', async () => {
+    const db = new MediaFakeDb()
+    const cookie = await createCookie(db)
+    await createMediaAsset(db, {
+      id: 'asset_1',
+      filename: 'hero.png',
+      mimeType: 'image/png',
+      sizeBytes: 12,
+      storagePath: 'asset_1-hero.png',
+      publicPath: '/uploads/asset_1-hero.png',
+    })
+
+    const res = await handleCmsRequest(
+      cmsRequest('http://localhost/api/cms/media/asset_1', {
+        method: 'PATCH',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ filename: 'Hero renamed.png' }),
+      }),
+      db,
+    )
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      asset: { filename: 'Hero renamed.png', publicPath: '/uploads/asset_1-hero.png' },
+    })
+  })
+
+  it('deletes uploaded media assets and removes their stored file for authenticated admins', async () => {
+    const db = new MediaFakeDb()
+    const cookie = await createCookie(db)
+    const uploadsDir = mkdtempSync(join(tmpdir(), 'page-builder-uploads-'))
+    await createMediaAsset(db, {
+      id: 'asset_1',
+      filename: 'hero.png',
+      mimeType: 'image/png',
+      sizeBytes: 12,
+      storagePath: 'asset_1-hero.png',
+      publicPath: '/uploads/asset_1-hero.png',
+    })
+    await writeFile(join(uploadsDir, 'asset_1-hero.png'), 'image-bytes')
+
+    try {
+      const res = await handleCmsRequest(
+        cmsRequest('http://localhost/api/cms/media/asset_1', {
+          method: 'DELETE',
+          headers: { cookie },
+        }),
+        db,
+        { uploadsDir },
+      )
+
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ ok: true })
+      expect(db.media).toHaveLength(0)
+      await expect(readFile(join(uploadsDir, 'asset_1-hero.png'), 'utf-8')).rejects.toThrow()
+    } finally {
+      rmSync(uploadsDir, { recursive: true, force: true })
+    }
   })
 })

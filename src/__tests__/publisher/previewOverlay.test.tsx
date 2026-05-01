@@ -19,7 +19,7 @@ import { readFileSync } from 'fs'
 import { PreviewOverlay } from '../../editor/components/Preview/PreviewOverlay'
 import { useEditorStore } from '../../core/editor-store/store'
 import { publishPage } from '../../core/publisher/render'
-import { makeModule, makeRegistry, makePage, makeProject } from './helpers'
+import { makeModule, makeRegistry, makePage, makeSite } from './helpers'
 
 // ---------------------------------------------------------------------------
 // Store reset
@@ -27,7 +27,7 @@ import { makeModule, makeRegistry, makePage, makeProject } from './helpers'
 
 function resetStore() {
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     selectedNodeId: null,
     hoveredNodeId: null,
@@ -42,8 +42,8 @@ function resetStore() {
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-/** Open the preview with a simple one-page project loaded in the store. */
-function openPreviewWithProject() {
+/** Open the preview with a simple one-page site loaded in the store. */
+function openPreviewWithSite() {
   const page = {
     id: 'page-1',
     slug: 'index',
@@ -70,9 +70,9 @@ function openPreviewWithProject() {
       },
     },
   }
-  const project = makeProject({ name: 'Test Site', pages: [page] })
+  const site = makeSite({ name: 'Test Site', pages: [page] })
   useEditorStore.setState({
-    project,
+    site,
     activePageId: 'page-1',
     previewOpen: true,
   } as Parameters<typeof useEditorStore.setState>[0])
@@ -119,20 +119,20 @@ describe('PreviewOverlay — DOM rendering', () => {
     expect(document.querySelector('[data-testid="preview-iframe"]')).toBeNull()
   })
 
-  it('renders nothing when previewOpen=true but no project is loaded', () => {
+  it('renders nothing when previewOpen=true but no site is loaded', () => {
     useEditorStore.setState({ previewOpen: true } as Parameters<typeof useEditorStore.setState>[0])
     render(<PreviewOverlay />)
     expect(document.querySelector('[data-testid="preview-overlay"]')).toBeNull()
   })
 
-  it('renders the dialog overlay when previewOpen=true with a project', () => {
-    openPreviewWithProject()
+  it('renders the dialog overlay when previewOpen=true with a site', () => {
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     expect(document.querySelector('[data-testid="preview-overlay"]')).not.toBeNull()
   })
 
   it('overlay has role="dialog" and aria-modal="true"', () => {
-    openPreviewWithProject()
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     const dialog = screen.getByRole('dialog')
     expect(dialog).toBeDefined()
@@ -140,14 +140,14 @@ describe('PreviewOverlay — DOM rendering', () => {
   })
 
   it('renders the preview iframe inside the dialog', () => {
-    openPreviewWithProject()
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     const iframe = document.querySelector('[data-testid="preview-iframe"]') as HTMLIFrameElement | null
     expect(iframe).not.toBeNull()
   })
 
   it('iframe has a non-empty srcdoc attribute', () => {
-    openPreviewWithProject()
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     const iframe = document.querySelector('[data-testid="preview-iframe"]') as HTMLIFrameElement | null
     const srcdoc = iframe?.getAttribute('srcdoc') ?? ''
@@ -156,23 +156,23 @@ describe('PreviewOverlay — DOM rendering', () => {
   })
 
   it('iframe srcdoc contains the page title', () => {
-    openPreviewWithProject()
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     const iframe = document.querySelector('[data-testid="preview-iframe"]') as HTMLIFrameElement | null
     const srcdoc = iframe?.getAttribute('srcdoc') ?? ''
-    // The project name "Test Site" should appear as the page title
+    // The site name "Test Site" should appear as the page title
     expect(srcdoc).toMatch(/<title>[^<]*<\/title>/)
   })
 
   it('close button has aria-label="Close preview"', () => {
-    openPreviewWithProject()
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     const closeBtn = screen.getByLabelText('Close preview')
     expect(closeBtn).toBeDefined()
   })
 
   it('clicking the close button closes the overlay (sets previewOpen=false)', () => {
-    openPreviewWithProject()
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     const closeBtn = screen.getByLabelText('Close preview')
     fireEvent.click(closeBtn)
@@ -180,7 +180,7 @@ describe('PreviewOverlay — DOM rendering', () => {
   })
 
   it('pressing Escape closes the overlay', () => {
-    openPreviewWithProject()
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     const dialog = screen.getByRole('dialog')
     fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' })
@@ -188,7 +188,7 @@ describe('PreviewOverlay — DOM rendering', () => {
   })
 
   it('clicking the backdrop closes the overlay', () => {
-    openPreviewWithProject()
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     // Backdrop is the first aria-hidden element
     const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement | null
@@ -198,7 +198,7 @@ describe('PreviewOverlay — DOM rendering', () => {
   })
 
   it('overlay header shows page title', () => {
-    openPreviewWithProject()
+    openPreviewWithSite()
     render(<PreviewOverlay />)
     // Header reads "Preview — {page.title}"
     expect(document.body.textContent).toContain('Preview — Home')
@@ -248,9 +248,9 @@ describe('PreviewButton — source enforcement', () => {
     expect(btnSrc).toContain('openPreview()')
   })
 
-  it('is disabled when no project is loaded', () => {
+  it('is disabled when no site is loaded', () => {
     expect(btnSrc).toContain('disabled={disabled}')
-    expect(btnSrc).toContain('!project')
+    expect(btnSrc).toContain('!site')
   })
 })
 
@@ -343,9 +343,9 @@ describe('publishPage — 2-node tree golden test (Phase 7)', () => {
       },
       'root',
     )
-    const project = makeProject({ name: 'Golden Test', pages: [page] })
+    const site = makeSite({ name: 'Golden Test', pages: [page] })
 
-    const { html, filename } = publishPage(page, project, reg)
+    const { html, filename } = publishPage(page, site, reg)
 
     // Document structure
     expect(html).toContain('<!DOCTYPE html>')
@@ -371,8 +371,8 @@ describe('publishPage — 2-node tree golden test (Phase 7)', () => {
       },
       'root',
     )
-    const project = makeProject({ pages: [page] })
-    const { html } = publishPage(page, project, reg)
+    const site = makeSite({ pages: [page] })
+    const { html } = publishPage(page, site, reg)
 
     expect(html).not.toContain('<script>')
     expect(html).toContain('&lt;script&gt;')
@@ -402,8 +402,8 @@ describe('publishPage — 2-node tree golden test (Phase 7)', () => {
       },
       'root',
     )
-    const project = makeProject({ pages: [page] })
-    const { html } = publishPage(page, project, regWithContainer)
+    const site = makeSite({ pages: [page] })
+    const { html } = publishPage(page, site, regWithContainer)
 
     // The heading CSS marker appears exactly once
     const occurrences = (html.match(/\/\* base\.heading \*\//g) ?? []).length
@@ -415,8 +415,8 @@ describe('publishPage — 2-node tree golden test (Phase 7)', () => {
       { root: { moduleId: 'base.root', children: [] } },
       'root',
     )
-    const project = makeProject({ pages: [page] })
-    const { html } = publishPage(page, project, reg)
+    const site = makeSite({ pages: [page] })
+    const { html } = publishPage(page, site, reg)
     expect(html).toContain('Content-Security-Policy')
     expect(html).toContain("script-src 'none'")
   })
@@ -426,8 +426,8 @@ describe('publishPage — 2-node tree golden test (Phase 7)', () => {
       { root: { moduleId: 'base.root', children: [] } },
       'root',
     )
-    const project = makeProject({ pages: [page] })
-    const { html } = publishPage(page, project, reg)
+    const site = makeSite({ pages: [page] })
+    const { html } = publishPage(page, site, reg)
     expect(html).not.toContain('data-testid')
     expect(html).not.toContain('zustand')
     expect(html).not.toContain('data-reactroot')

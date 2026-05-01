@@ -28,21 +28,27 @@ import {
   useRef,
 } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
+import type { Page } from '@core/page-tree/types'
 import { registry } from '@core/module-engine/registry'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
-import { Icon } from '../../../ui/icons/Icon'
+import { PlusIcon } from '@ui/icons/icons/plus'
+import { FilePlusIcon } from '@ui/icons/icons/file-plus'
+import { BracesIcon } from '@ui/icons/icons/braces'
 import { Button } from '@ui/components/Button'
 import { SearchBar } from '@ui/components/SearchBar'
 import {
-  ProjectCreateDialog,
-  slugifyProjectName,
-  toPascalCaseProjectName,
-  type ProjectCreateKind,
-} from '../ProjectCreateDialog'
+  SiteCreateDialog,
+  slugifySiteItemName,
+  toPascalCaseSiteItemName,
+  type SiteCreatePayload,
+  type SiteCreateKind,
+} from '../SiteCreateDialog'
 import { useInsertModule } from '../../hooks/useInsertModule'
 import styles from './Toolbar.module.css'
 
-type ToolbarCreateKind = Extract<ProjectCreateKind, 'page' | 'component'>
+type ToolbarCreateKind = Extract<SiteCreateKind, 'page' | 'component'>
+
+const EMPTY_PAGES: Page[] = []
 
 interface ModulePickerDropdownProps {
   triggerClassName?: string
@@ -61,6 +67,7 @@ export function ModulePickerDropdown({
   const menuRef = useRef<HTMLDivElement>(null)
 
   const addPage = useEditorStore((s) => s.addPage)
+  const pages = useEditorStore((s) => s.site?.pages ?? EMPTY_PAGES)
   const openPageInCanvas = useEditorStore((s) => s.openPageInCanvas)
   const createVisualComponent = useEditorStore((s) => s.createVisualComponent)
   const setActiveDocument = useEditorStore((s) => s.setActiveDocument)
@@ -167,15 +174,15 @@ export function ModulePickerDropdown({
   }, [handleClose])
 
   const handleCreateConfirm = useCallback(
-    (name: string) => {
+    ({ name, slug }: SiteCreatePayload) => {
       if (!createKind) return
 
       try {
         if (createKind === 'page') {
-          const page = addPage(name, slugifyProjectName(name))
+          const page = addPage(name, slug ?? slugifySiteItemName(name))
           openPageInCanvas(page.id)
         } else {
-          const vcId = createVisualComponent(toPascalCaseProjectName(name))
+          const vcId = createVisualComponent(toPascalCaseSiteItemName(name))
           setActiveDocument({ kind: 'visualComponent', vcId })
         }
         setCreateKind(null)
@@ -210,7 +217,7 @@ export function ModulePickerDropdown({
         onClick={handleOpen}
         data-testid={triggerTestId}
       >
-        <Icon name="plus" size={13} />
+        <PlusIcon size={13} />
         Add
       </Button>
 
@@ -238,7 +245,7 @@ export function ModulePickerDropdown({
                 data-testid="toolbar-add-page-action"
                 fullWidth
               >
-                <Icon name="file-plus" size={14} />
+                <FilePlusIcon size={14} />
                 Page
               </Button>
               <Button
@@ -248,7 +255,7 @@ export function ModulePickerDropdown({
                 data-testid="toolbar-add-component-action"
                 fullWidth
               >
-                <Icon name="braces" size={14} />
+                <BracesIcon size={14} />
                 Component
               </Button>
             </div>
@@ -321,8 +328,9 @@ export function ModulePickerDropdown({
       )}
 
       {createKind && (
-        <ProjectCreateDialog
+        <SiteCreateDialog
           kind={createKind}
+          pages={pages}
           onCancel={() => setCreateKind(null)}
           onCreate={handleCreateConfirm}
         />

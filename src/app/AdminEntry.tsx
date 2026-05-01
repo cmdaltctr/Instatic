@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Button } from '@ui/components/Button'
-import { Icon } from '../ui/icons/Icon'
+import { DatabaseIcon } from '@ui/icons/icons/database'
+import { LoaderIcon } from '@ui/icons/icons/loader'
 import {
   getCmsSetupStatus,
   loginCms,
@@ -87,7 +88,7 @@ export default function AdminEntry() {
   }
 
   if (phase === 'loading') return <AppLoadingScreen />
-  if (phase === 'editor') return <EditorLayout persistenceMode="cms" />
+  if (phase === 'editor') return <EditorLayout />
 
   const isSetup = phase === 'setup'
   const title = isSetup ? 'Set Up CMS' : 'Admin Login'
@@ -101,7 +102,7 @@ export default function AdminEntry() {
       <section className={styles.panel} aria-labelledby="admin-entry-title">
         <div className={styles.brandRow}>
           <div className={styles.brandIcon} aria-hidden="true">
-            <Icon name="database" size={16} />
+            <DatabaseIcon size={16} />
           </div>
           <span>Page Builder CMS</span>
         </div>
@@ -165,7 +166,7 @@ export default function AdminEntry() {
             aria-busy={submitting}
           >
             {submitting && (
-              <Icon name="loader" size={14} className={styles.spinIcon} aria-hidden="true" />
+              <LoaderIcon size={14} className={styles.spinIcon} aria-hidden="true" />
             )}
             <span>{submitLabel}</span>
           </Button>

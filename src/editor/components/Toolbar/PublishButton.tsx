@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
 import { getCmsPublishStatus, publishCmsDraft } from '@core/persistence'
-import { Icon } from '../../../ui/icons/Icon'
+import { LoaderIcon } from '@ui/icons/icons/loader'
+import { CheckIcon } from '@ui/icons/icons/check'
+import { CircleAlertIcon } from '@ui/icons/icons/circle-alert'
+import { CloudUploadIcon } from '@ui/icons/icons/cloud-upload'
 import { Button } from '@ui/components/Button'
 import styles from './Toolbar.module.css'
 
@@ -13,7 +16,8 @@ interface PublishButtonProps {
 }
 
 export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
-  const project = useEditorStore((s) => s.project)
+  const site = useEditorStore((s) => s.site)
+  const siteId = useEditorStore((s) => s.site?.id ?? null)
   const hasUnsavedChanges = useEditorStore((s) => s.hasUnsavedChanges)
   const [state, setState] = useState<PublishState>('idle')
   const [message, setMessage] = useState<string | null>(null)
@@ -26,7 +30,7 @@ export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
   }, [])
 
   useEffect(() => {
-    if (!enabled || !project) return
+    if (!enabled || !siteId) return
     let cancelled = false
 
     async function loadPublishStatus() {
@@ -44,14 +48,17 @@ export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
 
     void loadPublishStatus()
     return () => { cancelled = true }
-  }, [enabled, project?.id])
+  }, [enabled, siteId])
 
   useEffect(() => {
     if (!hasUnsavedChanges || state !== 'published') return
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
     statusTimerRef.current = null
-    setState('idle')
-    setMessage(null)
+    const resetTimer = setTimeout(() => {
+      setState('idle')
+      setMessage(null)
+    }, 0)
+    return () => clearTimeout(resetTimer)
   }, [hasUnsavedChanges, state])
 
   const resetErrorLater = useCallback(() => {
@@ -72,7 +79,7 @@ export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
   }, [])
 
   const handlePublish = useCallback(async () => {
-    if (!project || !enabled || state === 'publishing') return
+    if (!site || !enabled || state === 'publishing') return
 
     if (statusTimerRef.current) {
       clearTimeout(statusTimerRef.current)
@@ -97,10 +104,10 @@ export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
       setMessage(err instanceof Error ? err.message : 'Unknown publish error')
       resetErrorLater()
     }
-  }, [clearMessageLater, enabled, onSave, project, resetErrorLater, state])
+  }, [clearMessageLater, enabled, onSave, site, resetErrorLater, state])
 
   const isPublishing = state === 'publishing'
-  const disabled = !project || !enabled || isPublishing
+  const disabled = !site || !enabled || isPublishing
   const label =
     isPublishing ? 'Publishing' :
     state === 'published' ? 'Published' :
@@ -120,13 +127,13 @@ export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
         data-testid="toolbar-publish-btn"
       >
         {isPublishing ? (
-          <Icon name="loader" size={13} className={styles.spinIcon} aria-hidden="true" />
+          <LoaderIcon size={13} className={styles.spinIcon} aria-hidden="true" />
         ) : state === 'published' ? (
-          <Icon name="check" size={13} aria-hidden="true" />
+          <CheckIcon size={13} aria-hidden="true" />
         ) : state === 'error' ? (
-          <Icon name="circle-alert" size={13} aria-hidden="true" />
+          <CircleAlertIcon size={13} aria-hidden="true" />
         ) : (
-          <Icon name="cloud-upload" size={13} aria-hidden="true" />
+          <CloudUploadIcon size={13} aria-hidden="true" />
         )}
         <span>{label}</span>
       </Button>

@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 /**
- * base.container — semantic wrapper with class-backed layout styling.
+ * base.container — semantic wrapper.
  */
 import React from 'react'
 import { type ModuleDefinition, type ModuleComponentProps } from '../../../core/module-engine/types'
@@ -29,7 +29,7 @@ const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = ({ props
 export const ContainerModule: ModuleDefinition<ContainerProps> = {
   id: 'base.container',
   name: 'Container',
-  description: 'A semantic container. Layout and visual styling are class-backed.',
+  description: 'A semantic container.',
   category: 'Layout',
   version: '2.0.0',
   icon: 'Square',
@@ -63,12 +63,6 @@ export const ContainerModule: ModuleDefinition<ContainerProps> = {
       html: `<${tag} class="${MODULE_CLASS}">${renderedChildren.join('')}</${tag}>`,
       css: `.${MODULE_CLASS}{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;flex-wrap:nowrap;gap:16px;padding:16px;background-color:transparent;max-width:100%;width:100%;min-height:0;border-radius:0;overflow:visible;box-sizing:border-box}`,
     }
-  },
-
-  toJsx: (props, renderedChildren) => {
-    const tag = resolveContainerTag(props.tag)
-    const inner = renderedChildren.join('\n      ')
-    return `<${tag} className="${MODULE_CLASS}">\n      ${inner}\n    </${tag}>`
   },
 }
 

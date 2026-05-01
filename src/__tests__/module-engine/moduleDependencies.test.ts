@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import {
   getMissingModuleDependencies,
-  getProjectDependencyVersion,
-  getProjectModuleDependencyUsage,
+  getSiteDependencyVersion,
+  getSiteModuleDependencyUsage,
   normalizeModuleDependencies,
 } from '../../core/module-engine/dependencies'
 import type { PageNode } from '../../core/page-tree/types'
@@ -37,7 +37,7 @@ describe('module dependency metadata', () => {
     ])
   })
 
-  it('rejects unsafe package names before they reach the project manifest', () => {
+  it('rejects unsafe package names before they reach the site manifest', () => {
     expect(() =>
       normalizeModuleDependencies({
         'three; rm -rf /': '^0.184.0',
@@ -45,7 +45,7 @@ describe('module dependency metadata', () => {
     ).toThrow('Invalid package name')
   })
 
-  it('returns only dependencies missing from the project manifest', () => {
+  it('returns only dependencies missing from the site manifest', () => {
     const mod = makeModule({
       three: '^0.184.0',
       '@types/react': { version: '^18.2.0', dev: true },
@@ -66,19 +66,19 @@ describe('module dependency metadata', () => {
       devDependencies: { three: '^0.184.0' },
     }
 
-    expect(getProjectDependencyVersion(packageJson, dependency)).toBeNull()
+    expect(getSiteDependencyVersion(packageJson, dependency)).toBeNull()
     expect(getMissingModuleDependencies(makeModule({ three: '^0.184.0' }), packageJson)).toEqual([
       dependency,
     ])
   })
 
-  it('collects dependency usage from placed project modules', () => {
+  it('collects dependency usage from placed site modules', () => {
     const mod = makeModule({ three: '^0.184.0' })
     const fakeRegistry = {
       get: (id: string) => (id === mod.id ? mod : undefined),
     } as IModuleRegistry
 
-    const usage = getProjectModuleDependencyUsage(
+    const usage = getSiteModuleDependencyUsage(
       {
         pages: [
           {

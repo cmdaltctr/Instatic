@@ -3,31 +3,20 @@
  *
  * WHY THESE GATES EXIST
  * ─────────────────────
- * User directive (message #1657): pixel-art icons from @motion/icons are rendering
- * as empty SVG shells with no paths:
- *
- *   <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"
- *        style="display: inline-block; flex-shrink: 0;"></svg>
- *
- * Root cause: <Icon name="X"> falls back to the transparent Placeholder when
- * `iconModules[`./icons/${name}.tsx`]` is undefined — i.e., the named icon
- * file doesn't exist in `src/ui/icons/icons/`.
+ * User directive: editor UI icons should render synchronously from the
+ * MotionPageMaster icon catalog. Production UI imports concrete icon files
+ * directly from `src/ui/icons/icons/<name>` instead of resolving string names
+ * through a lazy runtime wrapper.
  *
  * This test file:
- *   Gate 1 — scans all src/editor/ .tsx files for `<Icon name="NAME"` patterns
- *             and asserts each NAME has a matching file in the icon catalog.
- *             FAILS NOW for: "settings", "type", "palette" (missing from catalog).
+ *   Gate 1 — scans all src/editor/ .tsx files for direct icon imports and
+ *             asserts each imported icon has a matching catalog file.
  *
  *   Gate 2 — verifies each catalog file exports the expected PascalCase component.
- *             Confirms the lazy-loader's name→ComponentName transform will work.
+ *             Confirms direct imports target the expected component names.
  *
  *   Gate 3 — scans src/editor/ for inline <svg JSX (raw SVG definitions inside
  *             component files), which violates Constraint #348 / Guideline #350.
- *             FAILS NOW for: ZoomControls.tsx (MinusIcon/PlusIcon).
- *
- * All gates go green when:
- *   - The three missing icons are added to src/ui/icons/icons/
- *   - The inline SVG helpers are replaced with <Icon name="..."> calls
  *
  * @see Task #389       — Icon Investigation + UI Polish Audit
  * @see Guideline #350  — @motion/icons accessibility requirements
@@ -78,13 +67,9 @@ function toComponentName(kebab: string): string {
 
 /**
  * Extract all icon name strings referenced in a source file.
- * Covers:
- *   1. <Icon name="foo-bar" /> — direct JSX prop (static string)
- *   2. icon: 'foo-bar'         — object-literal property (NAV_ITEMS style)
- *   3. value: 'foo-bar' in ICON_OPTIONS arrays (BreakpointsSection)
- *
- * Does NOT cover: name={variable} — dynamic references require separate
- * handling (see the NAV_ITEMS test below).
+ * Covers direct imports from either alias or relative paths:
+ *   import { ArrowRightIcon } from '@ui/icons/icons/arrow-right'
+ *   import { CloseIcon } from '../../../ui/icons/icons/close'
  */
 function extractIconNames(source: string): string[] {
   const names: string[] = []
@@ -94,29 +79,16 @@ function extractIconNames(source: string): string[] {
     if (!seen.has(n)) { seen.add(n); names.push(n) }
   }
 
-  // Pattern 1: <Icon name="foo-bar">  or  <Icon name='foo-bar'>
-  const jsxPattern = /<Icon\s+[^>]*?name=["']([a-z0-9-]+)["']/g
+  const importPattern = /from\s+["'][^"']*ui\/icons\/icons\/([a-z0-9-]+)["']/g
   let m: RegExpExecArray | null
-  while ((m = jsxPattern.exec(source)) !== null) add(m[1])
-
-  // Pattern 2: icon: 'foo-bar'  or  icon: "foo-bar"  (object literal — NAV_ITEMS)
-  const objPattern = /\bicon:\s*["']([a-z0-9-]+)["']/g
-  while ((m = objPattern.exec(source)) !== null) add(m[1])
-
-  // Pattern 3: value: 'foo-bar' inside ICON_OPTIONS-style arrays
-  const valuePattern = /\bvalue:\s*["']([a-z0-9-]+)["']/g
-  while ((m = valuePattern.exec(source)) !== null) {
-    // Only include if the source also references <Icon — avoids false positives
-    // from non-icon value props (e.g., select option values)
-    if (source.includes('<Icon') || source.includes("import { Icon }")) add(m[1])
-  }
+  while ((m = importPattern.exec(source)) !== null) add(m[1])
 
   return names
 }
 
-// ─── Gate 1: every <Icon name="X"> in src/editor/ has a catalog file ─────────
+// ─── Gate 1: every direct icon import in src/editor/ has a catalog file ──────
 
-describe('Gate 1 — All <Icon name="..."> values exist in the icon catalog', () => {
+describe('Gate 1 — All direct icon imports exist in the icon catalog', () => {
   const editorFiles = collectFiles(EDITOR_DIR)
 
   // Collect every (iconName, filePath) pair referenced across editor components
@@ -125,8 +97,7 @@ describe('Gate 1 — All <Icon name="..."> values exist in the icon catalog', ()
 
   for (const filePath of editorFiles) {
     const source = readFileSync(filePath, 'utf8')
-    // Only scan files that actually use the <Icon> wrapper component
-    if (!source.includes('from') || !source.includes('Icon')) continue
+    if (!source.includes('ui/icons/icons/')) continue
     const names = extractIconNames(source)
     for (const name of names) {
       allRefs.push({ name, file: filePath.replace(PROJECT_ROOT, '') })
@@ -136,25 +107,11 @@ describe('Gate 1 — All <Icon name="..."> values exist in the icon catalog', ()
   // Deduplicate for the per-name tests
   const uniqueNames = [...new Set(allRefs.map((r) => r.name))]
 
-  it('at least one <Icon name="..."> usage is found in src/editor/ (sanity check)', () => {
+  it('at least one direct icon import is found in src/editor/ (sanity check)', () => {
     expect(allRefs.length).toBeGreaterThan(0)
   })
 
-  it('every referenced icon name has a matching file in src/ui/icons/icons/', () => {
-    /**
-     * INTENTIONALLY FAILING — Task #389
-     *
-     * These icon names are currently missing from the vendored catalog and
-     * therefore render as empty transparent SVG placeholders at runtime:
-     *
-     *   ❌  settings  — used in SettingsButton.tsx + SettingsModal.tsx ("General")
-     *   ❌  type      — used in SettingsModal.tsx ("Typography")
-     *   ❌  palette   — used in SettingsModal.tsx ("Colors")
-     *
-     * Fix: copy the missing .tsx files from the MotionPageMaster icon source
-     *      into src/ui/icons/icons/ (Constraint #348).
-     *      Do NOT substitute lucide-react or any other third-party icon.
-     */
+  it('every directly imported icon name has a matching file in src/ui/icons/icons/', () => {
     const missing: IconRef[] = allRefs.filter(
       (ref) => !existsSync(join(ICONS_DIR, `${ref.name}.tsx`)),
     )
@@ -165,7 +122,6 @@ describe('Gate 1 — All <Icon name="..."> values exist in the icon catalog', ()
       )
       throw new Error(
         `[Gate 1 — Task #389] ${missing.length} icon(s) missing from src/ui/icons/icons/.\n` +
-          `These render as empty SVG placeholders at runtime.\n\n` +
           lines.join('\n') +
           `\n\nFix: add the missing .tsx icon files from the MotionPageMaster repo.\n` +
           `See Constraint #348 / Guideline #350.`,
@@ -228,19 +184,8 @@ describe('Gate 2 — Catalog files export the expected PascalCase component name
 // ─── Gate 3: no inline <svg JSX in src/editor/ components ────────────────────
 
 describe('Gate 3 — No inline <svg JSX in src/editor/ (Constraint #348)', () => {
-  /**
-   * INTENTIONALLY FAILING — Task #389
-   *
-   * Inline SVG definitions inside component files violate Constraint #348 which
-   * requires ALL icons to come from the MotionPageMaster pixel-art set.
-   *
-   * Currently failing files:
-   *   ❌  src/editor/components/Toolbar/ZoomControls.tsx
-   *         MinusIcon() and PlusIcon() are inline SVGs
-   *
-   * Fix: replace each inline SVG function with <Icon name="..."> using the
-   * closest matching MotionPageMaster icon (Constraint #348).
-   */
+  // Inline SVG definitions inside component files violate Constraint #348;
+  // UI chrome should import concrete components from the MotionPageMaster set.
   it('no src/editor/ .tsx file contains inline <svg JSX element definitions', () => {
     const editorFiles = collectFiles(EDITOR_DIR, ['.tsx'])
 
@@ -250,7 +195,6 @@ describe('Gate 3 — No inline <svg JSX in src/editor/ (Constraint #348)', () =>
     //
     // We intentionally exclude:
     //   - Imports from @ui/icons (those ARE the MotionPageMaster icons)
-    //   - The Icon.tsx wrapper itself (it renders the Placeholder SVG)
     //   - src/ui/ entirely — icons live there legitimately
     const INLINE_SVG_PATTERN = /return\s*\(\s*\n?\s*<svg|return\s+<svg/
 
@@ -267,10 +211,9 @@ describe('Gate 3 — No inline <svg JSX in src/editor/ (Constraint #348)', () =>
       throw new Error(
         `[Gate 3 — Task #389 / Constraint #348] ${violations.length} file(s) in src/editor/ ` +
           `define inline <svg JSX elements.\n` +
-          `All icons must use the MotionPageMaster set via <Icon name="..."> ` +
-          `(import { Icon } from '@ui/icons/Icon').\n\n` +
+          `All icons must use direct imports from '@ui/icons/icons/<name>'.\n\n` +
           violations.map((f) => `  ${f}`).join('\n') +
-          `\n\nFix: replace each inline SVG function with an appropriate <Icon name="..."> call.\n` +
+          `\n\nFix: replace each inline SVG function with an appropriate direct icon import.\n` +
           `See Constraint #348 / Guideline #350.`,
       )
     }
@@ -279,15 +222,14 @@ describe('Gate 3 — No inline <svg JSX in src/editor/ (Constraint #348)', () =>
   })
 })
 
-// ─── Gate 5: no <Icon name="x"> (Twitter/X logo) used as close button ────────
+// ─── Gate 5: no X/Twitter logo used as close/dismiss icon ───────────────────
 
-describe('Gate 5 — No <Icon name="x"> (Twitter/X logo) used as close/dismiss button (Constraint #451)', () => {
+describe('Gate 5 — No X/Twitter logo used as close/dismiss button (Constraint #451)', () => {
   /**
    * Constraint #451 — user directive msg #1967
    *
-   * `<Icon name="x" />` renders the XIcon from `src/ui/icons/icons/x.tsx` —
-   * that is the Twitter/X social-media logo (22 stair-step rectangles), NOT a
-   * close glyph.
+   * `XIcon` from `src/ui/icons/icons/x.tsx` is the Twitter/X social-media logo
+   * (22 stair-step rectangles), NOT a close glyph.
    *
    * The correct close icon for dialogs, modals, and panel headers is:
    *
@@ -298,11 +240,11 @@ describe('Gate 5 — No <Icon name="x"> (Twitter/X logo) used as close/dismiss b
    *   — File path contains "Share" or "Social" (social-sharing UI)
    *   — File contains the comment: // allowed: X social brand mark
    */
-  it('no src/editor/ file uses <Icon name="x"> unless it is an allowed social/share context', () => {
+  it('no src/editor/ file imports XIcon unless it is an allowed social/share context', () => {
     const editorFiles = collectFiles(EDITOR_DIR, ['.tsx', '.ts'])
 
-    // NOTE: pattern is assembled from parts so this test file does not self-match.
-    const X_ICON_PATTERN = new RegExp(`<Icon\\s[^>]*?name=` + `["']x["']`)
+    // NOTE: patterns are assembled from parts so this test file does not self-match.
+    const X_ICON_PATTERN = new RegExp(`from\\s+["'][^"']*ui/icons/icons/` + `x["']|<` + `XIcon\\b`)
 
     const violations: string[] = []
 
@@ -328,9 +270,9 @@ describe('Gate 5 — No <Icon name="x"> (Twitter/X logo) used as close/dismiss b
 
     if (violations.length > 0) {
       throw new Error(
-        `[Gate 5 — Constraint #451] ${violations.length} file(s) in src/editor/ use <Icon name="x"> (Twitter/X logo).\n` +
+        `[Gate 5 — Constraint #451] ${violations.length} file(s) in src/editor/ use XIcon (Twitter/X logo).\n` +
           `X icon is the Twitter logo — see Constraint #451 for the correct icon.\n\n` +
-          `Use the project-standard close icon instead:\n` +
+          `Use the site-standard close icon instead:\n` +
           `  import { CloseIcon } from '@ui/icons/icons/close'\n` +
           `  <CloseIcon size={12} color="currentColor" aria-hidden="true" />\n\n` +
           `Violating files:\n` +
@@ -357,13 +299,13 @@ describe('Gate 4 — No Unicode/emoji characters used as visual icons (user dire
    * These Unicode characters are currently used as visual icons in JSX renders:
    *
    *   ❌  DomPanel.tsx:400    — '≡'  (hamburger/triple-bar) for collapsed Layers panel
-   *         Fix: <Icon name="menu" size={14} />
+   *         Fix: direct import MenuIcon from @ui/icons/icons/menu
    *
    *   ❌  PropertiesPanel.tsx:283 — '‹' / '›' for collapse/expand toggle button
-   *         Fix: <Icon name="chevron-left" size={12} /> / <Icon name="chevron-right" size={12} />
+   *         Fix: direct import ChevronLeftIcon / ChevronRightIcon
    *
    *   ❌  PublishingSection.tsx:83-86 — '⏳' / '✅' / '❌' / '⬇' in button labels
-   *         Fix: use <Icon name="loader|check|x|arrow-down" /> + text labels
+   *         Fix: use direct icon imports plus text labels
    *
    * Rule: Visual icons must come exclusively from the MotionPageMaster pixel-art
    * set (Constraint #348 / Guideline #350). Unicode characters ≡ ‹ › ⬇ etc.
@@ -379,18 +321,17 @@ describe('Gate 4 — No Unicode/emoji characters used as visual icons (user dire
    * Each entry: [character, description, suggested @motion/icons replacement]
    */
   const FORBIDDEN_ICON_CHARS = [
-    { char: '≡',  desc: 'triple-bar / hamburger', replacement: '<Icon name="menu" />' },
-    { char: '‹',  desc: 'single left-pointing angle quotation', replacement: '<Icon name="chevron-left" />' },
-    { char: '›',  desc: 'single right-pointing angle quotation', replacement: '<Icon name="chevron-right" />' },
-    { char: '⬇',  desc: 'downwards black arrow', replacement: '<Icon name="arrow-down" /> or <Icon name="download" />' },
-    { char: '⬆',  desc: 'upwards black arrow', replacement: '<Icon name="arrow-up" />' },
+    { char: '≡',  desc: 'triple-bar / hamburger', replacement: 'MenuIcon' },
+    { char: '‹',  desc: 'single left-pointing angle quotation', replacement: 'ChevronLeftIcon' },
+    { char: '›',  desc: 'single right-pointing angle quotation', replacement: 'ChevronRightIcon' },
+    { char: '⬇',  desc: 'downwards black arrow', replacement: 'ArrowDownIcon or DownloadIcon' },
+    { char: '⬆',  desc: 'upwards black arrow', replacement: 'ArrowUpIcon' },
   ]
 
   // Scan src/editor/ and src/app/ (excluding dead src/App.tsx / src/main.tsx)
   const APP_DIR = join(PROJECT_ROOT, 'src/app')
   const ACTIVE_APP_FILES = [
     join(APP_DIR, 'EditorLayout.tsx'),
-    join(APP_DIR, 'Dashboard.tsx'),
     join(APP_DIR, 'router.tsx'),
   ]
 

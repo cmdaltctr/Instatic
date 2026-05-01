@@ -7,7 +7,7 @@
  *
  * Separate from `isSafeUrl()` in `src/core/publisher/` which is the stricter
  * enforcement gate applied at HTML export time. This module is the
- * input-boundary gate applied at user-input / project-load time.
+ * input-boundary gate applied at user-input / site-load time.
  *
  * Allowlists:
  *   isValidUrl()       — https, http, mailto
@@ -15,7 +15,7 @@
  */
 
 /**
- * Returns true if `v` is a safe general-purpose URL for storing in project
+ * Returns true if `v` is a safe general-purpose URL for storing in site
  * props (e.g. a link href, a button href).
  *
  * Allows:  https:, http:, mailto:

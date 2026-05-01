@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import type { PropertyControl, PropertySchema } from '../../../core/module-engine/types'
 import { sanitizeRichtext } from '../../../core/sanitize'
-import { Icon } from '../../../ui/icons/Icon'
+import { ChevronRightIcon } from '@ui/icons/icons/chevron-right'
 import { TextControl } from './TextControl'
 import { TextareaControl } from './TextareaControl'
 import { NumberControl } from './NumberControl'
@@ -16,6 +16,7 @@ import { ColorControl } from './ColorControl'
 import { SelectControl } from './SelectControl'
 import { ToggleControl } from './ToggleControl'
 import { ImageControl } from './ImageControl'
+import { MediaLibraryControl } from './MediaLibraryControl'
 import { UrlControl } from './UrlControl'
 import { cn } from '@ui/cn'
 import styles from './controls.module.css'
@@ -101,6 +102,16 @@ export function PropertyControlRenderer({
 
     case 'image':
       inner = <ImageControl {...shared} value={String(value ?? '')} />
+      break
+
+    case 'media':
+      inner = (
+        <MediaLibraryControl
+          {...shared}
+          value={String(value ?? '')}
+          mediaKind={control.mediaKind}
+        />
+      )
       break
 
     case 'url':
@@ -201,7 +212,7 @@ function GroupSection({
         className={styles.groupHeader}
       >
         <span className={cn(styles.groupChevron, !collapsed && styles.groupChevronExpanded)}>
-          <Icon name="chevron-right" size={10} />
+          <ChevronRightIcon size={10} />
         </span>
         {label}
       </button>

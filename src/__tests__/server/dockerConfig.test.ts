@@ -33,6 +33,12 @@ describe('self-host docker config', () => {
     expect(dockerfile).not.toContain('vite build && bun run server/index.ts')
   })
 
+  it('allows PATCH in server CORS preflight for CMS media rename', () => {
+    const serverIndex = readFileSync('server/index.ts', 'utf8')
+
+    expect(serverIndex).toContain("'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'")
+  })
+
   it('defines a production compose stack with health checks and persistent data', () => {
     const compose = readFileSync('compose.prod.yml', 'utf8')
     const buildOverride = readFileSync('compose.build.yml', 'utf8')

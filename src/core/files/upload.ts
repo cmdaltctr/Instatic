@@ -5,23 +5,23 @@
  * Task #431 — Gate 10
  *
  * Provides:
- *   - detectMimeType(mimeType, filePath)  → ProjectFileType
+ *   - detectMimeType(mimeType, filePath)  → SiteFileType
  *   - checkSizeLimit(sizeBytes)           → { ok, level, message? }
  *
  * These are pure functions with no store dependency. They are consumed by the
- * Project Explorer upload handler and any future drag-drop processing.
+ * CMS media upload UI and any future drag-drop processing.
  *
- * Dependency direction: MUST NOT import from editor/ or react-publisher/.
+ * Dependency direction: MUST NOT import from editor/.
  */
 
-import type { ProjectFileType } from './types'
+import type { SiteFileType } from './types'
 
 // ---------------------------------------------------------------------------
-// detectMimeType — map browser File MIME + path extension to ProjectFileType
+// detectMimeType — map browser File MIME + path extension to SiteFileType
 // ---------------------------------------------------------------------------
 
 /**
- * Determine the ProjectFileType for an uploaded file.
+ * Determine the SiteFileType for an uploaded file.
  *
  * Priority order:
  *   1. Binary asset MIMEs (image/*, video/*, audio/*, font/*) → 'asset'
@@ -36,7 +36,7 @@ import type { ProjectFileType } from './types'
  * @param mimeType  Browser-reported MIME type (may be empty or "text/plain")
  * @param filePath  Full relative path e.g. "src/components/Button.tsx"
  */
-export function detectMimeType(mimeType: string, filePath: string): ProjectFileType {
+export function detectMimeType(mimeType: string, filePath: string): SiteFileType {
   const lowerMime = mimeType.toLowerCase()
   const lowerPath = filePath.toLowerCase()
 
@@ -157,7 +157,7 @@ function isComponentPath(lowerPath: string): boolean {
 }
 
 /**
- * True if the filename/extension suggests a project config file.
+ * True if the filename/extension suggests a site config file.
  * Covers: package.json, tsconfig.json, vite.config.ts, .env, *.config.*, etc.
  */
 function isConfigFile(filename: string, ext: string): boolean {

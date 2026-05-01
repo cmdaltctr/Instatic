@@ -18,12 +18,18 @@ describe('CanvasNotch', () => {
   it('exposes the approved quick insert actions', () => {
     const src = readFileSync(CANVAS_NOTCH, 'utf-8')
 
+    expect(src).toContain("import { CheckboxSharpIcon } from '@ui/icons/icons/checkbox-sharp'")
+    expect(src).toContain("import { TypeIcon } from '@ui/icons/icons/type'")
+    expect(src).toContain("import { ImageIcon } from '@ui/icons/icons/image'")
+    expect(src).toContain("import { BoxIcon } from '@ui/icons/icons/box'")
     expect(src).toContain("moduleId: 'base.container'")
-    expect(src).toContain("icon: 'checkbox-sharp'")
+    expect(src).toContain('icon: CheckboxSharpIcon')
     expect(src).toContain("moduleId: 'base.text'")
+    expect(src).toContain('icon: TypeIcon')
     expect(src).toContain("moduleId: 'base.image'")
-    expect(src).toContain("icon: 'image'")
+    expect(src).toContain('icon: ImageIcon')
     expect(src).toContain("moduleId: 'base.button'")
+    expect(src).toContain('icon: BoxIcon')
     expect(src).toContain('canvas-notch-add-btn')
   })
 

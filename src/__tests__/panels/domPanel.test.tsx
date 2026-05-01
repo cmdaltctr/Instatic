@@ -5,7 +5,7 @@
  *   1. data-testid="dom-panel" / "dom-panel-ready" present (Guideline #221)
  *   2. role="complementary" + aria-label on panel container
  *   3. Empty state text shown when page has only root node
- *   4. "No project loaded" state when project is null
+ *   4. "Loading site..." state when site is null
  *   5. data-panel attribute present (event propagation guard, Guideline #192)
  *   6. Toggle button aria-expanded reflects collapsed state
  *   7. Collapse toggle: panel collapses and focus moves to toggle button
@@ -26,7 +26,7 @@ import React from 'react'
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 import { DomPanel } from '../../editor/components/DomPanel/DomPanel'
 import { useEditorStore } from '../../core/editor-store/store'
-import { makeProject, makePage, makeNode } from '../fixtures'
+import { makeSite, makePage, makeNode } from '../fixtures'
 
 const TREE_ROW_CSS_PATH = join(import.meta.dir, '../../editor/ui/Tree/TreeRow.module.css')
 const TREE_NODE_CSS_PATH = join(import.meta.dir, '../../editor/components/DomPanel/TreeNode.module.css')
@@ -44,7 +44,7 @@ function resetStore() {
   // the store state we set below (the component reads from localStorage on mount).
   localStorage.clear()
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     selectedNodeId: null,
     hoveredNodeId: null,
@@ -59,8 +59,8 @@ function resetStore() {
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-/** Load a project into the store (simulates opening a project). */
-function loadProject(rootHasChildren = false) {
+/** Load a site into the store (simulates opening a site). */
+function loadSite(rootHasChildren = false) {
   const rootId = 'root-1'
   const childId = 'node-child-1'
 
@@ -72,15 +72,15 @@ function loadProject(rootHasChildren = false) {
   }
 
   const page = makePage({ id: 'page-1', rootNodeId: rootId, nodes })
-  const project = makeProject({ pages: [page] })
+  const site = makeSite({ pages: [page] })
 
   useEditorStore.setState({
-    project,
+    site,
     activePageId: 'page-1',
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-function loadContainerProject() {
+function loadContainerSite() {
   const rootId = 'root-1'
   const containerId = 'container-1'
   const textId = 'text-1'
@@ -92,15 +92,15 @@ function loadContainerProject() {
   }
 
   const page = makePage({ id: 'page-1', rootNodeId: rootId, nodes })
-  const project = makeProject({ pages: [page] })
+  const site = makeSite({ pages: [page] })
 
   useEditorStore.setState({
-    project,
+    site,
     activePageId: 'page-1',
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-function loadSiblingContainerProject() {
+function loadSiblingContainerSite() {
   const rootId = 'root-1'
   const firstContainerId = 'container-1'
   const firstTextId = 'text-1'
@@ -128,10 +128,10 @@ function loadSiblingContainerProject() {
   }
 
   const page = makePage({ id: 'page-1', rootNodeId: rootId, nodes })
-  const project = makeProject({ pages: [page] })
+  const site = makeSite({ pages: [page] })
 
   useEditorStore.setState({
-    project,
+    site,
     activePageId: 'page-1',
   } as Parameters<typeof useEditorStore.setState>[0])
 }
@@ -143,19 +143,19 @@ beforeEach(resetStore)
 // ---------------------------------------------------------------------------
 
 describe('DomPanel — data-testid (Guideline #221)', () => {
-  it('renders data-testid="dom-panel" when no project is loaded', () => {
+  it('renders data-testid="dom-panel" when no site is loaded', () => {
     render(<DomPanel />)
     expect(screen.getByTestId('dom-panel')).toBeDefined()
   })
 
-  it('renders data-testid="dom-panel-ready" once a project/page is loaded', () => {
-    loadProject()
+  it('renders data-testid="dom-panel-ready" once a site/page is loaded', () => {
+    loadSite()
     render(<DomPanel />)
     expect(screen.getByTestId('dom-panel-ready')).toBeDefined()
   })
 
   it('data-testid="dom-panel-tree" present inside loaded panel', () => {
-    loadProject(true)
+    loadSite(true)
     render(<DomPanel />)
     expect(screen.getByTestId('dom-panel-tree')).toBeDefined()
   })
@@ -184,19 +184,19 @@ describe('DomPanel — ARIA landmark', () => {
 // ---------------------------------------------------------------------------
 
 describe('DomPanel — empty states', () => {
-  it('shows "No project loaded" when project is null', () => {
+  it('shows "Loading site..." when site is null', () => {
     render(<DomPanel />)
-    expect(screen.getByText('No project loaded')).toBeDefined()
+    expect(screen.getByText('Loading site...')).toBeDefined()
   })
 
   it('shows "no elements" hint when page has only root node', () => {
-    loadProject(false) // only root, no children
+    loadSite(false) // only root, no children
     render(<DomPanel />)
     expect(screen.getByText(/no elements yet/i)).toBeDefined()
   })
 
   it('renders tree rows when page has child nodes', () => {
-    loadProject(true) // root + 1 child
+    loadSite(true) // root + 1 child
     render(<DomPanel />)
     // Tree rows with role=treeitem should exist
     const treeItems = screen.getAllByRole('treeitem')
@@ -270,28 +270,28 @@ describe('DomPanel — collapse toggle', () => {
 
 describe('DomPanel — tree accessibility', () => {
   it('tree container has role="tree" (WAI-ARIA tree pattern)', () => {
-    loadProject(true)
+    loadSite(true)
     render(<DomPanel />)
     const tree = screen.getByRole('tree')
     expect(tree).toBeDefined()
   })
 
   it('tree has aria-label="Page element tree"', () => {
-    loadProject(true)
+    loadSite(true)
     render(<DomPanel />)
     const tree = screen.getByRole('tree')
     expect(tree.getAttribute('aria-label')).toBe('Page element tree')
   })
 
   it('tree node rows have role="treeitem" (Guideline #234)', () => {
-    loadProject(true)
+    loadSite(true)
     render(<DomPanel />)
     const items = screen.getAllByRole('treeitem')
     expect(items.length).toBeGreaterThan(0)
   })
 
   it('tree node rows have tabIndex=0 for keyboard navigation', () => {
-    loadProject(true)
+    loadSite(true)
     render(<DomPanel />)
     const items = screen.getAllByRole('treeitem')
     for (const item of items) {
@@ -334,7 +334,7 @@ describe('DomPanel — tree accessibility', () => {
   })
 
   it('selected tree node has aria-selected="true"', () => {
-    loadProject(true)
+    loadSite(true)
     // Select the root node (root is always visible regardless of expand state)
     useEditorStore.setState({ selectedNodeId: 'root-1' } as Parameters<typeof useEditorStore.setState>[0])
     render(<DomPanel />)
@@ -343,7 +343,7 @@ describe('DomPanel — tree accessibility', () => {
   })
 
   it('unselected tree node has aria-selected="false"', () => {
-    loadProject(true)
+    loadSite(true)
     useEditorStore.setState({ selectedNodeId: null } as Parameters<typeof useEditorStore.setState>[0])
     render(<DomPanel />)
     const items = screen.getAllByRole('treeitem')
@@ -360,7 +360,7 @@ describe('DomPanel — tree accessibility', () => {
 
 describe('DomPanel — open container group highlight', () => {
   it('marks the whole expanded container wrapper as an open group', () => {
-    loadContainerProject()
+    loadContainerSite()
     render(<DomPanel />)
 
     const rootItem = screen.getByRole('treeitem', { name: /root/i })
@@ -392,7 +392,7 @@ describe('DomPanel — open container group highlight', () => {
   })
 
   it('moves the open group highlight when selecting a different expanded container', () => {
-    loadSiblingContainerProject()
+    loadSiblingContainerSite()
     render(<DomPanel />)
 
     fireEvent.click(screen.getByRole('treeitem', { name: /root/i }))
@@ -419,7 +419,7 @@ describe('DomPanel — open container group highlight', () => {
 
 describe('DomPanel — tree keyboard navigation', () => {
   it('pressing Enter on a tree row selects the node', () => {
-    loadProject(true)
+    loadSite(true)
     useEditorStore.setState({ selectedNodeId: null } as Parameters<typeof useEditorStore.setState>[0])
     render(<DomPanel />)
     // Root is always the first (and only top-level) treeitem visible
@@ -431,7 +431,7 @@ describe('DomPanel — tree keyboard navigation', () => {
   })
 
   it('pressing Space on a tree row selects the node', () => {
-    loadProject(true)
+    loadSite(true)
     useEditorStore.setState({ selectedNodeId: null } as Parameters<typeof useEditorStore.setState>[0])
     render(<DomPanel />)
     const items = screen.getAllByRole('treeitem')
@@ -442,7 +442,7 @@ describe('DomPanel — tree keyboard navigation', () => {
   })
 
   it('pressing ArrowRight on collapsed root expands its children', () => {
-    loadProject(true)
+    loadSite(true)
     render(<DomPanel />)
     const items = screen.getAllByRole('treeitem')
     const rootItem = items[0]
@@ -456,7 +456,7 @@ describe('DomPanel — tree keyboard navigation', () => {
   })
 
   it('clicking a parent row expands its children like the Files tree', () => {
-    loadProject(true)
+    loadSite(true)
     render(<DomPanel />)
     const rootItem = screen.getAllByRole('treeitem')[0]
 
@@ -469,7 +469,7 @@ describe('DomPanel — tree keyboard navigation', () => {
   })
 
   it('commits inline tree rename to the node label', () => {
-    loadContainerProject()
+    loadContainerSite()
     render(<DomPanel />)
 
     fireEvent.click(screen.getByRole('treeitem', { name: /root/i }))
@@ -477,11 +477,13 @@ describe('DomPanel — tree keyboard navigation', () => {
 
     fireEvent.contextMenu(containerItem, { clientX: 40, clientY: 40 })
     fireEvent.click(screen.getByRole('menuitem', { name: /rename/i }))
-    const input = screen.getByRole('textbox', { name: /rename base\.container/i }) as HTMLInputElement
+    const input = screen.getByRole('textbox', {
+      name: /rename (base\.container|container)/i,
+    }) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Hero Group' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
-    const renamedNode = useEditorStore.getState().project?.pages[0].nodes['container-1']
+    const renamedNode = useEditorStore.getState().site?.pages[0].nodes['container-1']
     expect(renamedNode?.label).toBe('Hero Group')
     expect(renamedNode?.props.label).toBeUndefined()
     expect(screen.getByRole('treeitem', { name: /hero group/i })).toBeDefined()

@@ -4,7 +4,10 @@ import {
   ContextMenu as UIContextMenu,
   ContextMenuItem,
 } from '@ui/components/ContextMenu'
-import { Icon } from '../../../ui/icons/Icon'
+import { EditIcon } from '@ui/icons/icons/edit'
+import { CopyIcon } from '@ui/icons/icons/copy'
+import { LayoutIcon } from '@ui/icons/icons/layout'
+import { DeleteIcon } from '@ui/icons/icons/delete'
 
 interface LayerNodeContextMenuProps {
   x: number
@@ -38,10 +41,10 @@ export function LayerNodeContextMenu({
   }
 
   const items: { label: string; action: () => void; icon: ReactNode; danger: boolean }[] = [
-    { label: 'Rename', action: onRename, icon: <Icon name="edit" size={13} />, danger: false },
-    { label: 'Duplicate', action: onDuplicate, icon: <Icon name="copy" size={13} />, danger: false },
-    { label: 'Wrap in Container', action: onWrapInContainer, icon: <Icon name="layout" size={13} />, danger: false },
-    { label: 'Delete', action: onDelete, icon: <Icon name="delete" size={13} />, danger: true },
+    { label: 'Rename', action: onRename, icon: <EditIcon size={13} />, danger: false },
+    { label: 'Duplicate', action: onDuplicate, icon: <CopyIcon size={13} />, danger: false },
+    { label: 'Wrap in Container', action: onWrapInContainer, icon: <LayoutIcon size={13} />, danger: false },
+    { label: 'Delete', action: onDelete, icon: <DeleteIcon size={13} />, danger: true },
   ]
 
   return (

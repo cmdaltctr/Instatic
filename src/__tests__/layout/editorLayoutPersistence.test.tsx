@@ -9,10 +9,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import EditorLayout from '../../app/EditorLayout'
 import { useEditorStore } from '../../core/editor-store/store'
-import { makeNode, makePage, makeProject } from '../fixtures'
+import { makeNode, makePage, makeSite } from '../fixtures'
 import '../../modules/base/index'
 
 const LAYOUT_STORAGE_KEY = 'pb-editor-layout-v1'
@@ -22,7 +21,7 @@ afterEach(cleanup)
 function resetStore() {
   localStorage.clear()
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     selectedNodeId: null,
     hoveredNodeId: null,
@@ -32,7 +31,8 @@ function resetStore() {
     propertiesPanelMode: 'docked',
     leftSidebarWidth: 320,
     focusedPanel: 'canvas',
-    projectExplorerPanelOpen: false,
+    siteExplorerPanelOpen: false,
+    mediaExplorerPanelOpen: false,
     codeEditorPanelOpen: false,
     activeEditorFileId: null,
     dependenciesPanelOpen: false,
@@ -48,17 +48,14 @@ function resetStore() {
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-function renderEditorLayout() {
-  render(
-    <MemoryRouter initialEntries={['/editor/new-project']}>
-      <Routes>
-        <Route path="/editor/:projectId" element={<EditorLayout />} />
-      </Routes>
-    </MemoryRouter>,
-  )
+function renderEditorLayout({ preloadSite = true }: { preloadSite?: boolean } = {}) {
+  if (preloadSite && !useEditorStore.getState().site) {
+    loadSiteWithSelectedHeading()
+  }
+  render(<EditorLayout />)
 }
 
-function loadProjectWithSelectedHeading() {
+function loadSiteWithSelectedHeading() {
   const rootId = 'root-1'
   const nodeId = 'heading-1'
   const rootNode = makeNode({ id: rootId, moduleId: 'base.root', children: [nodeId] })
@@ -73,15 +70,65 @@ function loadProjectWithSelectedHeading() {
     rootNodeId: rootId,
     nodes: { [rootId]: rootNode, [nodeId]: headingNode },
   })
-  const project = makeProject({ pages: [page] })
+  const site = makeSite({ pages: [page] })
   useEditorStore.setState({
-    project,
+    site,
     activePageId: 'page-1',
     selectedNodeId: nodeId,
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
 beforeEach(resetStore)
+
+describe('EditorLayout — CMS site hydration gate', () => {
+  it('does not render editor chrome with an empty store while the CMS site hydrates', async () => {
+    const loaded = makeSite({ name: 'Hydrated Site' })
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ site: loaded }), { status: 200 })
+    ) as typeof fetch
+
+    try {
+      renderEditorLayout({ preloadSite: false })
+
+      expect(screen.getByText('Loading...')).toBeDefined()
+      expect(screen.queryByTestId('toolbar')).toBeNull()
+      expect(screen.queryByText(/loading site/i)).toBeNull()
+
+      expect(await screen.findByText('Hydrated Site')).toBeDefined()
+      expect(screen.queryByText(/loading site/i)).toBeNull()
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('does not overwrite an existing in-memory site when EditorLayout remounts during HMR', async () => {
+    const existing = makeSite({ name: 'Existing HMR Site' })
+    useEditorStore.setState({
+      site: existing,
+      activePageId: existing.pages[0].id,
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    let siteFetchCalls = 0
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      if (String(input).includes('/api/cms/site')) siteFetchCalls += 1
+      return new Response(JSON.stringify({ error: 'draft site not found' }), { status: 404 })
+    }) as typeof fetch
+
+    try {
+      renderEditorLayout({ preloadSite: false })
+
+      expect(screen.getByText('Existing HMR Site')).toBeDefined()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(siteFetchCalls).toBe(0)
+      expect(useEditorStore.getState().site?.name).toBe('Existing HMR Site')
+      expect(screen.queryByText(/loading site/i)).toBeNull()
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+})
 
 describe('EditorLayout — persisted panel layout', () => {
   it('restores panel visibility from localStorage on mount', async () => {
@@ -92,7 +139,8 @@ describe('EditorLayout — persisted panel layout', () => {
         panels: {
           dom: { open: false },
           properties: { open: true, mode: 'floating', width: 390 },
-          project: { open: true },
+          site: { open: true },
+          media: { open: true },
           codeeditor: { open: true },
           dependencies: { open: true },
           agent: { open: true },
@@ -101,7 +149,7 @@ describe('EditorLayout — persisted panel layout', () => {
         activeEditorFileId: 'file-1',
       }),
     )
-    loadProjectWithSelectedHeading()
+    loadSiteWithSelectedHeading()
 
     renderEditorLayout()
 
@@ -112,7 +160,8 @@ describe('EditorLayout — persisted panel layout', () => {
       expect(state.propertiesPanelMode).toBe('floating')
       expect(state.propertiesPanel.width).toBe(390)
       expect(state.leftSidebarWidth).toBe(410)
-      expect(state.projectExplorerPanelOpen).toBe(true)
+      expect(state.siteExplorerPanelOpen).toBe(true)
+      expect(state.mediaExplorerPanelOpen).toBe(false)
       expect(state.codeEditorPanelOpen).toBe(true)
       expect(state.activeEditorFileId).toBe('file-1')
       expect(state.dependenciesPanelOpen).toBe(false)
@@ -127,7 +176,7 @@ describe('EditorLayout — persisted panel layout', () => {
         version: 1,
         panels: {
           files: { open: true },
-          project: { open: false },
+          site: { open: false },
         },
       }),
     )
@@ -136,11 +185,11 @@ describe('EditorLayout — persisted panel layout', () => {
 
     await waitFor(() => {
       const state = useEditorStore.getState()
-      expect(state.projectExplorerPanelOpen).toBe(false)
+      expect(state.siteExplorerPanelOpen).toBe(false)
 
       const stored = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) ?? '{}')
       expect(stored.panels.files).toBeUndefined()
-      expect(stored.panels.project.open).toBe(false)
+      expect(stored.panels.site.open).toBe(false)
     }, { timeout: 150 })
   })
 })
@@ -153,44 +202,47 @@ describe('EditorLayout — permanent panel rail', () => {
     expect(screen.queryByTestId('panel-rail-timeline')).toBeNull()
   })
 
-  it('renders a left panel rail that can toggle the Project panel', () => {
+  it('renders a left panel rail that can toggle the Site panel', () => {
     renderEditorLayout()
 
     const rail = screen.queryByRole('navigation', { name: /panel dock/i })
     expect(rail).not.toBeNull()
 
-    const projectButton = within(rail!).getByRole('button', { name: /open project panel/i })
-    expect(projectButton.getAttribute('aria-pressed')).toBe('false')
+    const siteButton = within(rail!).getByRole('button', { name: /open site panel/i })
+    expect(siteButton.getAttribute('aria-pressed')).toBe('false')
     expect(within(rail!).queryByRole('button', { name: /properties panel/i })).toBeNull()
     expect(within(rail!).queryByRole('button', { name: /code editor/i })).toBeNull()
 
-    fireEvent.click(projectButton)
+    fireEvent.click(siteButton)
 
-    expect(useEditorStore.getState().projectExplorerPanelOpen).toBe(true)
-    expect(projectButton.getAttribute('aria-pressed')).toBe('true')
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(true)
+    expect(siteButton.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('orders primary rail panels by importance and uses the chosen panel icons', () => {
     renderEditorLayout()
 
     const rail = screen.getByRole('navigation', { name: /panel dock/i })
-    const primaryButtons = within(rail).getAllByRole('button').slice(0, 4)
+    const primaryButtons = within(rail).getAllByRole('button').slice(0, 5)
 
     expect(primaryButtons.map((button) => button.getAttribute('data-testid'))).toEqual([
       'panel-rail-layers',
       'panel-rail-agent',
-      'panel-rail-project',
+      'panel-rail-site',
+      'panel-rail-media',
       'panel-rail-dependencies',
     ])
     expect(primaryButtons.map((button) => button.getAttribute('data-icon'))).toEqual([
       'bulletlist-2-sharp',
       'ai-settings-solid',
       'files-stack-2',
+      'images',
       'box-stack',
     ])
     expect(primaryButtons.map((button) => button.getAttribute('data-accent'))).toEqual([
       'mint',
       'lilac',
+      'sky',
       'sky',
       'peach',
     ])
@@ -208,22 +260,33 @@ describe('EditorLayout — permanent panel rail', () => {
     expect(within(sidebar).getByRole('separator', { name: /resize left sidebar/i })).toBeDefined()
     expect(within(sidebar).getByLabelText('DOM tree panel')).toBeDefined()
 
-    fireEvent.click(within(rail).getByRole('button', { name: /open project panel/i }))
+    fireEvent.click(within(rail).getByRole('button', { name: /open site panel/i }))
 
     expect(sidebar.getAttribute('data-expanded')).toBe('true')
-    expect(sidebar.getAttribute('data-active-panel')).toBe('project')
-    expect(useEditorStore.getState().projectExplorerPanelOpen).toBe(true)
+    expect(sidebar.getAttribute('data-active-panel')).toBe('site')
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(true)
     expect(useEditorStore.getState().dependenciesPanelOpen).toBe(false)
     expect(useEditorStore.getState().domTreePanel.collapsed).toBe(true)
     expect(useEditorStore.getState().isAgentOpen).toBe(false)
-    expect(within(sidebar).getByTestId('project-explorer-panel')).toBeDefined()
+    expect(within(sidebar).getByTestId('site-explorer-panel')).toBeDefined()
     expect(within(sidebar).queryByTestId('deps-section')).toBeNull()
 
-    fireEvent.click(within(rail).getByRole('button', { name: /close project panel/i }))
+    fireEvent.click(within(rail).getByRole('button', { name: /close site panel/i }))
 
     expect(sidebar.getAttribute('data-expanded')).toBe('false')
     expect(sidebar.getAttribute('data-active-panel')).toBe('none')
-    expect(useEditorStore.getState().projectExplorerPanelOpen).toBe(false)
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
+
+    fireEvent.click(within(rail).getByRole('button', { name: /open media panel/i }))
+
+    expect(sidebar.getAttribute('data-expanded')).toBe('true')
+    expect(sidebar.getAttribute('data-active-panel')).toBe('media')
+    expect(useEditorStore.getState().mediaExplorerPanelOpen).toBe(true)
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
+    expect(useEditorStore.getState().dependenciesPanelOpen).toBe(false)
+    expect(useEditorStore.getState().domTreePanel.collapsed).toBe(true)
+    expect(useEditorStore.getState().isAgentOpen).toBe(false)
+    expect(within(sidebar).getByTestId('media-explorer-panel')).toBeDefined()
 
     fireEvent.click(within(rail).getByRole('button', { name: /open dependencies panel/i }))
 
@@ -231,7 +294,8 @@ describe('EditorLayout — permanent panel rail', () => {
     expect(sidebar.getAttribute('data-active-panel')).toBe('dependencies')
     expect(sidebar.getAttribute('style')).toContain('--left-sidebar-panel-width: 320px')
     expect(useEditorStore.getState().dependenciesPanelOpen).toBe(true)
-    expect(useEditorStore.getState().projectExplorerPanelOpen).toBe(false)
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
+    expect(useEditorStore.getState().mediaExplorerPanelOpen).toBe(false)
     expect(useEditorStore.getState().domTreePanel.collapsed).toBe(true)
     expect(useEditorStore.getState().isAgentOpen).toBe(false)
     expect(within(sidebar).getByTestId('dependencies-panel')).toBeDefined()
@@ -244,13 +308,14 @@ describe('EditorLayout — permanent panel rail', () => {
     expect(sidebar.getAttribute('style')).toContain('--left-sidebar-panel-width: 320px')
     expect(useEditorStore.getState().isAgentOpen).toBe(true)
     expect(useEditorStore.getState().dependenciesPanelOpen).toBe(false)
-    expect(useEditorStore.getState().projectExplorerPanelOpen).toBe(false)
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
+    expect(useEditorStore.getState().mediaExplorerPanelOpen).toBe(false)
     expect(useEditorStore.getState().domTreePanel.collapsed).toBe(true)
     expect(within(sidebar).getByTestId('agent-panel')).toBeDefined()
   })
 
   it('docks Properties into the right sidebar by default and can switch to floating mode', async () => {
-    loadProjectWithSelectedHeading()
+    loadSiteWithSelectedHeading()
     renderEditorLayout()
 
     const rightSidebar = await screen.findByTestId('right-sidebar')
@@ -283,7 +348,7 @@ describe('EditorLayout — permanent panel rail', () => {
   })
 
   it('marks the canvas stage while the right sidebar is open', async () => {
-    loadProjectWithSelectedHeading()
+    loadSiteWithSelectedHeading()
     renderEditorLayout()
 
     const canvasStage = screen.getByTestId('canvas-root').parentElement
@@ -302,13 +367,13 @@ describe('EditorLayout — permanent panel rail', () => {
   })
 
   it('resizes both sidebars with keyboard-accessible handles and persists the widths', async () => {
-    loadProjectWithSelectedHeading()
+    loadSiteWithSelectedHeading()
     localStorage.setItem(
       LAYOUT_STORAGE_KEY,
       JSON.stringify({
         version: 1,
         panels: {
-          project: { open: true },
+          site: { open: true },
           properties: { open: true, mode: 'docked', width: 420 },
         },
         sidebars: { leftWidth: 410 },
@@ -366,7 +431,11 @@ describe('EditorLayout — permanent panel rail', () => {
     renderEditorLayout()
 
     fireEvent.keyDown(document, { key: 'E', ctrlKey: true, shiftKey: true })
-    expect(useEditorStore.getState().projectExplorerPanelOpen).toBe(true)
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(true)
+
+    fireEvent.keyDown(document, { key: 'M', ctrlKey: true, shiftKey: true })
+    expect(useEditorStore.getState().mediaExplorerPanelOpen).toBe(true)
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
 
     fireEvent.keyDown(document, { key: 'R', ctrlKey: true, shiftKey: true })
     expect(useEditorStore.getState().propertiesPanel.collapsed).toBe(true)

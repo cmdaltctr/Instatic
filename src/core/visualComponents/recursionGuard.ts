@@ -20,7 +20,7 @@
  *          diamond/duplicate path which is treated as a cycle by this system
  *          to keep the VC dependency graph a strict tree).
  *
- * Both functions are statically testable (no store access, no project needed).
+ * Both functions are statically testable (no store access, no site needed).
  *
  * Constraint #269: This file must NOT import from editor/ or editor-store/.
  */
@@ -34,7 +34,7 @@
  * base.visualComponentRef nodes anywhere in the tree.
  *
  * Accepts `unknown` so it can safely receive raw data from test fixtures
- * and validateProject without requiring a fully-typed PageNode.
+ * and validateSite without requiring a fully-typed PageNode.
  *
  * Tree traversal uses `childNodes: unknown[]` (VC-tree nested format).
  *
@@ -91,7 +91,7 @@ export function getReferencedComponentIds(node: unknown): Set<string> {
  * Cases 2 and 3 both return true to prevent both circular loops and
  * diamond-dependency paths in the VC reference graph.
  *
- * @param visualComponents - All VCs in the project.
+ * @param visualComponents - All VCs in the site.
  * @param hostVcId         - VC whose tree is being modified.
  * @param candidateChildVcId - VC about to be embedded as a componentRef.
  * @returns true if embedding would create a cycle/duplicate path.

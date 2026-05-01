@@ -1,9 +1,6 @@
 /**
  * base.list — default editor styles.
  * These defaults are overridden by user-applied mc-{id} CSS classes (cascade order wins).
- *
- * Dynamic prop-driven typography (color, font-size, item spacing, etc.) is handled by
- * the publisher's render() function. The editor preview shows these defaults only.
  */
 
 .list {

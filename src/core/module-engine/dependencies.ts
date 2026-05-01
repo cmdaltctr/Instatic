@@ -1,7 +1,7 @@
-import type { Project, PageNode } from '../page-tree/types'
+import type { SiteDocument, PageNode } from '../page-tree/types'
 import type { AnyModuleDefinition, IModuleRegistry, ModuleDependencies } from './types'
-import type { ProjectPackageJson } from '../project-dependencies/manifest'
-import { isSafePackageName } from '../project-dependencies/packageNames'
+import type { SitePackageJson } from '../site-dependencies/manifest'
+import { isSafePackageName } from '../site-dependencies/packageNames'
 
 export interface NormalizedModuleDependency {
   name: string
@@ -9,7 +9,7 @@ export interface NormalizedModuleDependency {
   dev: boolean
 }
 
-export interface ProjectModuleDependencyUsage {
+export interface SiteModuleDependencyUsage {
   name: string
   version: string
   dev: boolean
@@ -40,8 +40,8 @@ export function normalizeModuleDependencies(
   })
 }
 
-export function getProjectDependencyVersion(
-  packageJson: ProjectPackageJson,
+export function getSiteDependencyVersion(
+  packageJson: SitePackageJson,
   dependency: Pick<NormalizedModuleDependency, 'name' | 'dev'>,
 ): string | null {
   const bucket = dependency.dev ? packageJson.devDependencies : packageJson.dependencies
@@ -50,20 +50,20 @@ export function getProjectDependencyVersion(
 
 export function getMissingModuleDependencies(
   moduleDefinition: AnyModuleDefinition,
-  packageJson: ProjectPackageJson,
+  packageJson: SitePackageJson,
 ): NormalizedModuleDependency[] {
   const dependencies = normalizeModuleDependencies(moduleDefinition.dependencies)
   return dependencies.filter(
-    (dependency) => getProjectDependencyVersion(packageJson, dependency) === null,
+    (dependency) => getSiteDependencyVersion(packageJson, dependency) === null,
   )
 }
 
-export function getProjectModuleDependencyUsage(
-  project: Pick<Project, 'pages' | 'visualComponents'> | null | undefined,
+export function getSiteModuleDependencyUsage(
+  site: Pick<SiteDocument, 'pages' | 'visualComponents'> | null | undefined,
   registry: IModuleRegistry,
-): Map<string, ProjectModuleDependencyUsage> {
-  const usage = new Map<string, ProjectModuleDependencyUsage>()
-  if (!project) return usage
+): Map<string, SiteModuleDependencyUsage> {
+  const usage = new Map<string, SiteModuleDependencyUsage>()
+  if (!site) return usage
 
   const recordModule = (moduleId: string) => {
     const definition = registry.get(moduleId)
@@ -93,13 +93,13 @@ export function getProjectModuleDependencyUsage(
     }
   }
 
-  for (const page of project.pages) {
+  for (const page of site.pages) {
     for (const node of Object.values(page.nodes)) {
       recordModule(node.moduleId)
     }
   }
 
-  for (const component of project.visualComponents) {
+  for (const component of site.visualComponents) {
     walkNestedNode(component.rootNode, recordModule)
   }
 

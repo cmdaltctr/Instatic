@@ -63,18 +63,18 @@ export interface VisualComponentRefProps extends Record<string, unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// VisualComponent — top-level VC document stored in Project.visualComponents[]
+// VisualComponent — top-level VC document stored in SiteDocument.visualComponents[]
 // ---------------------------------------------------------------------------
 
 /**
  * A reusable canvas tree authored by the end user.
- * Stored as a flat array in Project.visualComponents[] (parallel to pages[]).
+ * Stored as a flat array in SiteDocument.visualComponents[] (parallel to pages[]).
  *
  * Naming invariants (enforced at write boundaries by validateComponentName()):
  *  - PascalCase, valid JS identifier
  *  - Not a reserved React/JS name
  *  - Not a base module display name
- *  - Unique within the project
+ *  - Unique within the site
  *
  * filePath is always derived: `src/components/${name}.tsx`
  * Updating `name` must atomically update `filePath` (slice responsibility).
@@ -84,7 +84,7 @@ export interface VisualComponent {
   id: string
 
   /**
-   * PascalCase name — project-unique.
+   * PascalCase name — site-unique.
    * Validated by validateComponentName() at every write boundary.
    */
   name: string
@@ -112,21 +112,21 @@ export interface VisualComponent {
   /** Explicit prop surface — drives publisher TypeScript type + instance overrides */
   params: VCParam[]
 
-  /** Per-VC breakpoints (mirrors Project.breakpoints) */
+  /** Per-VC breakpoints (mirrors SiteDocument.breakpoints) */
   breakpoints: Array<{id: string; label: string; width: number; icon: string}>
 
-  /** Ordered class IDs from the project's class registry */
+  /** Ordered class IDs from the site's class registry */
   classIds: string[]
 
   /**
    * Canonical file path — always `src/components/${name}.tsx`.
-   * Derived from name; auto-corrected by validateProject on mismatch.
+   * Derived from name; auto-corrected by validateSite on mismatch.
    * NEVER user-editable directly (rename VC to change path).
    */
   filePath: string
 
   /**
-   * Publisher eject precedence (mirrors ProjectFile):
+   * Publisher eject precedence (mirrors SiteFile):
    *   generated=true, ejected=false  → scaffold/canvas version re-emitted
    *   generated=true, ejected=true   → user's .tsx wins (manual override)
    *   generated=false                → always emit from canvas tree

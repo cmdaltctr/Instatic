@@ -5,8 +5,7 @@
  * All icons must come from the MotionPageMaster icon set vendored at
  * `src/ui/icons/icons/` and consumed via:
  *
- *   import { Icon } from '@ui/icons/Icon'            // preferred (lazy-loaded)
- *   import { ArrowRightIcon } from '@ui/icons/icons/arrow-right'  // direct (acceptable)
+ *   import { ArrowRightIcon } from '@ui/icons/icons/arrow-right'
  *
  * Banned packages (non-exhaustive — covers all known icon ecosystems):
  *   - lucide-react
@@ -125,7 +124,7 @@ describe('Constraint #348 — No third-party icon libraries in production src/',
       const rel = violations.map((f) => f.replace(SRC_ROOT, 'src/'))
       throw new Error(
         `[Constraint #348] "${bannedPkg.name}" found in production source.\n` +
-        `Use MotionPageMaster icons from '@ui/icons/Icon' or '@ui/icons/icons/<name>'.\n` +
+        `Use MotionPageMaster icons from '@ui/icons/icons/<name>'.\n` +
         `Violating files:\n` +
         rel.map((f) => `  ${f}`).join('\n')
       )
@@ -154,8 +153,7 @@ describe('Constraint #348 — No third-party icon libraries in production src/',
       throw new Error(
         `[Constraint #348] Third-party icon library imports found in production source.\n` +
         `All icons must come from the MotionPageMaster set at 'src/ui/icons/icons/'.\n` +
-        `Use: import { Icon } from '@ui/icons/Icon'\n` +
-        `  or: import { <Name>Icon } from '@ui/icons/icons/<kebab-name>'\n` +
+        `Use: import { <Name>Icon } from '@ui/icons/icons/<kebab-name>'\n` +
         `Violating files:\n` +
         lines.join('\n')
       )

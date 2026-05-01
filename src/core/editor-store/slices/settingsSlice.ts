@@ -2,8 +2,8 @@
  * settingsSlice — Phase 0 canonical slice for settings modal state.
  *
  * Owns the settings modal open/close state and the active section navigation.
- * This is UI-only state that must NOT trigger project autosave — it lives here,
- * not in projectSlice.
+ * This is UI-only state that must NOT trigger site autosave — it lives here,
+ * not in siteSlice.
  *
  * Canonical Phase 0 fields (Contribution #457 / Guideline #193):
  *   - isSettingsOpen   — whether the settings modal is currently open

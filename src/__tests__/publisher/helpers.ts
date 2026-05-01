@@ -2,12 +2,12 @@
  * Shared test helpers for publisher tests.
  * Re-uses the flat-map PageNode structure from the locked types.
  */
-import type { Page, PageNode, Project, Breakpoint } from '../../core/page-tree/types'
+import type { Page, PageNode, SiteDocument, Breakpoint } from '../../core/page-tree/types'
 import type { ModuleDefinition, IModuleRegistry, AnyModuleDefinition } from '../../core/module-engine/types'
 import {
   DEFAULT_COLOR_TOKENS,
   DEFAULT_TYPE_SCALE,
-  DEFAULT_PROJECT_SETTINGS,
+  DEFAULT_SITE_SETTINGS,
 } from '../../core/page-tree/types'
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ export function makePage(
 }
 
 // ---------------------------------------------------------------------------
-// Project fixture factory
+// SiteDocument fixture factory
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_BREAKPOINTS: Breakpoint[] = [
@@ -105,15 +105,14 @@ export const DEFAULT_BREAKPOINTS: Breakpoint[] = [
   { id: 'desktop', label: 'Desktop', width: 1440, icon: 'monitor' },
 ]
 
-export function makeProject(overrides: Partial<Project> = {}): Project {
+export function makeSite(overrides: Partial<SiteDocument> = {}): SiteDocument {
   return {
     id: 'proj-1',
-    name: 'Test Project',
-    projectMode: 'html',
+    name: 'Test SiteDocument',
     pages: [],
     files: [],
     breakpoints: DEFAULT_BREAKPOINTS,
-    settings: DEFAULT_PROJECT_SETTINGS,
+    settings: DEFAULT_SITE_SETTINGS,
     classes: {},
     createdAt: 0,
     updatedAt: 0,

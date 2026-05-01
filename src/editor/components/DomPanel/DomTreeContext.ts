@@ -1,7 +1,7 @@
 /**
  * DomTreeContext — local UI state for the DOM tree panel.
  * Tracks which nodes are expanded/collapsed in the tree view.
- * This is UI-only state — it is NOT part of the Zustand project store.
+ * This is UI-only state — it is NOT part of the Zustand site store.
  * (Constraint #182: no document-model state outside the store.)
  */
 import { createContext, useContext } from 'react'

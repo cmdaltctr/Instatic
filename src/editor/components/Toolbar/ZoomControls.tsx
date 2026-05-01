@@ -13,7 +13,8 @@
  */
 
 import { useEditorStore } from '@core/editor-store/store'
-import { Icon } from '../../../ui/icons/Icon'
+import { MinusIcon } from '@ui/icons/icons/minus'
+import { PlusIcon } from '@ui/icons/icons/plus'
 import { Button } from '@ui/components/Button'
 import styles from './Toolbar.module.css'
 
@@ -43,7 +44,7 @@ export function ZoomControls() {
         title="Zoom out (−)"
         onClick={zoomOut}
       >
-        <Icon name="minus" size={14} />
+        <MinusIcon size={14} />
       </Button>
 
       {/* Zoom % display — click to reset to 100% */}
@@ -69,7 +70,7 @@ export function ZoomControls() {
         title="Zoom in (+)"
         onClick={zoomIn}
       >
-        <Icon name="plus" size={14} />
+        <PlusIcon size={14} />
       </Button>
     </div>
   )

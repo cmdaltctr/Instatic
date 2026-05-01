@@ -1,0 +1,698 @@
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
+import { useEditorStore } from '@core/editor-store/store'
+import { checkSizeLimit } from '@core/files/upload'
+import {
+  deleteCmsMediaAsset,
+  listCmsMediaAssets,
+  renameCmsMediaAsset,
+  uploadCmsMediaAsset,
+  type CmsMediaAsset,
+} from '@core/persistence/cmsMedia'
+import { PanelHeader } from '../shared/PanelHeader'
+import { Button } from '@ui/components/Button'
+import { FileUpload } from '@ui/components/FileUpload'
+import { SearchBar } from '@ui/components/SearchBar'
+import type { IconComponent } from '@ui/icons/types'
+import { BulletlistIcon } from '@ui/icons/icons/bulletlist'
+import { CheckIcon } from '@ui/icons/icons/check'
+import { Copy2Icon } from '@ui/icons/icons/copy-2'
+import { FolderIcon } from '@ui/icons/icons/folder'
+import { Grid2x22Icon } from '@ui/icons/icons/grid-2x2-2'
+import { Image2Icon } from '@ui/icons/icons/image-2'
+import { UploadIcon } from '@ui/icons/icons/upload'
+import { VideoIcon } from '@ui/icons/icons/video'
+import { cn } from '@ui/cn'
+import {
+  ExplorerItemContextMenu,
+  ExplorerRenameDialog,
+  type ExplorerContextMenuItem,
+  type ExplorerRenamePayload,
+} from '../ExplorerPanelActions'
+import styles from '../SiteExplorerPanel/SiteExplorerPanel.module.css'
+
+interface MediaExplorerPanelProps {
+  variant?: 'docked'
+}
+
+type MediaBucket = 'images' | 'videos' | 'other'
+type MediaFilter = 'all' | MediaBucket
+type MediaViewMode = 'list' | 'grid'
+
+interface ContextMenuState {
+  x: number
+  y: number
+  target: CmsMediaAsset
+}
+
+const BUCKET_LABELS: Record<MediaBucket, string> = {
+  images: 'Images',
+  videos: 'Videos',
+  other: 'Other',
+}
+
+const IMAGE_EXTENSIONS = new Set([
+  'apng',
+  'avif',
+  'gif',
+  'jpeg',
+  'jpg',
+  'png',
+  'svg',
+  'webp',
+])
+
+const VIDEO_EXTENSIONS = new Set([
+  'avi',
+  'm4v',
+  'mov',
+  'mp4',
+  'mpeg',
+  'ogv',
+  'webm',
+])
+
+function fileName(path: string) {
+  return path.split('/').pop() ?? path
+}
+
+function keyboardMenuPosition(element: HTMLElement) {
+  const rect = element.getBoundingClientRect()
+  return {
+    x: rect.left + Math.min(rect.width - 8, 24),
+    y: rect.top + Math.min(rect.height - 8, 24),
+  }
+}
+
+function extension(path: string) {
+  const name = fileName(path)
+  const index = name.lastIndexOf('.')
+  return index >= 0 ? name.slice(index + 1).toLowerCase() : ''
+}
+
+function mediaBucket(mimeType: string | undefined, path: string): MediaBucket {
+  if (mimeType?.startsWith('image/')) return 'images'
+  if (mimeType?.startsWith('video/')) return 'videos'
+
+  const ext = extension(path)
+  if (IMAGE_EXTENSIONS.has(ext)) return 'images'
+  if (VIDEO_EXTENSIONS.has(ext)) return 'videos'
+  return 'other'
+}
+
+function groupCmsMediaAssets(assets: CmsMediaAsset[]) {
+  const buckets: Record<MediaBucket, CmsMediaAsset[]> = {
+    images: [],
+    videos: [],
+    other: [],
+  }
+
+  for (const asset of assets) {
+    buckets[mediaBucket(asset.mimeType, asset.filename)].push(asset)
+  }
+
+  return buckets
+}
+
+function searchableText(...parts: Array<string | undefined>) {
+  return parts.filter(Boolean).join(' ').toLowerCase()
+}
+
+function matchesSearch(query: string, ...parts: Array<string | undefined>) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+  return searchableText(...parts).includes(normalized)
+}
+
+function filterCmsMediaBuckets(
+  buckets: Record<MediaBucket, CmsMediaAsset[]>,
+  filter: MediaFilter,
+  query: string,
+) {
+  const next: Record<MediaBucket, CmsMediaAsset[]> = {
+    images: [],
+    videos: [],
+    other: [],
+  }
+
+  for (const bucket of Object.keys(next) as MediaBucket[]) {
+    if (filter !== 'all' && filter !== bucket) continue
+    next[bucket] = buckets[bucket].filter((asset) => matchesSearch(query, asset.filename, asset.publicPath, asset.mimeType))
+  }
+
+  return next
+}
+
+function targetBucket(target: CmsMediaAsset) {
+  return mediaBucket(target.mimeType, target.filename)
+}
+
+export function MediaExplorerPanel({
+  variant = 'docked',
+}: MediaExplorerPanelProps) {
+  const isOpen = useEditorStore((s) => s.mediaExplorerPanelOpen)
+  const site = useEditorStore((s) => s.site)
+  const setMediaExplorerPanelOpen = useEditorStore((s) => s.setMediaExplorerPanelOpen)
+  const updateNodeProps = useEditorStore((s) => s.updateNodeProps)
+  const openMediaAssetPreview = useEditorStore((s) => s.openMediaAssetPreview)
+  const activeMediaAssetPreview = useEditorStore((s) => s.activeMediaAssetPreview)
+  const closeEditor = useEditorStore((s) => s.closeEditor)
+  const activePageId = useEditorStore((s) => s.activePageId)
+  const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
+  const [cmsAssets, setCmsAssets] = useState<CmsMediaAsset[]>([])
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [renameTarget, setRenameTarget] = useState<CmsMediaAsset | null>(null)
+  const [mediaError, setMediaError] = useState<string | null>(null)
+  const [mediaLoading, setMediaLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all')
+  const [viewMode, setViewMode] = useState<MediaViewMode>('list')
+  const panelRef = useRef<HTMLElement>(null)
+
+  const cmsBuckets = useMemo(() => groupCmsMediaAssets(cmsAssets), [cmsAssets])
+  const visibleCmsBuckets = useMemo(
+    () => filterCmsMediaBuckets(cmsBuckets, mediaFilter, searchQuery),
+    [cmsBuckets, mediaFilter, searchQuery],
+  )
+  const counts = visibleCmsBuckets
+  const hasFilters = searchQuery.trim().length > 0 || mediaFilter !== 'all'
+  const emptyLabel = mediaLoading ? 'Loading...' : mediaError ?? (hasFilters ? 'No matching media' : 'None yet')
+  const selectedNode = useMemo(() => {
+    if (!site || !activePageId || !selectedNodeId) return null
+    const activePage = site.pages.find((page) => page.id === activePageId)
+    return activePage?.nodes[selectedNodeId] ?? null
+  }, [site, activePageId, selectedNodeId])
+
+  useEffect(() => {
+    if (isOpen) {
+      requestAnimationFrame(() => panelRef.current?.focus())
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    let canceled = false
+    queueMicrotask(() => {
+      if (!canceled) {
+        setMediaLoading(true)
+        setMediaError(null)
+      }
+    })
+    listCmsMediaAssets()
+      .then((assets) => {
+        if (!canceled) setCmsAssets(assets)
+      })
+      .catch((err) => {
+        if (!canceled) {
+          setMediaError(err instanceof Error ? err.message : 'Unable to load media')
+        }
+      })
+      .finally(() => {
+        if (!canceled) setMediaLoading(false)
+      })
+
+    return () => {
+      canceled = true
+    }
+  }, [isOpen])
+
+  if (!isOpen || variant !== 'docked') return null
+
+  async function handleAssetUpload(e: ChangeEvent<HTMLInputElement>) {
+    const pickedFiles = Array.from(e.target.files ?? [])
+    e.target.value = ''
+
+    for (const file of pickedFiles) {
+      const sizeCheck = checkSizeLimit(file.size)
+      if (!sizeCheck.ok) {
+        console.warn('[MediaExplorerPanel] Upload rejected:', sizeCheck.message)
+        continue
+      }
+
+      try {
+        const asset = await uploadCmsMediaAsset(file)
+        setCmsAssets((assets) => [asset, ...assets.filter((item) => item.id !== asset.id)])
+      } catch (err) {
+        console.error('[MediaExplorerPanel] upload asset error:', err)
+      }
+    }
+  }
+
+  function renderUploadAction() {
+    return (
+      <FileUpload
+        multiple
+        onChange={handleAssetUpload}
+        buttonProps={{
+          variant: 'ghost',
+          size: 'xs',
+          iconOnly: true,
+          title: 'Upload media',
+          'aria-label': 'Upload media',
+        }}
+      >
+        <UploadIcon size={13} />
+      </FileUpload>
+    )
+  }
+
+  function openContextMenu(target: CmsMediaAsset, event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu({ x: event.clientX, y: event.clientY, target })
+  }
+
+  function openKeyboardContextMenu(target: CmsMediaAsset, event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu({ ...keyboardMenuPosition(event.currentTarget), target })
+  }
+
+  async function handleRename(payload: ExplorerRenamePayload) {
+    if (!renameTarget) return
+
+    const asset = await renameCmsMediaAsset(renameTarget.id, payload.value)
+    setCmsAssets((assets) => assets.map((item) => item.id === asset.id ? asset : item))
+    if (activeMediaAssetPreview?.id === asset.id) {
+      openMediaAssetPreview(asset)
+    }
+
+    setRenameTarget(null)
+  }
+
+  async function handleDelete(target: CmsMediaAsset) {
+    setCmsAssets((assets) => assets.filter((item) => item.id !== target.id))
+    if (activeMediaAssetPreview?.id === target.id) {
+      closeEditor()
+    }
+    try {
+      await deleteCmsMediaAsset(target.id)
+    } catch (err) {
+      setCmsAssets((assets) => [target, ...assets.filter((item) => item.id !== target.id)])
+      setMediaError(err instanceof Error ? err.message : 'Unable to delete media')
+      console.error('[MediaExplorerPanel] delete CMS media error:', err)
+    }
+    setContextMenu(null)
+  }
+
+  function applyTargetToSelectedModule(target: CmsMediaAsset) {
+    if (!selectedNodeId || !selectedNode) return
+
+    const publicPath = target.publicPath
+    const bucket = targetBucket(target)
+    if (selectedNode.moduleId === 'base.image' && bucket === 'images') {
+      updateNodeProps(selectedNodeId, { src: publicPath })
+    } else if (selectedNode.moduleId === 'base.video' && bucket === 'videos') {
+      updateNodeProps(selectedNodeId, { source: 'media', videoUrl: publicPath })
+    }
+    setContextMenu(null)
+  }
+
+  async function copyTargetUrl(target: CmsMediaAsset) {
+    setContextMenu(null)
+    if (!navigator.clipboard?.writeText) {
+      setMediaError('Clipboard is unavailable')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(target.publicPath)
+    } catch (err) {
+      setMediaError('Unable to copy media URL')
+      console.error('[MediaExplorerPanel] copy media URL error:', err)
+    }
+  }
+
+  function contextMenuItems(target: CmsMediaAsset): ExplorerContextMenuItem[] {
+    const items: ExplorerContextMenuItem[] = []
+    const bucket = targetBucket(target)
+
+    if (selectedNode?.moduleId === 'base.image' && bucket === 'images') {
+      items.push({
+        label: 'Use in selected image',
+        action: () => applyTargetToSelectedModule(target),
+        icon: <CheckIcon size={13} />,
+      })
+    } else if (selectedNode?.moduleId === 'base.video' && bucket === 'videos') {
+      items.push({
+        label: 'Use in selected video',
+        action: () => applyTargetToSelectedModule(target),
+        icon: <CheckIcon size={13} />,
+      })
+    }
+
+    items.push({
+      label: 'Copy URL',
+      action: () => { void copyTargetUrl(target) },
+      icon: <Copy2Icon size={13} />,
+    })
+
+    return items
+  }
+
+  function shouldShowBucket(bucket: MediaBucket) {
+    return mediaFilter === 'all' || mediaFilter === bucket
+  }
+
+  return (
+    <aside
+      ref={panelRef}
+      role="complementary"
+      aria-label="Media Explorer"
+      data-panel=""
+      data-testid="media-explorer-panel"
+      tabIndex={-1}
+      onClick={(e) => e.stopPropagation()}
+      className={styles.panel}
+    >
+      <PanelHeader
+        panelId="media-explorer"
+        title="Media"
+        onClose={() => setMediaExplorerPanelOpen(false)}
+      />
+
+      <div className={styles.content}>
+        <>
+            <div className={styles.mediaToolbar} aria-label="Media library controls">
+              <SearchBar
+                aria-label="Search media"
+                placeholder="Search media"
+                fieldSize="xs"
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+                onClear={() => setSearchQuery('')}
+                className={styles.mediaSearch}
+              />
+              <div className={styles.mediaControlRow}>
+                <div className={styles.mediaFilterGroup} role="group" aria-label="Filter media type">
+                  {(['all', 'images', 'videos', 'other'] as MediaFilter[]).map((filter) => (
+                    <Button
+                      key={filter}
+                      variant="ghost"
+                      size="xs"
+                      pressed={mediaFilter === filter}
+                      onClick={() => setMediaFilter(filter)}
+                    >
+                      {filter === 'all' ? 'All' : BUCKET_LABELS[filter]}
+                    </Button>
+                  ))}
+                </div>
+                <div className={styles.mediaViewGroup} role="group" aria-label="Media view">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    iconOnly
+                    pressed={viewMode === 'list'}
+                    title="List view"
+                    aria-label="List view"
+                    onClick={() => setViewMode('list')}
+                  >
+                    <BulletlistIcon size={13} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    iconOnly
+                    pressed={viewMode === 'grid'}
+                    title="Grid view"
+                    aria-label="Grid view"
+                    onClick={() => setViewMode('grid')}
+                  >
+                    <Grid2x22Icon size={13} />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {shouldShowBucket('images') && (
+            <ExplorerSection
+                title="Images"
+                bucket="images"
+                viewMode={viewMode}
+                count={counts.images.length}
+                emptyLabel={emptyLabel}
+                uploadAction={renderUploadAction()}
+              >
+                <CmsMediaRows
+                  assets={visibleCmsBuckets.images}
+                  bucket="images"
+                  viewMode={viewMode}
+                  onOpen={openMediaAssetPreview}
+                  onContextMenu={openContextMenu}
+                  onKeyDown={openKeyboardContextMenu}
+                />
+              </ExplorerSection>
+            )}
+
+            {shouldShowBucket('videos') && (
+              <ExplorerSection
+                title="Videos"
+                bucket="videos"
+                viewMode={viewMode}
+                count={counts.videos.length}
+                emptyLabel={emptyLabel}
+                uploadAction={renderUploadAction()}
+              >
+                <CmsMediaRows
+                  assets={visibleCmsBuckets.videos}
+                  bucket="videos"
+                  viewMode={viewMode}
+                  onOpen={openMediaAssetPreview}
+                  onContextMenu={openContextMenu}
+                  onKeyDown={openKeyboardContextMenu}
+                />
+              </ExplorerSection>
+            )}
+
+            {shouldShowBucket('other') && (
+              <ExplorerSection
+                title="Other"
+                bucket="other"
+                viewMode={viewMode}
+                count={counts.other.length}
+                emptyLabel={emptyLabel}
+                uploadAction={renderUploadAction()}
+              >
+                <CmsMediaRows
+                  assets={visibleCmsBuckets.other}
+                  bucket="other"
+                  viewMode={viewMode}
+                  onOpen={openMediaAssetPreview}
+                  onContextMenu={openContextMenu}
+                  onKeyDown={openKeyboardContextMenu}
+                />
+              </ExplorerSection>
+            )}
+          </>
+      </div>
+
+      {contextMenu && (
+        <ExplorerItemContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          ariaLabel="Media item options"
+          onClose={() => setContextMenu(null)}
+          onRename={() => {
+            setRenameTarget(contextMenu.target)
+            setContextMenu(null)
+          }}
+          onDelete={() => { void handleDelete(contextMenu.target) }}
+          extraItems={contextMenuItems(contextMenu.target)}
+        />
+      )}
+
+      {renameTarget && (
+        <ExplorerRenameDialog
+          title="Rename media"
+          fieldLabel="Name"
+          initialValue={renameTarget.filename}
+          onCancel={() => setRenameTarget(null)}
+          onRename={handleRename}
+        />
+      )}
+    </aside>
+  )
+}
+
+interface ExplorerSectionProps {
+  title: string
+  bucket: MediaBucket
+  viewMode: MediaViewMode
+  count: number
+  uploadAction: ReactNode
+  emptyLabel?: string
+  children: ReactNode
+}
+
+function ExplorerSection({
+  title,
+  bucket,
+  viewMode,
+  count,
+  uploadAction,
+  emptyLabel = 'None yet',
+  children,
+}: ExplorerSectionProps) {
+  return (
+    <section className={styles.section} aria-labelledby={`media-section-${title.toLowerCase()}`}>
+      <div className={styles.sectionHeader}>
+        <h2 id={`media-section-${title.toLowerCase()}`} className={styles.sectionTitle}>
+          {title}
+        </h2>
+        <span className={styles.sectionCount}>{count}</span>
+        {uploadAction}
+      </div>
+      <div
+        className={viewMode === 'grid' ? styles.mediaGrid : styles.rows}
+        data-testid={viewMode === 'grid' ? `media-grid-${bucket}` : undefined}
+        data-media-view={viewMode}
+      >
+        {count === 0 ? <div className={styles.sectionEmpty}>{emptyLabel}</div> : children}
+      </div>
+    </section>
+  )
+}
+
+interface ExplorerRowProps {
+  icon: IconComponent
+  label: string
+  meta?: string
+  ariaLabel: string
+  onClick: () => void
+  onContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void
+  onKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void
+}
+
+function ExplorerRow({
+  icon,
+  label,
+  meta,
+  ariaLabel,
+  onClick,
+  onContextMenu,
+  onKeyDown,
+}: ExplorerRowProps) {
+  const RowIcon = icon
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={cn(styles.row)}
+      aria-label={ariaLabel}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      onKeyDown={onKeyDown}
+    >
+      <RowIcon size={13} />
+      <span className={styles.rowLabel}>{label}</span>
+      {meta && <span className={styles.rowMeta}>{meta}</span>}
+    </Button>
+  )
+}
+
+interface ExplorerTileProps {
+  icon: IconComponent
+  label: string
+  meta?: string
+  ariaLabel: string
+  previewKind: MediaBucket
+  previewSrc?: string
+  onClick: () => void
+  onContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void
+  onKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void
+}
+
+function ExplorerTile({
+  icon,
+  label,
+  meta,
+  ariaLabel,
+  previewKind,
+  previewSrc,
+  onClick,
+  onContextMenu,
+  onKeyDown,
+}: ExplorerTileProps) {
+  const TileIcon = icon
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={styles.mediaTile}
+      aria-label={ariaLabel}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      onKeyDown={onKeyDown}
+    >
+      <span className={styles.mediaTilePreview} aria-hidden="true">
+        {previewKind === 'images' && previewSrc ? (
+          <img className={styles.mediaTileImage} src={previewSrc} alt="" />
+        ) : previewKind === 'videos' && previewSrc ? (
+          <video className={styles.mediaTileVideo} src={previewSrc} muted preload="metadata" />
+        ) : (
+          <TileIcon size={22} />
+        )}
+      </span>
+      <span className={styles.mediaTileBody}>
+        <span className={styles.mediaTileLabel}>{label}</span>
+        {meta && <span className={styles.mediaTileMeta}>{meta}</span>}
+      </span>
+    </Button>
+  )
+}
+
+function CmsMediaRows({
+  assets,
+  bucket,
+  viewMode,
+  onOpen,
+  onContextMenu,
+  onKeyDown,
+}: {
+  assets: CmsMediaAsset[]
+  bucket: MediaBucket
+  viewMode: MediaViewMode
+  onOpen: (asset: CmsMediaAsset) => void
+  onContextMenu: (asset: CmsMediaAsset, event: MouseEvent<HTMLButtonElement>) => void
+  onKeyDown: (asset: CmsMediaAsset, event: KeyboardEvent<HTMLButtonElement>) => void
+}) {
+  if (viewMode === 'grid') {
+    return assets.map((asset) => (
+      <ExplorerTile
+        key={asset.id}
+        icon={asset.mimeType.startsWith('video/') ? VideoIcon : mediaBucket(asset.mimeType, asset.filename) === 'images' ? Image2Icon : FolderIcon}
+        label={asset.filename}
+        meta={asset.publicPath}
+        ariaLabel={`Open media ${asset.filename}`}
+        previewKind={bucket}
+        previewSrc={asset.publicPath}
+        onClick={() => onOpen(asset)}
+        onContextMenu={(event) => onContextMenu(asset, event)}
+        onKeyDown={(event) => onKeyDown(asset, event)}
+      />
+    ))
+  }
+
+  return assets.map((asset) => (
+    <ExplorerRow
+      key={asset.id}
+      icon={asset.mimeType.startsWith('video/') ? VideoIcon : mediaBucket(asset.mimeType, asset.filename) === 'images' ? Image2Icon : FolderIcon}
+      label={asset.filename}
+      meta={asset.publicPath}
+      ariaLabel={`Open media ${asset.filename}`}
+      onClick={() => onOpen(asset)}
+      onContextMenu={(event) => onContextMenu(asset, event)}
+      onKeyDown={(event) => onKeyDown(asset, event)}
+    />
+  ))
+}

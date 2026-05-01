@@ -3,7 +3,7 @@ import { useEditorStore } from '../../core/editor-store/store'
 
 function freshStore() {
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     selectedNodeId: null,
     hoveredNodeId: null,
@@ -23,8 +23,8 @@ beforeEach(freshStore)
 describe('selectionSlice.selectNode', () => {
   it('activates the first assigned class when selecting a node with classes', () => {
     const store = useEditorStore.getState()
-    const project = store.createProject('Selection Test')
-    const rootId = project.pages[0].rootNodeId
+    const site = store.createSite('Selection Test')
+    const rootId = site.pages[0].rootNodeId
     const nodeId = useEditorStore.getState().insertNode('base.text', {}, rootId)
     const cls = useEditorStore.getState().createClass('hero-title')
     useEditorStore.getState().addNodeClass(nodeId, cls.id)

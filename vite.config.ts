@@ -153,13 +153,15 @@ export default defineConfig({
     },
   },
   server: {
-    /**
-     * Phase D — standalone dev server handles /api/agent via agentDevPlugin().
-     * The proxy below is intentionally removed; the Vite plugin middleware
-     * serves Claude Agent SDK requests in-process without a second server.
-     *
-     * If you need a separate Bun agent server (e.g., for debugging the server
-     * layer in isolation), use: bun run dev:agent
-     */
+    proxy: {
+      '/api/cms': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/uploads': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
   },
 })

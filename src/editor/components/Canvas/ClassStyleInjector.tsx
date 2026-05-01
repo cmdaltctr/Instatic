@@ -1,15 +1,15 @@
 /**
  * ClassStyleInjector — injects/updates `.mc-{classId}` CSS into the document
- * whenever the project's class registry changes.
+ * whenever the site's class registry changes.
  *
  * This is a pure side-effect component (renders null). It subscribes to
- * `project.classes` via a stable selector and imperatively manages a single
+ * `site.classes` via a stable selector and imperatively manages a single
  * <style id="mc-classes"> element in document.head.
  *
  * Architecture:
  * - One <style> tag, kept in sync on every class registry change.
  * - CSS is generated from CSSPropertyBag by camelCase → kebab-case conversion.
- * - @media blocks are emitted for breakpoint overrides (uses project.breakpoints).
+ * - @media blocks are emitted for breakpoint overrides (uses site.breakpoints).
  * - No FOUC: the style element is created synchronously before first paint.
  *
  * Security (Constraint #228):
@@ -19,7 +19,7 @@
  *
  * Performance:
  * - Subscribes with a shallow-equality selector so re-renders only happen when
- *   classes actually change (not on every project edit).
+ *   classes actually change (not on every site edit).
  */
 
 import { useEffect } from 'react'
@@ -43,8 +43,8 @@ const EMPTY_BREAKPOINTS: Array<{ id: string; width: number }> = []
 export function ClassStyleInjector() {
   // Subscribe to class registry — shallow equality so we only re-run when
   // the classes object reference changes (Immer always creates a new ref on mutation)
-  const classes = useEditorStore((s) => s.project?.classes ?? null)
-  const breakpoints = useEditorStore((s) => s.project?.breakpoints ?? EMPTY_BREAKPOINTS)
+  const classes = useEditorStore((s) => s.site?.classes ?? null)
+  const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? EMPTY_BREAKPOINTS)
 
   useEffect(() => {
     // Get or create the <style> element

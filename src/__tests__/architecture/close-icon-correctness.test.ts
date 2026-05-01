@@ -1,33 +1,33 @@
 /**
  * Architecture Source-Scan — Close Icon Correctness
  *
- * Enforces that no production component uses `<Icon name="x" />` (the X/Twitter
- * logo) as a close or dismiss button.
+ * Enforces that no production component imports `XIcon` (the X/Twitter logo)
+ * as a close or dismiss button.
  *
  * ## Background
  *
- * `<Icon name="x" size={N} />` renders the X (formerly Twitter) logo from the
- * MotionPageMaster icon set.  It was mistakenly used as a close/dismiss icon in
- * several modal and overlay components before this gate was introduced.
+ * `XIcon` renders the X (formerly Twitter) logo from the MotionPageMaster icon
+ * set. It was mistakenly used as a close/dismiss icon in several modal and
+ * overlay components before this gate was introduced.
  *
  * The correct close icon for dialogs, modals, and panel headers is:
  *
  *   import { CloseIcon } from '@ui/icons/icons/close'
  *   <CloseIcon size={12} color="currentColor" aria-hidden="true" />
  *
- * This pattern is codified in `PanelHeader.tsx` and is the project-wide standard
+ * This pattern is codified in `PanelHeader.tsx` and is the site-wide standard
  * (user directive, msg #1967 / Contribution #649).
  *
  * ## What this test checks
  *
- * 1. No production file contains `Icon name="x"` anywhere (catches any future
+ * 1. No production file imports `src/ui/icons/icons/x` anywhere (catches future
  *    regression regardless of context — the X/Twitter icon has no legitimate
  *    close-button use case in this codebase).
  *
  * ## Legitimate X-shaped icon patterns that ARE allowed
  *
- * - `<CloseIcon ...>` — the canonical project close icon
- * - `Icon name="x-circle"` / `Icon name="x-square"` — distinct icon names
+ * - `<CloseIcon ...>` — the canonical site close icon
+ * - `x-circle` / `x-square` icon files — distinct icon names
  * - Status icons with aria meaning (e.g. error state) — those use different
  *   icon names (`circle-x`, `alert-circle`, etc.)
  *
@@ -72,18 +72,18 @@ function collectProdFiles(): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Banned pattern — Icon name="x" (X/Twitter logo used as close button)
+// Banned pattern — XIcon (X/Twitter logo used as close button)
 // ---------------------------------------------------------------------------
 
 // NOTE: String is split so that THIS test file does not self-match.
-const X_LOGO_PATTERN = new RegExp(`Icon\\s+name=` + `["']x["']`)
+const X_LOGO_PATTERN = new RegExp(`from\\s+["'][^"']*ui/icons/icons/` + `x["']|<` + `XIcon\\b`)
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe('Close-icon correctness — no X/Twitter logo used as close button', () => {
-  it('CI-1: no production file uses <Icon name="x"> (X/Twitter logo as close icon)', () => {
+  it('CI-1: no production file imports XIcon (X/Twitter logo as close icon)', () => {
     const allFiles = collectProdFiles()
 
     const violations = allFiles.filter((f) => {
@@ -98,9 +98,9 @@ describe('Close-icon correctness — no X/Twitter logo used as close button', ()
       const rel = violations.map((f) => f.replace(SRC_ROOT, 'src/'))
       throw new Error(
         [
-          '[CI-1] <Icon name="x"> (X/Twitter logo) found in production source.',
+          '[CI-1] XIcon (X/Twitter logo) found in production source.',
           '',
-          'Use the project-standard close icon instead:',
+          'Use the site-standard close icon instead:',
           '',
           "  import { CloseIcon } from '@ui/icons/icons/close'",
           '  <CloseIcon size={12} color="currentColor" aria-hidden="true" />',
@@ -116,19 +116,19 @@ describe('Close-icon correctness — no X/Twitter logo used as close button', ()
     expect(violations).toHaveLength(0)
   })
 
-  it('CI-2: ProjectCreateDialog close button uses CloseIcon from @ui/icons/icons/close', () => {
-    const modalPath = join(SRC_ROOT, 'editor/components/ProjectCreateDialog/ProjectCreateDialog.tsx')
+  it('CI-2: SiteCreateDialog close button uses CloseIcon from @ui/icons/icons/close', () => {
+    const modalPath = join(SRC_ROOT, 'editor/components/SiteCreateDialog/SiteCreateDialog.tsx')
     let src: string
     try {
       src = readFileSync(modalPath, 'utf8')
     } catch {
-      throw new Error(`[CI-2] ProjectCreateDialog.tsx not found at expected path: ${modalPath}`)
+      throw new Error(`[CI-2] SiteCreateDialog.tsx not found at expected path: ${modalPath}`)
     }
 
     // Must import CloseIcon
     expect(src).toMatch(/import\s*\{[^}]*CloseIcon[^}]*\}\s*from\s*['"]@ui\/icons\/icons\/close['"]/)
 
-    // Must NOT use Icon name="x"
+    // Must NOT use XIcon
     expect(src).not.toMatch(X_LOGO_PATTERN)
 
     // Must use CloseIcon in JSX

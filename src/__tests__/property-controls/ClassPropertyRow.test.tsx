@@ -67,14 +67,16 @@ describe('ClassComposer module style remove button layout', () => {
       new URL('../../editor/components/PropertiesPanel/ClassComposer.module.css', import.meta.url),
       'utf-8',
     )
+    const compactCss = css.replace(/\s+/g, '')
 
     expect(css).toMatch(/--class-remove-label-column:\s*120px/)
     expect(css).toMatch(/--class-remove-row-center:\s*14px/)
     expect(css).toMatch(/--class-remove-button-size:\s*22px/)
     expect(css).toMatch(/--class-remove-fade-width:\s*64px/)
     expect(css).toMatch(/\.moduleStyleRow::after\s*\{[^}]*linear-gradient/s)
-    expect(css).toMatch(/\.moduleStyleRemoveBtn\s*\{[^}]*left:\s*calc\(var\(--class-remove-label-column\)\s*-\s*var\(--class-remove-button-size\)\s*-\s*4px\)/s)
-    expect(css).toMatch(/\.moduleStyleRemoveBtn\s*\{[^}]*top:\s*calc\(var\(--class-remove-row-center\)\s*-\s*\(var\(--class-remove-button-size\)\s*\/\s*2\)\)/s)
+    expect(compactCss).toContain(
+      '.moduleStyleRemoveBtn{position:absolute;top:calc(var(--class-remove-row-center)-(var(--class-remove-button-size)/2));left:calc(var(--class-remove-label-column)-var(--class-remove-button-size)-4px)',
+    )
     expect(css).toMatch(/\.moduleStyleRemoveBtn\.moduleStyleRemoveBtn\s*\{[^}]*width:\s*var\(--class-remove-button-size\)/s)
     expect(css).toMatch(/\.moduleStyleRemoveBtn\.moduleStyleRemoveBtn\s*\{[^}]*height:\s*var\(--class-remove-button-size\)/s)
     expect(css).not.toMatch(/\.moduleStyleRemoveBtn\s*\{[^}]*right:/s)

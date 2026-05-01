@@ -1,8 +1,8 @@
 /**
- * validateProject — structural validation of raw data before store hydration.
+ * validateSite — structural validation of raw data before store hydration.
  *
- * Constraint #230: ALL project data loaded from storage MUST be validated
- * before being passed to `store.loadProject()`. This prevents corrupted or
+ * Constraint #230: ALL site data loaded from storage MUST be validated
+ * before being passed to `store.loadSite()`. This prevents corrupted or
  * stale schema data from silently poisoning the store.
  *
  * The validator is intentionally STRICT on structure and LENIENT on values:
@@ -12,27 +12,27 @@
  * - It does NOT validate prop VALUES against module schemas — that would
  *   require the registry at validation time, creating a circular dependency.
  *
- * Throws a descriptive ValidationError with a `path` field for debugging.
+ * Throws a descriptive SiteValidationError with a `path` field for debugging.
  */
 
-import type { Project, Page, PageNode, Breakpoint, ProjectSettings } from '../page-tree/types'
-import type { ProjectFile, ProjectFileType } from '../files/types'
+import type { SiteDocument, Page, PageNode, Breakpoint, SiteSettings } from '../page-tree/types'
+import type { SiteFile, SiteFileType } from '../files/types'
 import type { VisualComponent, VCParam } from '../visualComponents/types'
 import { isSafePath, normalizePath } from '../files/pathValidation'
 import { validateComponentName } from '../visualComponents/nameValidation'
 import { sanitizeRichtext, isRichtextPropKey } from '../sanitize'
-import { normalizeProjectPackageJson } from '../project-dependencies/manifest'
+import { normalizeSitePackageJson } from '../site-dependencies/manifest'
 import { pageSlugDuplicateError, pageSlugError } from '../page-tree/slugs'
 
 // ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
 
-export class ValidationError extends Error {
+export class SiteValidationError extends Error {
   readonly path: string
   constructor(message: string, path: string) {
     super(`[persistence/validate] ${path}: ${message}`)
-    this.name = 'ValidationError'
+    this.name = 'SiteValidationError'
     this.path = path
   }
 }
@@ -42,21 +42,21 @@ export class ValidationError extends Error {
 // ---------------------------------------------------------------------------
 
 function assertString(v: unknown, path: string): asserts v is string {
-  if (typeof v !== 'string') throw new ValidationError(`expected string, got ${typeof v}`, path)
+  if (typeof v !== 'string') throw new SiteValidationError(`expected string, got ${typeof v}`, path)
 }
 
 function assertNumber(v: unknown, path: string): asserts v is number {
-  if (typeof v !== 'number' || !isFinite(v)) throw new ValidationError(`expected finite number, got ${typeof v}`, path)
+  if (typeof v !== 'number' || !isFinite(v)) throw new SiteValidationError(`expected finite number, got ${typeof v}`, path)
 }
 
 function assertObject(v: unknown, path: string): asserts v is Record<string, unknown> {
   if (!v || typeof v !== 'object' || Array.isArray(v)) {
-    throw new ValidationError(`expected plain object, got ${Array.isArray(v) ? 'array' : typeof v}`, path)
+    throw new SiteValidationError(`expected plain object, got ${Array.isArray(v) ? 'array' : typeof v}`, path)
   }
 }
 
 function assertArray(v: unknown, path: string): asserts v is unknown[] {
-  if (!Array.isArray(v)) throw new ValidationError(`expected array, got ${typeof v}`, path)
+  if (!Array.isArray(v)) throw new SiteValidationError(`expected array, got ${typeof v}`, path)
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ function validatePageNode(raw: unknown, path: string): PageNode {
   assertObject(raw.breakpointOverrides ?? {}, `${path}.breakpointOverrides`)
 
   // Sanitize richtext-typed prop values before storing — prevents XSS via
-  // tampered or pre-DOMPurify-boundary project data reaching the publisher.
+  // tampered or pre-DOMPurify-boundary site data reaching the publisher.
   // Non-richtext props are passed through unchanged. Constraint #299 / Task #302.
   const rawProps = (raw.props ?? {}) as Record<string, unknown>
   const sanitizedProps: Record<string, unknown> = {}
@@ -142,7 +142,7 @@ function validatePage(raw: unknown, path: string): Page {
 
   // Referential integrity: rootNodeId must exist in nodes
   if (!nodes[raw.rootNodeId as string]) {
-    throw new ValidationError(
+    throw new SiteValidationError(
       `rootNodeId "${raw.rootNodeId}" not found in nodes`,
       `${path}.rootNodeId`,
     )
@@ -171,7 +171,7 @@ function validateBreakpoint(raw: unknown, path: string): Breakpoint {
   }
 }
 
-function validateSettings(raw: unknown, path: string): ProjectSettings {
+function validateSettings(raw: unknown, path: string): SiteSettings {
   assertObject(raw, path)
   return {
     metaTitle: typeof raw.metaTitle === 'string' ? raw.metaTitle : undefined,
@@ -203,17 +203,17 @@ function validateSettings(raw: unknown, path: string): ProjectSettings {
   }
 }
 
-const VALID_FILE_TYPES: ProjectFileType[] = [
+const VALID_FILE_TYPES: SiteFileType[] = [
   'component', 'script', 'style', 'asset', 'config', 'doc',
 ]
 
-function validateProjectFile(raw: unknown, _path: string): ProjectFile | null {
+function validateSiteFile(raw: unknown, _path: string): SiteFile | null {
   void _path
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const r = raw as Record<string, unknown>
 
   if (typeof r.id !== 'string' || typeof r.path !== 'string') return null
-  if (!VALID_FILE_TYPES.includes(r.type as ProjectFileType)) return null
+  if (!VALID_FILE_TYPES.includes(r.type as SiteFileType)) return null
 
   // Silently discard files with unsafe paths (rather than throwing — we want
   // the validator to be lenient on individual files to avoid rejecting whole
@@ -224,7 +224,7 @@ function validateProjectFile(raw: unknown, _path: string): ProjectFile | null {
   return {
     id: r.id,
     path: normalized,
-    type: r.type as ProjectFileType,
+    type: r.type as SiteFileType,
     content: typeof r.content === 'string' ? r.content : undefined,
     blob:
       r.blob &&
@@ -245,7 +245,7 @@ function validateProjectFile(raw: unknown, _path: string): ProjectFile | null {
 }
 
 // ---------------------------------------------------------------------------
-// VisualComponent validator (lenient per-item, mirrors validateProjectFile)
+// VisualComponent validator (lenient per-item, mirrors validateSiteFile)
 // ---------------------------------------------------------------------------
 
 /**
@@ -338,39 +338,39 @@ function validateVisualComponent(raw: unknown): VisualComponent | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Validate raw data from storage and return a typed Project, or throw
- * ValidationError describing exactly which field failed.
+ * Validate raw data from storage and return a typed SiteDocument, or throw
+ * SiteValidationError describing exactly which field failed.
  *
  * Usage:
  * ```ts
- * const raw = await adapter.loadProject(id)
- * const project = validateProject(raw)   // throws if corrupt
- * store.loadProject(project)
+ * const raw = await adapter.loadSite(id)
+ * const site = validateSite(raw)   // throws if corrupt
+ * store.loadSite(site)
  * ```
  */
-export function validateProject(raw: unknown): Project {
-  assertObject(raw, 'project')
-  assertString(raw.id, 'project.id')
-  assertString(raw.name, 'project.name')
-  assertArray(raw.pages, 'project.pages')
-  assertArray(raw.breakpoints, 'project.breakpoints')
-  assertNumber(raw.createdAt, 'project.createdAt')
-  assertNumber(raw.updatedAt, 'project.updatedAt')
+export function validateSite(raw: unknown): SiteDocument {
+  assertObject(raw, 'site')
+  assertString(raw.id, 'site.id')
+  assertString(raw.name, 'site.name')
+  assertArray(raw.pages, 'site.pages')
+  assertArray(raw.breakpoints, 'site.breakpoints')
+  assertNumber(raw.createdAt, 'site.createdAt')
+  assertNumber(raw.updatedAt, 'site.updatedAt')
 
   const pages: Page[] = (raw.pages as unknown[]).map((p, i) =>
-    validatePage(p, `project.pages[${i}]`),
+    validatePage(p, `site.pages[${i}]`),
   )
 
   const breakpoints: Breakpoint[] = (raw.breakpoints as unknown[]).map((b, i) =>
-    validateBreakpoint(b, `project.breakpoints[${i}]`),
+    validateBreakpoint(b, `site.breakpoints[${i}]`),
   )
 
-  const settings = validateSettings(raw.settings ?? {}, 'project.settings')
-  const packageJson = normalizeProjectPackageJson(raw.packageJson)
+  const settings = validateSettings(raw.settings ?? {}, 'site.settings')
+  const packageJson = normalizeSitePackageJson(raw.packageJson)
 
   // Validate class registry — coerce any legacy projects that lack this field
   const rawClasses = raw.classes
-  const classes: Project['classes'] = {}
+  const classes: SiteDocument['classes'] = {}
   if (rawClasses !== undefined && rawClasses !== null && typeof rawClasses === 'object' && !Array.isArray(rawClasses)) {
     for (const [id, cls] of Object.entries(rawClasses as Record<string, unknown>)) {
       if (cls && typeof cls === 'object' && !Array.isArray(cls)) {
@@ -406,38 +406,29 @@ export function validateProject(raw: unknown): Project {
 
   // Must have at least one page
   if (pages.length === 0) {
-    throw new ValidationError('project must have at least one page', 'project.pages')
+    throw new SiteValidationError('site must have at least one page', 'site.pages')
   }
 
   for (let i = 0; i < pages.length; i++) {
     const slugError = pageSlugError(pages[i].slug)
-    if (slugError) throw new ValidationError(slugError, `project.pages[${i}].slug`)
+    if (slugError) throw new SiteValidationError(slugError, `site.pages[${i}].slug`)
 
     const duplicateError = pageSlugDuplicateError(pages[i].slug, pages, pages[i].id)
     if (duplicateError) {
-      throw new ValidationError(`duplicate slug: ${duplicateError}`, `project.pages[${i}].slug`)
+      throw new SiteValidationError(`duplicate slug: ${duplicateError}`, `site.pages[${i}].slug`)
     }
   }
 
-  // Validate projectMode — coerce any legacy projects that lack this field to 'html'.
-  // This field was added in Phase E; older stored projects won't have it.
-  // Previously omitted from the return object entirely, causing projects hydrated
-  // from IndexedDB to silently lose their projectMode (React publisher would break
-  // on reload for any project saved in 'react' mode).
-  const rawProjectMode = raw.projectMode
-  const projectMode: Project['projectMode'] =
-    rawProjectMode === 'html' || rawProjectMode === 'react' ? rawProjectMode : 'html'
-
   // Validate files[] — default to [] for legacy projects that pre-date the
   // files data layer (Contribution #595 / Task #429).  Individual files with
-  // unsafe paths are silently dropped rather than rejecting the whole project.
+  // unsafe paths are silently dropped rather than rejecting the whole site.
   // Duplicate paths are deduplicated (last-write-wins on the normalized path).
   const rawFiles = raw.files
-  const files: ProjectFile[] = []
+  const files: SiteFile[] = []
   if (Array.isArray(rawFiles)) {
     const seenPaths = new Set<string>()
     for (let i = 0; i < rawFiles.length; i++) {
-      const file = validateProjectFile(rawFiles[i], `project.files[${i}]`)
+      const file = validateSiteFile(rawFiles[i], `site.files[${i}]`)
       if (file === null) continue
       if (seenPaths.has(file.path)) continue // deduplicate
       seenPaths.add(file.path)
@@ -466,7 +457,6 @@ export function validateProject(raw: unknown): Project {
   return {
     id: raw.id as string,
     name: raw.name as string,
-    projectMode,
     pages,
     files,
     visualComponents,

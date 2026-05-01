@@ -1,18 +1,18 @@
 /**
  * CodeEditorPanel — floating code editor panel (Task #432).
  *
- * Achromatic palette only (Guideline #376).
+ * Neutral editor chrome; syntax colors live in CodeMirrorEditor.
  * No Tailwind, no force-overrides (Constraints 402, 403).
  * CSS vars for all colour values.
  */
 
 /* ── Floating panel outer shell ───────────────────────────────────────────── */
 .panel {
-  position: absolute;
+  position: fixed;
   /* Position driven by --panel-x / --panel-y CSS vars (useDraggablePanel) */
   left: var(--panel-x, calc(50vw - 400px));
   top: var(--panel-y, 80px);
-  z-index: 50;
+  z-index: 80;
   width: 800px;
   height: 500px;
   display: flex;

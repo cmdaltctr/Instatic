@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { readFileSync } from 'fs'
 import { ModulePickerDropdown } from '../../editor/components/Toolbar/ModulePickerDropdown'
 import { useEditorStore } from '../../core/editor-store/store'
-import { makeNode, makePage, makeProject } from '../fixtures'
+import { makeNode, makePage, makeSite } from '../fixtures'
 import '../../modules/base/index'
 
 afterEach(cleanup)
@@ -12,12 +12,13 @@ afterEach(cleanup)
 function resetStore() {
   localStorage.clear()
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     selectedNodeId: null,
     hoveredNodeId: null,
     activeDocument: null,
-    projectExplorerPanelOpen: false,
+    siteExplorerPanelOpen: false,
+    mediaExplorerPanelOpen: false,
     codeEditorPanelOpen: false,
     activeEditorFileId: null,
     _historyPast: [],
@@ -28,7 +29,7 @@ function resetStore() {
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
-function loadProject() {
+function loadSite() {
   const home = makePage({
     id: 'page-home',
     title: 'Home',
@@ -40,7 +41,7 @@ function loadProject() {
   })
 
   useEditorStore.setState({
-    project: makeProject({ pages: [home], files: [], visualComponents: [] }),
+    site: makeSite({ pages: [home], files: [], visualComponents: [] }),
     activePageId: 'page-home',
     activeDocument: null,
   } as Parameters<typeof useEditorStore.setState>[0])
@@ -48,8 +49,8 @@ function loadProject() {
 
 beforeEach(resetStore)
 
-describe('ModulePickerDropdown project creation', () => {
-  it('uses the shared project creation dialog instead of the retired file modal', () => {
+describe('ModulePickerDropdown site creation', () => {
+  it('uses the shared site creation dialog instead of the retired file modal', () => {
     const source = readFileSync(
       new URL('../../editor/components/Toolbar/ModulePickerDropdown.tsx', import.meta.url),
       'utf-8',
@@ -58,11 +59,11 @@ describe('ModulePickerDropdown project creation', () => {
     expect(source).not.toContain('NewFileModal')
     expect(source).not.toContain('src/pages/')
     expect(source).not.toContain('src/components/')
-    expect(source).toContain('ProjectCreateDialog')
+    expect(source).toContain('SiteCreateDialog')
   })
 
-  it('creates a page from the toolbar through the simple project dialog', () => {
-    loadProject()
+  it('creates a page from the toolbar through the simple site dialog', () => {
+    loadSite()
     render(<ModulePickerDropdown />)
 
     fireEvent.click(screen.getByTestId('toolbar-add-module-btn'))
@@ -77,14 +78,14 @@ describe('ModulePickerDropdown project creation', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 
     const state = useEditorStore.getState()
-    const created = state.project?.pages.find((page) => page.title === 'Product Tour')
+    const created = state.site?.pages.find((page) => page.title === 'Product Tour')
     expect(created?.slug).toBe('product-tour')
     expect(state.activePageId).toBe(created?.id)
     expect(state.activeDocument).toBeNull()
   })
 
-  it('creates a component from the toolbar through the simple project dialog', () => {
-    loadProject()
+  it('creates a component from the toolbar through the simple site dialog', () => {
+    loadSite()
     render(<ModulePickerDropdown />)
 
     fireEvent.click(screen.getByTestId('toolbar-add-module-btn'))
@@ -99,7 +100,7 @@ describe('ModulePickerDropdown project creation', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 
     const state = useEditorStore.getState()
-    const created = state.project?.visualComponents.find((component) => component.name === 'PricingCard')
+    const created = state.site?.visualComponents.find((component) => component.name === 'PricingCard')
     expect(created).toBeDefined()
     expect(state.activeDocument).toEqual({
       kind: 'visualComponent',

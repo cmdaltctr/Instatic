@@ -32,7 +32,7 @@ interface PanelHeaderProps {
    * Stable identifier for this panel instance — used to generate stable
    * `data-testid` attributes for the close button and for Playwright targeting.
    *
-   * Examples: "dom", "properties", "agent", "project"
+   * Examples: "dom", "properties", "agent", "site"
    * → produces: data-testid="panel-close-dom", etc.
    */
   panelId: string

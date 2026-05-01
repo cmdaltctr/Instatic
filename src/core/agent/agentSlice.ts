@@ -54,7 +54,7 @@ export interface AgentSlice {
   agentMessages: AgentMessage[]
   agentError: string | null
   agentSessionId: string | null
-  agentSessionProjectId: string | null
+  agentSessionSiteId: string | null
 
   // ── Actions ────────────────────────────────────────────────────────────────
   openAgent(): void
@@ -80,20 +80,20 @@ type EditorStoreSet = Parameters<StateCreator<EditorStore, [], [], AgentSlice>>[
 
 const AGENT_SESSION_STORAGE_PREFIX = 'pb-agent-session:'
 
-function readStoredAgentSessionId(projectId: string | null | undefined): string | null {
-  if (!projectId || typeof localStorage === 'undefined') return null
-  const sessionId = localStorage.getItem(`${AGENT_SESSION_STORAGE_PREFIX}${projectId}`)
+function readStoredAgentSessionId(siteId: string | null | undefined): string | null {
+  if (!siteId || typeof localStorage === 'undefined') return null
+  const sessionId = localStorage.getItem(`${AGENT_SESSION_STORAGE_PREFIX}${siteId}`)
   return sessionId && sessionId.trim() ? sessionId.trim() : null
 }
 
-function writeStoredAgentSessionId(projectId: string | null | undefined, sessionId: string): void {
-  if (!projectId || typeof localStorage === 'undefined') return
-  localStorage.setItem(`${AGENT_SESSION_STORAGE_PREFIX}${projectId}`, sessionId)
+function writeStoredAgentSessionId(siteId: string | null | undefined, sessionId: string): void {
+  if (!siteId || typeof localStorage === 'undefined') return
+  localStorage.setItem(`${AGENT_SESSION_STORAGE_PREFIX}${siteId}`, sessionId)
 }
 
-function clearStoredAgentSessionId(projectId: string | null | undefined): void {
-  if (!projectId || typeof localStorage === 'undefined') return
-  localStorage.removeItem(`${AGENT_SESSION_STORAGE_PREFIX}${projectId}`)
+function clearStoredAgentSessionId(siteId: string | null | undefined): void {
+  if (!siteId || typeof localStorage === 'undefined') return
+  localStorage.removeItem(`${AGENT_SESSION_STORAGE_PREFIX}${siteId}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +142,7 @@ export const createAgentSlice: StateCreator<EditorStore, [], [], AgentSlice> = (
     agentMessages: [],
     agentError: null,
     agentSessionId: null,
-    agentSessionProjectId: null,
+    agentSessionSiteId: null,
 
     // ── UI actions ───────────────────────────────────────────────────────────
     openAgent() {
@@ -164,12 +164,12 @@ export const createAgentSlice: StateCreator<EditorStore, [], [], AgentSlice> = (
     },
 
     clearAgentMessages() {
-      clearStoredAgentSessionId(get().project?.id)
+      clearStoredAgentSessionId(get().site?.id)
       set({
         agentMessages: [],
         agentError: null,
         agentSessionId: null,
-        agentSessionProjectId: null,
+        agentSessionSiteId: null,
       })
     },
 
@@ -181,15 +181,15 @@ export const createAgentSlice: StateCreator<EditorStore, [], [], AgentSlice> = (
 
       if (get().isAgentStreaming) return // one request at a time
 
-      const projectId = get().project?.id ?? null
-      const stateSessionId = get().agentSessionProjectId === projectId
+      const siteId = get().site?.id ?? null
+      const stateSessionId = get().agentSessionSiteId === siteId
         ? get().agentSessionId
         : null
-      const resumeSessionId = stateSessionId ?? readStoredAgentSessionId(projectId)
+      const resumeSessionId = stateSessionId ?? readStoredAgentSessionId(siteId)
       if (resumeSessionId && resumeSessionId !== get().agentSessionId) {
         set({
           agentSessionId: resumeSessionId,
-          agentSessionProjectId: projectId,
+          agentSessionSiteId: siteId,
         })
       }
 
@@ -453,11 +453,11 @@ export async function processStreamEvent(
     }
 
     case 'session': {
-      const projectId = get().project?.id ?? null
-      writeStoredAgentSessionId(projectId, event.sessionId)
+      const siteId = get().site?.id ?? null
+      writeStoredAgentSessionId(siteId, event.sessionId)
       set({
         agentSessionId: event.sessionId,
-        agentSessionProjectId: projectId,
+        agentSessionSiteId: siteId,
       })
       break
     }
@@ -485,7 +485,7 @@ export function buildPageContext(
   state: EditorStore,
   activePage: import('../page-tree/types').Page | undefined,
 ): PageContext {
-  if (!activePage || !state.project) {
+  if (!activePage || !state.site) {
     return {
       pageTitle: 'Untitled',
       rootNodeId: '',
@@ -525,7 +525,7 @@ export function buildPageContext(
     .sort((a, b) => a.id.localeCompare(b.id))
     .map(moduleDefinitionToAgentContext)
 
-  const classes = Object.values(state.project.classes ?? {}).map((c) => ({
+  const classes = Object.values(state.site.classes ?? {}).map((c) => ({
     id: c.id,
     name: c.name,
     styles: toSerializableRecord(c.styles ?? {}),
@@ -536,7 +536,7 @@ export function buildPageContext(
     pageTitle: activePage.title,
     rootNodeId: activePage.rootNodeId,
     activeBreakpointId: state.activeBreakpointId,
-    breakpoints: state.project.breakpoints.map((breakpoint) => ({
+    breakpoints: state.site.breakpoints.map((breakpoint) => ({
       id: breakpoint.id,
       label: breakpoint.label,
       width: breakpoint.width,
@@ -565,9 +565,9 @@ export async function buildLivePageContext(
 
 async function buildCurrentLivePageContext(get: () => EditorStore): Promise<PageContext> {
   const storeState = get()
-  const activePage = storeState.project?.pages.find(
+  const activePage = storeState.site?.pages.find(
     (p) => p.id === storeState.activePageId,
-  ) ?? storeState.project?.pages[0]
+  ) ?? storeState.site?.pages[0]
   return buildLivePageContext(storeState, activePage)
 }
 

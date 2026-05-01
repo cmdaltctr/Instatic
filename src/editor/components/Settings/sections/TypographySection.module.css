@@ -1,6 +1,6 @@
 /* TypographySection — settings for font import and type scale */
 
-.noProject {
+.noSite {
   color: var(--editor-text-subtle);
   font-size: 13px;
 }

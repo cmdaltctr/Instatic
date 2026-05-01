@@ -2,11 +2,11 @@
  * TypographySection — global font import + type scale configuration.
  *
  * - Font Import: paste a Google Fonts CSS @import URL; it will be embedded
- *   as a <link> in all exported pages.
+ *   as a <link> in all published pages.
  * - Type Scale: choose a base size (px) and a modular-scale ratio; a live
  *   preview renders all 6 canonical steps (xs → 2xl).
  *
- * Both settings persist to `project.settings` (Zustand → IndexedDB).
+ * Both settings persist to `site.settings` through CMS draft autosave.
  *
  * Guideline #326 — Phase 6 Settings Modal: Section-by-Section UX Patterns.
  */
@@ -44,21 +44,21 @@ function computeSteps(ts: TypeScale) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TypographySection() {
-  const project = useEditorStore((s) => s.project)
-  const updateProjectSettings = useEditorStore((s) => s.updateProjectSettings)
+  const site = useEditorStore((s) => s.site)
+  const updateSiteSettings = useEditorStore((s) => s.updateSiteSettings)
 
-  if (!project) {
-    return <div className={styles.noProject}>No project loaded.</div>
+  if (!site) {
+    return <div className={styles.noSite}>Loading site...</div>
   }
 
-  const { typeScale, fontImportUrl } = project.settings
+  const { typeScale, fontImportUrl } = site.settings
   const steps = computeSteps(typeScale)
 
   return (
     <div>
       <h3 className={s.sectionHeading}>Typography</h3>
       <p className={s.sectionDescription}>
-        Global font imports and modular type scale for the project.
+        Global font imports and modular type scale for the site.
       </p>
 
       {/* ── Font Import ───────────────────────────────────────────────────── */}
@@ -79,7 +79,7 @@ export function TypographySection() {
           defaultValue={fontImportUrl ?? ''}
           placeholder="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
           onBlur={(e) =>
-            updateProjectSettings({ fontImportUrl: e.target.value.trim() || undefined })
+            updateSiteSettings({ fontImportUrl: e.target.value.trim() || undefined })
           }
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
         />
@@ -114,7 +114,7 @@ export function TypographySection() {
               onBlur={(e) => {
                 const v = Number(e.target.value)
                 if (v >= 10 && v <= 32) {
-                  updateProjectSettings({ typeScale: { ...typeScale, baseSize: v } })
+                  updateSiteSettings({ typeScale: { ...typeScale, baseSize: v } })
                 }
               }}
               onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
@@ -131,7 +131,7 @@ export function TypographySection() {
               id="typo-ratio"
               value={typeScale.ratio}
               onChange={(e) =>
-                updateProjectSettings({
+                updateSiteSettings({
                   typeScale: { ...typeScale, ratio: parseFloat(e.target.value) },
                 })
               }

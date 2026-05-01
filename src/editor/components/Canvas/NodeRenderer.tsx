@@ -18,7 +18,7 @@ import { useEditorStore, selectActiveCanvasPage } from '../../../core/editor-sto
 import { resolveProps } from '../../../core/page-tree/selectors'
 import { registry } from '../../../core/module-engine/registry'
 import type { ClassPreviewAssignment } from '../../../core/editor-store/slices/classSlice'
-import { Icon } from '../../../ui/icons/Icon'
+import { WarningDiamondIcon } from '@ui/icons/icons/warning-diamond'
 import { ModuleSandboxFrame } from './ModuleSandboxFrame'
 import styles from './NodeRenderer.module.css'
 
@@ -97,7 +97,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
         className={styles.unknownModule}
         title={`Unknown module: ${node.moduleId}`}
       >
-        <Icon name="warning-diamond" size={14} /> Unknown module: {node.moduleId}
+        <WarningDiamondIcon size={14} /> Unknown module: {node.moduleId}
       </div>
     )
   }

@@ -1,5 +1,5 @@
 /**
- * pathValidation — ProjectFile path safety checks.
+ * pathValidation — SiteFile path safety checks.
  *
  * Architecture source: Contribution #595 §1.4 + msg #1844 amendments.
  *
@@ -43,7 +43,7 @@ export function normalizePath(path: string): string {
 }
 
 /**
- * Return true if `path` is safe to use as a ProjectFile path.
+ * Return true if `path` is safe to use as a SiteFile path.
  * The caller is responsible for normalizing the path first via normalizePath().
  *
  * @param path — should already be normalized (no `.` segments)

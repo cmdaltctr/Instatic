@@ -26,7 +26,12 @@ import { useRef, useEffect, useCallback, memo } from 'react'
 import { useEditorStore } from '../../../core/editor-store/store'
 import { stripAgentActionBlocks } from '../../../core/agent/actionBlocks'
 import type { AgentMessage, AgentToolCall } from '../../../core/agent/types'
-import { Icon } from '../../../ui/icons/Icon'
+import { DeleteIcon } from '@ui/icons/icons/delete'
+import { SquareIcon } from '@ui/icons/icons/square'
+import { LoaderIcon } from '@ui/icons/icons/loader'
+import { CheckIcon } from '@ui/icons/icons/check'
+import { CircleAlertIcon } from '@ui/icons/icons/circle-alert'
+import { AiBoxIcon } from '@ui/icons/icons/ai-box'
 import { PanelHeader } from '../shared/PanelHeader'
 import { Button } from '@ui/components/Button'
 import { Textarea } from '@ui/components/Input'
@@ -162,7 +167,7 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
             title="Clear conversation"
             aria-label="Clear conversation"
           >
-            <Icon name="delete" size={14} />
+            <DeleteIcon size={14} />
           </Button>
         )}
         {isStreaming && (
@@ -207,7 +212,7 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
             onClick={abortAgent}
             fullWidth
           >
-            <Icon name="square" size={12} /> Stop
+            <SquareIcon size={12} /> Stop
           </Button>
         ) : (
           <form onSubmit={handleSubmit} className={styles.inputForm}>
@@ -286,7 +291,6 @@ function ToolCallBadge({ toolCall }: { toolCall: AgentToolCall }) {
   const isPending = toolCall.status === 'pending'
   const isSuccess = toolCall.status === 'success'
 
-  const iconName = isPending ? 'loader' : isSuccess ? 'check' : 'x'
   const iconClass = isPending
     ? styles.toolCallIconPending
     : isSuccess
@@ -306,7 +310,15 @@ function ToolCallBadge({ toolCall }: { toolCall: AgentToolCall }) {
       aria-label={statusLabel}
       className={styles.toolCallBadge}
     >
-      <span className={iconClass} aria-hidden="true"><Icon name={iconName} size={10} /></span>
+      <span className={iconClass} aria-hidden="true">
+        {isPending ? (
+          <LoaderIcon size={10} />
+        ) : isSuccess ? (
+          <CheckIcon size={10} />
+        ) : (
+          <CircleAlertIcon size={10} />
+        )}
+      </span>
       <span className={styles.toolCallType} aria-hidden="true">
         {displayType}
       </span>
@@ -343,7 +355,7 @@ function formatActionLabel(actionType: string, params: unknown): string {
 function EmptyState() {
   return (
     <div className={styles.emptyState}>
-      <Icon name="ai-box" size={28} color="var(--editor-text-subtle)" className={styles.emptyIcon} />
+      <AiBoxIcon size={28} color="var(--editor-text-subtle)" className={styles.emptyIcon} />
       <p className={styles.emptyText}>
         Describe what you want to build and I'll do it for you.
       </p>

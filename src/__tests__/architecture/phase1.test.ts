@@ -17,17 +17,17 @@
  *    Cache must expose `get()`, `set()`, `clear()`, `invalidateModule()`, `size`.
  *    (Guideline #307 Hot Path 2)
  *
- * 3. `renderCache.clear()` is called inside `projectSlice.loadProject()`.
- *    Prevents stale HTML from a previous project bleeding into the canvas.
+ * 3. `renderCache.clear()` is called inside `siteSlice.loadSite()`.
+ *    Prevents stale HTML from a previous site bleeding into the canvas.
  *    (Guideline #307 / Architect message #1216 — Critical integration note)
  *
  * 4. `collectModuleCSS` / `CssCollector.add()` deduplicates by moduleId (O(modules)).
  *    Each moduleId contributes at most one CSS entry regardless of node count.
  *    (Guideline #307 Hot Path 4)
  *
- * 5. `base.video` is registered — all 9 Guideline #226 base modules present.
+ * 5. `base.video` is registered.
  *
- * 6. `base.columns` is registered — all 9 Guideline #226 base modules present.
+ * 6. Retired layout-only modules are not registered as base modules.
  *
  * @see Guideline #307 — Phase 1 Module Engine Core Performance Spec
  * @see Contribution #422 — Performance Spec (Performance Engineer)
@@ -41,7 +41,7 @@ import { join } from 'path'
 
 const SRC_ROOT = join(import.meta.dir, '../../')
 const RENDER_CACHE_PATH = join(SRC_ROOT, 'core/engine/renderCache.ts')
-const PROJECT_SLICE_PATH = join(SRC_ROOT, 'core/editor-store/slices/projectSlice.ts')
+const PROJECT_SLICE_PATH = join(SRC_ROOT, 'core/editor-store/slices/siteSlice.ts')
 const CSS_COLLECTOR_PATH = join(SRC_ROOT, 'core/publisher/cssCollector.ts')
 const REGISTRY_PATH = join(SRC_ROOT, 'core/module-engine/registry.ts')
 
@@ -101,25 +101,25 @@ describe('Phase 1 Gate 2 — renderCache API (Guideline #307 Hot Path 2)', () =>
 })
 
 // ---------------------------------------------------------------------------
-// Gate 3 — renderCache.clear() called inside loadProject()
+// Gate 3 — renderCache.clear() called inside loadSite()
 // ---------------------------------------------------------------------------
 
-describe('Phase 1 Gate 3 — renderCache.clear() in loadProject() (Guideline #307 / message #1216)', () => {
-  it('projectSlice.ts imports renderCache', () => {
+describe('Phase 1 Gate 3 — renderCache.clear() in loadSite() (Guideline #307 / message #1216)', () => {
+  it('siteSlice.ts imports renderCache', () => {
     expect(existsSync(PROJECT_SLICE_PATH)).toBe(true)
     const src = readFileSync(PROJECT_SLICE_PATH, 'utf-8')
     expect(src).toMatch(/renderCache/)
   })
 
-  it('loadProject() action calls renderCache.clear()', () => {
+  it('loadSite() action calls renderCache.clear()', () => {
     const src = readFileSync(PROJECT_SLICE_PATH, 'utf-8')
-    // Find the loadProject block and verify renderCache.clear() appears before/inside it
-    // We check that both loadProject and renderCache.clear() are present together in the file
-    expect(src).toMatch(/loadProject/)
+    // Find the loadSite block and verify renderCache.clear() appears before/inside it
+    // We check that both loadSite and renderCache.clear() are present together in the file
+    expect(src).toMatch(/loadSite/)
     expect(src).toMatch(/renderCache\.clear\(\)/)
     // Verify they appear near each other (within 15 lines) using a broad regex
-    const loadProjectBlock = src.match(/loadProject[^}]*\{[^}]*renderCache\.clear[^}]*\}/s)
-    expect(loadProjectBlock).not.toBeNull()
+    const loadSiteBlock = src.match(/loadSite[^}]*\{[^}]*renderCache\.clear[^}]*\}/s)
+    expect(loadSiteBlock).not.toBeNull()
   })
 })
 
@@ -152,18 +152,23 @@ describe('Phase 1 Gate 4 — CSS deduplication O(modules) (Guideline #307 Hot Pa
 })
 
 // ---------------------------------------------------------------------------
-// Gate 5 & 6 — base.video and base.columns are registered
+// Gate 5 & 6 — base.video remains registered; retired layout modules are absent
 // ---------------------------------------------------------------------------
 
-describe('Phase 1 Gates 5 & 6 — base.video and base.columns registered (Guideline #226)', () => {
+describe('Phase 1 Gates 5 & 6 — base.video registered and retired layout modules absent', () => {
   it('base.video module file exists', () => {
     const videoPath = join(SRC_ROOT, 'modules/base/video/index.tsx')
     expect(existsSync(videoPath)).toBe(true)
   })
 
-  it('base.columns module file exists', () => {
-    const columnsPath = join(SRC_ROOT, 'modules/base/columns/index.tsx')
-    expect(existsSync(columnsPath)).toBe(true)
+  it('layout-only base module files are removed', () => {
+    for (const retiredPath of [
+      join(SRC_ROOT, 'modules/base/columns/index.tsx'),
+      join(SRC_ROOT, 'modules/base/spacer/index.tsx'),
+      join(SRC_ROOT, 'modules/base/divider/index.tsx'),
+    ]) {
+      expect(existsSync(retiredPath)).toBe(false)
+    }
   })
 
   it('base/index.ts registers base.video', () => {
@@ -174,10 +179,10 @@ describe('Phase 1 Gates 5 & 6 — base.video and base.columns registered (Guidel
     expect(src).toMatch(/video/)
   })
 
-  it('base/index.ts registers base.columns', () => {
+  it('base/index.ts does not register layout-only modules', () => {
     const indexPath = join(SRC_ROOT, 'modules/base/index.ts')
     const src = readFileSync(indexPath, 'utf-8')
-    expect(src).toMatch(/columns/)
+    expect(src).not.toMatch(/columns|spacer|divider/)
   })
 })
 
@@ -198,14 +203,6 @@ describe('Phase 1 Gate 7 — Constraint #310: css is props-independent', () => {
     // Also acceptable: no css field at all, or css: string literal
   })
 
-  it('base.columns render() css field does not interpolate props.*', () => {
-    const columnsPath = join(SRC_ROOT, 'modules/base/columns/index.tsx')
-    const src = readFileSync(columnsPath, 'utf-8')
-    const cssFieldMatch = src.match(/css:\s*`([^`]+)`/)
-    if (cssFieldMatch) {
-      expect(cssFieldMatch[1]).not.toMatch(/\$\{.*props/)
-    }
-  })
 })
 
 // ---------------------------------------------------------------------------

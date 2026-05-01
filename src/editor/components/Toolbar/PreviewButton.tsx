@@ -4,13 +4,13 @@
  * WCAG 2.5.5: 44×44px minimum touch target.
  */
 import { useEditorStore } from '@core/editor-store/store'
-import { Icon } from '../../../ui/icons/Icon'
+import { EyeIcon } from '@ui/icons/icons/eye'
 import { Button } from '@ui/components/Button'
 
 export function PreviewButton() {
   const openPreview = useEditorStore((s) => s.openPreview)
-  const project = useEditorStore((s) => s.project)
-  const disabled = !project
+  const site = useEditorStore((s) => s.site)
+  const disabled = !site
 
   return (
     <Button
@@ -22,7 +22,7 @@ export function PreviewButton() {
       disabled={disabled}
       data-testid="toolbar-preview-btn"
     >
-      <Icon name="eye" size={14} aria-hidden="true" />
+      <EyeIcon size={14} aria-hidden="true" />
       <span>Preview</span>
     </Button>
   )

@@ -4,24 +4,24 @@
  * Architecture source: Contribution #595 §6
  *
  * All functions here are pure (no store dependency) and operate on
- * ProjectFile[] directly.  Consumers import these and call them from
+ * SiteFile[] directly.  Consumers import these and call them from
  * within React selectors or test code.
  *
- * Dependency direction: this module MUST NOT import from editor/, page-tree/,
- * or react-publisher/.  It is a pure data utility.
+ * Dependency direction: this module MUST NOT import from editor/ or page-tree/.
+ * It is a pure data utility.
  */
 
-import type { ProjectFile, ProjectFileType, FileTreeNode } from './types'
+import type { SiteFile, SiteFileType, FileTreeNode } from './types'
 
 // ---------------------------------------------------------------------------
 // getFileByPath
 // ---------------------------------------------------------------------------
 
 /**
- * Return the first ProjectFile whose path matches exactly, or undefined.
- * O(n) — acceptable for typical project file counts (<200).
+ * Return the first SiteFile whose path matches exactly, or undefined.
+ * O(n) — acceptable for typical site file counts (<200).
  */
-export function getFileByPath(files: ProjectFile[], path: string): ProjectFile | undefined {
+export function getFileByPath(files: SiteFile[], path: string): SiteFile | undefined {
   return files.find((f) => f.path === path)
 }
 
@@ -30,9 +30,9 @@ export function getFileByPath(files: ProjectFile[], path: string): ProjectFile |
 // ---------------------------------------------------------------------------
 
 /**
- * Return all ProjectFiles of the given type, preserving array order.
+ * Return all SiteFiles of the given type, preserving array order.
  */
-export function getFilesByType(files: ProjectFile[], type: ProjectFileType): ProjectFile[] {
+export function getFilesByType(files: SiteFile[], type: SiteFileType): SiteFile[] {
   return files.filter((f) => f.type === type)
 }
 
@@ -41,7 +41,7 @@ export function getFilesByType(files: ProjectFile[], type: ProjectFileType): Pro
 // ---------------------------------------------------------------------------
 
 /**
- * Convert a flat ProjectFile[] into a nested FileTreeNode[] for display.
+ * Convert a flat SiteFile[] into a nested FileTreeNode[] for display.
  *
  * Algorithm:
  * - Sort files alphabetically for consistent, deterministic output.
@@ -54,7 +54,7 @@ export function getFilesByType(files: ProjectFile[], type: ProjectFileType): Pro
  * are returned directly.  Sort order within each directory: alphabetical by
  * name (directories and files mixed — callers may re-sort if desired).
  */
-export function buildFileTree(files: ProjectFile[]): FileTreeNode[] {
+export function buildFileTree(files: SiteFile[]): FileTreeNode[] {
   // Synthesized directory nodes, keyed by their full path
   const dirNodes = new Map<string, FileTreeNode>()
 

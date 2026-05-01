@@ -8,7 +8,7 @@ import '../../modules/base/index'
 beforeEach(() => {
   localStorage.clear()
   useEditorStore.setState({
-    project: null,
+    site: null,
     activePageId: null,
     selectedNodeId: null,
     hoveredNodeId: null,
@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 function renderInsideCanvasClickBoundary() {
-  useEditorStore.getState().createProject('Test Project')
+  useEditorStore.getState().createSite('Test SiteDocument')
 
   render(
     <div onClick={() => useEditorStore.getState().clearSelection()}>

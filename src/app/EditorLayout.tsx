@@ -1,9 +1,9 @@
 /**
- * EditorLayout — root layout for the editor route /editor/:projectId
+ * EditorLayout — root layout for the self-hosted CMS editor.
  *
  * Editor Overlay Layout (Guideline #410 — motion-editor style):
  *   ┌─────────────────────────────── Toolbar ──────────────────────────────────┐  z-60
- *   │ [ProjectName] [Undo/Redo] [+ Add] ──── [Zoom] [Save] [Publish] [⚙] [✦] │
+ *   │ [SiteName] [Undo/Redo] [+ Add] ─────── [Zoom] [Save] [Publish] [⚙] [✦] │
  *   ├──────────────────────────── Canvas (full-bleed) ─────────────────────────┤
  *   │  [DOM Tree Panel ▓]     canvas          [Properties Panel ▓]            │
  *   │  position: absolute overlays (z-50)     [AI Panel ▓] (bottom-right)     │
@@ -13,17 +13,16 @@
  * - DomPanel (Layers) — top-left
  * - PropertiesPanel — top-right
  * - AgentPanel (AI) — bottom-right, independent visibility
- * - ProjectExplorerPanel — project concepts: pages, components, styles, assets, scripts
+ * - Site explorer panel — site concepts: pages, components, styles, scripts
  * - CodeEditorPanel (Task #432) — center-stage, code editing
  *
- * J12: usePersistence handles load-from-IndexedDB on mount, preference-gated
+ * J12: usePersistence handles CMS draft load on mount, preference-gated
  * 30s auto-save, toolbar Save, and Cmd+S immediate save.
  *
  * Agent Panel: Phase D AI assistant — self-contained floating panel (Guideline #410).
  * Authenticates via ambient Claude Code credentials through the local Bun server.
  * No env vars, no API keys, no endpoint configuration required (Constraint #385).
  */
-import { useParams } from 'react-router-dom'
 import { CanvasRoot } from '@editor/components/Canvas'
 import { PropertiesPanel } from '@editor/components/PropertiesPanel'
 import { CodeEditorPanel } from '@editor/components/CodeEditor'
@@ -34,39 +33,39 @@ import { SettingsModal } from '@editor/components/Settings'
 import { usePersistence } from '@editor/hooks/usePersistence'
 import { useEditorLayoutPersistence } from '@editor/hooks/useEditorLayoutPersistence'
 import { selectRightSidebarExpanded, useEditorStore } from '@core/editor-store/store'
-import { cmsAdapter, localAdapter } from '@core/persistence'
+import { cmsAdapter } from '@core/persistence'
+import { AppLoadingScreen } from './AppLoadingScreen'
 import styles from './EditorLayout.module.css'
 
-interface EditorLayoutProps {
-  persistenceMode?: 'local' | 'cms'
-}
-
-export default function EditorLayout({ persistenceMode = 'local' }: EditorLayoutProps) {
-  const { projectId } = useParams<{ projectId: string }>()
+export default function EditorLayout() {
+  const site = useEditorStore((s) => s.site)
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
   const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
 
-  const persistenceAdapter = persistenceMode === 'cms' ? cmsAdapter : localAdapter
-  const requestedProjectId = persistenceMode === 'cms' ? 'default' : projectId
-  const persistenceOptions = persistenceMode === 'cms'
-    ? { rememberLastProject: false, markNewProjectUnsaved: true }
-    : undefined
-
   // J12 — wire persistence: load, auto-save, toolbar Save, Cmd+S.
-  const persistence = usePersistence(
-    requestedProjectId,
-    persistenceAdapter,
-    persistenceOptions,
-  )
+  const persistence = usePersistence('default', cmsAdapter, { markNewSiteUnsaved: true })
   useEditorLayoutPersistence()
+
+  if (!site) {
+    if (persistence.saveStatus.state === 'error') {
+      return (
+        <main className={styles.bootstrapError} role="alert">
+          <h1>Could not load CMS site</h1>
+          <p>{persistence.saveStatus.message ?? 'Reload the admin page and try again.'}</p>
+        </main>
+      )
+    }
+
+    return <AppLoadingScreen />
+  }
 
   return (
     <div className={styles.shell}>
       {/* ── Top toolbar (z-60, Guideline #374) ───────────────────────────── */}
       <Toolbar
-        onSave={persistence.saveProject}
+        onSave={persistence.saveSite}
         saveStatus={persistence.saveStatus}
-        publishEnabled={persistenceMode === 'cms'}
+        publishEnabled
       />
 
       {/* ── Canvas + floating overlay panels ──────────────────────────────── */}
@@ -76,7 +75,7 @@ export default function EditorLayout({ persistenceMode = 'local' }: EditorLayout
         flex is kept so CanvasRoot's flex:1 fills the full width.
       */}
       <div className={styles.editorBody}>
-        <LeftSidebar mediaMode={persistenceMode === 'cms' ? 'cms' : 'project'} />
+        <LeftSidebar />
         <div
           className={'relative ' + styles.canvasStage + (rightSidebarExpanded ? ` ${styles.canvasStageRightSidebarOpen}` : '')}
           data-right-sidebar-expanded={rightSidebarExpanded ? 'true' : 'false'}
@@ -85,11 +84,12 @@ export default function EditorLayout({ persistenceMode = 'local' }: EditorLayout
           <CanvasRoot />
           {/* Properties can be unpinned into the floating draggable overlay. */}
           {propertiesPanelMode === 'floating' && <PropertiesPanel variant="floating" />}
-          {/* Task #432 — Code Editor Panel: center-stage overlay (Guideline #410, UX Spec #612) */}
-          <CodeEditorPanel />
         </div>
         <RightSidebar />
       </div>
+
+      {/* Code editor/media preview: viewport overlay, not constrained by the canvas stage. */}
+      <CodeEditorPanel />
 
       {/* J10 — Settings Modal (portal-rendered, listens to store.settingsModalOpen) */}
       <SettingsModal />

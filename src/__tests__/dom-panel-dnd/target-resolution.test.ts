@@ -28,7 +28,7 @@ function page(nodes: Record<string, PageNode>, rootNodeId = 'root'): Page {
 }
 
 const canHaveChildren = (moduleId: string) =>
-  moduleId === 'base.root' || moduleId === 'base.container' || moduleId === 'base.columns'
+  moduleId === 'base.root' || moduleId === 'base.container'
 
 const meta = (nodeId: string, top = 100, height = 30): DomDropRowMeta => ({
   nodeId,
@@ -83,12 +83,10 @@ describe('DOMPanel DnD target resolution', () => {
     })
   })
 
-  it('resolves inside append into containers and columns', () => {
+  it('resolves inside append into containers', () => {
     const p = page({
-      root: node('root', 'base.root', ['container', 'columns', 'leaf']),
+      root: node('root', 'base.root', ['container', 'leaf']),
       container: node('container', 'base.container', []),
-      columns: node('columns', 'base.columns', ['inside']),
-      inside: node('inside', 'base.heading'),
       leaf: node('leaf', 'base.paragraph'),
     })
 
@@ -107,20 +105,6 @@ describe('DOMPanel DnD target resolution', () => {
       overId: 'container',
     })
 
-    expect(resolveDomDropTarget({
-      page: p,
-      draggedId: 'leaf',
-      overId: 'columns',
-      zone: 'inside',
-      canHaveChildren,
-    })).toEqual({
-      draggedId: 'leaf',
-      parentId: 'columns',
-      index: 1,
-      position: 'inside',
-      slot: 'default',
-      overId: 'columns',
-    })
   })
 
   it('normalizes same-parent insertion indices after source removal', () => {

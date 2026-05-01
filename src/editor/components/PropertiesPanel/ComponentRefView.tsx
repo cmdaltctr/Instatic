@@ -5,7 +5,7 @@
  *
  * When a visualComponentRef node is selected, this view replaces the normal
  * Properties tab. It shows:
- *   - Header: <Icon/> VC name + "Open in canvas" link
+ *   - Header: component icon + VC name + "Open in canvas" link
  *   - One row per VCParam, in vc.params declaration order
  *   - Each row: param name | value editor | status pill (Default / Overridden)
  *   - "Reset" button visible only on overridden params
@@ -23,7 +23,10 @@
 
 import { useCallback } from 'react'
 import { useEditorStore } from '../../../core/editor-store/store'
-import { Icon } from '../../../ui/icons/Icon'
+import { WarningDiamondIcon } from '@ui/icons/icons/warning-diamond'
+import { BracesIcon } from '@ui/icons/icons/braces'
+import { ExternalLinkIcon } from '@ui/icons/icons/external-link'
+import { UndoIcon } from '@ui/icons/icons/undo'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
@@ -46,7 +49,7 @@ export function ComponentRefView({ nodeId, componentId, propOverrides }: Compone
 
   const vc = useEditorStore(
     useCallback(
-      (s) => s.project?.visualComponents?.find((v) => v.id === componentId) ?? null,
+      (s) => s.site?.visualComponents?.find((v) => v.id === componentId) ?? null,
       [componentId],
     ),
   )
@@ -71,7 +74,7 @@ export function ComponentRefView({ nodeId, componentId, propOverrides }: Compone
   if (!vc) {
     return (
       <div className={styles.unknownVC}>
-        <Icon name="warning-diamond" size={14} color="currentColor" aria-hidden="true" />
+        <WarningDiamondIcon size={14} color="currentColor" aria-hidden="true" />
         <p>Unknown component: {componentId}</p>
       </div>
     )
@@ -82,7 +85,7 @@ export function ComponentRefView({ nodeId, componentId, propOverrides }: Compone
       {/* ── Header: VC name + Open in canvas link ──────────────────────── */}
       <div className={styles.header}>
         <span className={styles.headerIcon} aria-hidden="true">
-          <Icon name="braces" size={12} color="currentColor" />
+          <BracesIcon size={12} color="currentColor" />
         </span>
         <span className={styles.headerName}>{vc.name}</span>
         <Button
@@ -91,7 +94,7 @@ export function ComponentRefView({ nodeId, componentId, propOverrides }: Compone
           onClick={handleOpenInCanvas}
           title="Open component in canvas"
         >
-          <Icon name="external-link" size={10} color="currentColor" aria-hidden="true" />
+          <ExternalLinkIcon size={10} color="currentColor" aria-hidden="true" />
           Open in canvas
         </Button>
       </div>
@@ -146,7 +149,7 @@ export function ComponentRefView({ nodeId, componentId, propOverrides }: Compone
                     title="Reset to default"
                     aria-label={`Reset ${param.name} to default`}
                   >
-                    <Icon name="undo" size={10} color="currentColor" aria-hidden="true" />
+                    <UndoIcon size={10} color="currentColor" aria-hidden="true" />
                   </Button>
                 )}
               </div>

@@ -277,7 +277,7 @@ export function runModuleConformanceSuite(def: AnyModuleDefinition): void {
 
     // ---- Security contract — URL prop call verification (Constraint #211, Guideline #231) ----
     //
-    // For every 'url' or 'image' typed prop in the schema, render with dangerous
+    // For every URL-bearing prop type in the schema, render with dangerous
     // payloads injected and verify the output does NOT contain the unsafe scheme.
     // This confirms safeUrl() (or equivalent) is CALLED at render time — not just
     // imported. The base.video bug (#445) would have been caught by this test.
@@ -289,13 +289,13 @@ export function runModuleConformanceSuite(def: AnyModuleDefinition): void {
     // When the module does NOT render the URL in a given configuration, the unsafe
     // scheme won't appear in the output anyway — the test passes correctly.
 
-    const URL_PROP_TYPES = new Set<PropertyControl['type']>(['url', 'image'])
+    const URL_PROP_TYPES = new Set<PropertyControl['type']>(['url', 'image', 'media'])
     const urlPropEntries = Object.entries(def.schema).filter(
       ([, ctrl]) => URL_PROP_TYPES.has(ctrl.type)
     )
 
     if (urlPropEntries.length > 0) {
-      it('url/image-typed props are sanitised at render time — unsafe schemes rejected (Constraint #211)', () => {
+      it('URL-bearing props are sanitised at render time — unsafe schemes rejected (Constraint #211)', () => {
         // Vectors that isSafeUrl() must block
         const UNSAFE_VECTORS: Array<{ scheme: string; payload: string }> = [
           { scheme: 'javascript:', payload: 'javascript:alert(1)' },

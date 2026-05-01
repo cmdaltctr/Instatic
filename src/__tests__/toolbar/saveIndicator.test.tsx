@@ -4,12 +4,12 @@ import { cleanup, fireEvent, render, screen, act } from '@testing-library/react'
 import { SaveIndicator } from '../../editor/components/Toolbar/SaveIndicator'
 import { EDITOR_PREFS_KEY } from '../../editor/preferences/editorPreferences'
 import { useEditorStore } from '../../core/editor-store/store'
-import { makeProject } from '../fixtures'
+import { makeSite } from '../fixtures'
 
 function resetStore() {
   localStorage.clear()
   useEditorStore.setState({
-    project: makeProject(),
+    site: makeSite(),
     hasUnsavedChanges: false,
   } as Parameters<typeof useEditorStore.setState>[0])
 }
@@ -34,7 +34,7 @@ describe('SaveIndicator — manual save mode', () => {
 
     render(<SaveIndicator onSave={() => {}} />)
 
-    expect(screen.getByRole('button', { name: /save project/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /save site/i })).toBeDefined()
     expect(screen.queryByText('Unsaved changes')).toBeNull()
   })
 
@@ -53,7 +53,7 @@ describe('SaveIndicator — manual save mode', () => {
     )
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /save project/i }))
+      fireEvent.click(screen.getByRole('button', { name: /save site/i }))
     })
 
     expect(saveCalls).toBe(1)

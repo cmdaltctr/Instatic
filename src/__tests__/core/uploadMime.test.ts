@@ -5,7 +5,7 @@
  * ─────────────────────
  * Architecture Amendment #613 §A.1 requires a MIME-driven helper at
  * `src/core/files/upload.ts` that maps browser File objects (mime type + path)
- * to the correct `ProjectFileType` and content strategy.
+ * to the correct `SiteFileType` and content strategy.
  *
  * User directive #1870: "upload files there, upload images there, create
  * components which we can open in the canvas" — the detection logic is the
@@ -43,8 +43,8 @@
  *
  * @see src/core/files/upload.ts          — not yet implemented (will go green)
  * @see Contribution #613 §A.1            — MIME detection spec
- * @see src/core/files/types.ts           — ProjectFileType
- * @see Project Explorer asset upload
+ * @see src/core/files/types.ts           — SiteFileType
+ * @see Site Explorer asset upload
  * @see Constraint #436 — isSafePath() must be called at slice write boundary
  */
 
@@ -54,7 +54,7 @@ import { describe, it, expect } from 'bun:test'
 // Import under test — will fail (module not found) until upload.ts exists
 // ---------------------------------------------------------------------------
 
-let detectMimeType: (mimeType: string, filePath: string) => import('../../core/files/types').ProjectFileType
+let detectMimeType: (mimeType: string, filePath: string) => import('../../core/files/types').SiteFileType
 let checkSizeLimit: (sizeBytes: number) => { ok: boolean; level: 'none' | 'soft' | 'hard'; message?: string }
 
 try {

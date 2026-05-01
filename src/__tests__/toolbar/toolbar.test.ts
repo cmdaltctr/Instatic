@@ -14,7 +14,7 @@
  * canvas/accessibility.test.tsx) so no JSDOM or browser is needed.
  *
  * Store-dependent tests use the actual Zustand store (reset between tests
- * via createProject / clearProject) rather than mocks — this catches real
+ * via createSite / clearSite) rather than mocks — this catches real
  * integration issues between toolbar actions and store state.
  */
 
@@ -170,13 +170,13 @@ describe('SaveIndicator — state display', () => {
     expect(src).toContain('saveStatus={persistence.saveStatus}')
   })
 
-  it('EditorLayout marks a fresh CMS project as unsaved until the first save', () => {
+  it('EditorLayout marks a fresh cms site as unsaved until the first save', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
       new URL('../../app/EditorLayout.tsx', import.meta.url),
       'utf-8',
     )
-    expect(src).toContain('markNewProjectUnsaved: true')
+    expect(src).toContain('markNewSiteUnsaved: true')
   })
 })
 
@@ -208,7 +208,6 @@ function filterModules(
 const MOCK_REGISTRY: Record<string, Array<{ id: string; name: string }>> = {
   Layout: [
     { id: 'base.container', name: 'Container' },
-    { id: 'base.spacer', name: 'Spacer' },
   ],
   Typography: [
     { id: 'base.text', name: 'Text' },
@@ -223,7 +222,7 @@ describe('ModulePickerDropdown — search filter', () => {
   it('returns all modules when query is empty', () => {
     const result = filterModules(MOCK_REGISTRY, '')
     expect(Object.keys(result)).toHaveLength(3)
-    expect(result['Layout']).toHaveLength(2)
+    expect(result['Layout']).toHaveLength(1)
     expect(result['Typography']).toHaveLength(1)
   })
 
@@ -242,7 +241,7 @@ describe('ModulePickerDropdown — search filter', () => {
 
   it('filters by category name', () => {
     const result = filterModules(MOCK_REGISTRY, 'layout')
-    expect(result['Layout']).toHaveLength(2)
+    expect(result['Layout']).toHaveLength(1)
     expect(Object.keys(result)).toHaveLength(1)
   })
 
@@ -254,13 +253,13 @@ describe('ModulePickerDropdown — search filter', () => {
   it('is case-insensitive for all match types', () => {
     expect(filterModules(MOCK_REGISTRY, 'BUTTON')['Interactive']).toHaveLength(1)
     expect(filterModules(MOCK_REGISTRY, 'TEXT')['Typography']).toHaveLength(1)
-    expect(filterModules(MOCK_REGISTRY, 'LAYOUT')['Layout']).toHaveLength(2)
+    expect(filterModules(MOCK_REGISTRY, 'LAYOUT')['Layout']).toHaveLength(1)
   })
 
   it('trims whitespace from query before filtering', () => {
-    const result = filterModules(MOCK_REGISTRY, '  spacer  ')
+    const result = filterModules(MOCK_REGISTRY, '  container  ')
     expect(result['Layout']).toHaveLength(1)
-    expect(result['Layout'][0].id).toBe('base.spacer')
+    expect(result['Layout'][0].id).toBe('base.container')
   })
 
   it('partial match works (prefix, suffix, substring)', () => {
@@ -447,7 +446,7 @@ describe('Toolbar — structural requirements', () => {
     )
     expect(src).toContain('data-testid="toolbar-add-page-action"')
     expect(src).toContain('data-testid="toolbar-add-component-action"')
-    expect(src).toContain('ProjectCreateDialog')
+    expect(src).toContain('SiteCreateDialog')
     expect(src).not.toContain('NewFileModal')
     expect(src).not.toContain('src/pages/')
     expect(src).not.toContain('src/components/')
@@ -530,9 +529,9 @@ describe('Toolbar — structural requirements', () => {
     )
     expect(src).toContain("import { Toolbar }")
     expect(src).toContain('const persistence = usePersistence(')
-    expect(src).toContain('requestedProjectId')
-    expect(src).toContain('persistenceAdapter')
-    expect(src).toContain('publishEnabled={persistenceMode === \'cms\'}')
+    expect(src).toContain("'default'")
+    expect(src).toContain('cmsAdapter')
+    expect(src).toContain('publishEnabled')
   })
 
   it('touch targets: all toolbar buttons have a defined height (compact density per Guideline #357)', () => {
@@ -630,51 +629,6 @@ describe('ModulePickerDropdown — ArrowDown keyboard bridge (WCAG SC 2.1.1)', (
     expect(src).toContain('handleMenuKeyDown')
     // handleMenuKeyDown must be attached to the menu container (onKeyDown prop)
     expect(src).toContain('onKeyDown={handleMenuKeyDown}')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// 8 — Dashboard delete button touch target (WCAG SC 2.5.5)
-//     Regression test for the violation found in UX Review #343 (#999).
-//
-//     Bug: Dashboard delete button had padding: '2px 4px' — approximately
-//     18×26px, far below the 44px minimum touch target. The Security Auditor
-//     also flagged this in message #997 ("padding: '2px 4px' is far below
-//     the 44px minimum"). Fixed in this contribution.
-// ---------------------------------------------------------------------------
-
-describe('Dashboard — delete button touch target (WCAG SC 2.5.5)', () => {
-  const { readFileSync, existsSync } = require('fs')
-  const tsxUrl = new URL('../../app/Dashboard.tsx', import.meta.url)
-  const cssUrl = new URL('../../app/Dashboard.module.css', import.meta.url)
-  const src = readFileSync(tsxUrl, 'utf-8')
-  // Post-Task #399: styles move to CSS module — check both sources for constraints
-  const cssModule = existsSync(cssUrl.pathname) ? readFileSync(cssUrl, 'utf-8') : ''
-  const combined = src + '\n' + cssModule
-
-  it('delete action uses the shared 44px Button size (WCAG 2.5.5)', () => {
-    const deleteActionStart = src.indexOf('aria-label={`Delete ${project.name}`}')
-    const deleteActionBlock = src.slice(deleteActionStart - 400, deleteActionStart + 400)
-
-    expect(deleteActionBlock).toContain('<Button')
-    expect(deleteActionBlock).toContain('size="lg"')
-    expect(deleteActionBlock).toContain('iconOnly')
-  })
-
-  it('delete button does NOT use tiny padding: 2px 4px', () => {
-    // Guard against revert to the original small padding.
-    const codeOnly = src.split('\n')
-      .filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*'))
-      .join('\n')
-    const deleteBtnBlock = codeOnly.slice(
-      codeOnly.indexOf('handleDelete'),
-      codeOnly.indexOf('handleDelete') + 800,
-    )
-    expect(deleteBtnBlock).not.toContain("padding: '2px 4px'")
-  })
-
-  it('delete action does not keep local dashboard button classes', () => {
-    expect(combined).not.toContain('btnDelete')
   })
 })
 

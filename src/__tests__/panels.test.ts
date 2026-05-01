@@ -15,7 +15,7 @@ import { useEditorStore } from '../core/editor-store/store'
 function freshStore() {
   // Reset store to a clean state for each test
   useEditorStore.setState({
-    project: null,
+    site: null,
     selectedNodeId: null,
     hoveredNodeId: null,
     _historyPast: [],
@@ -33,21 +33,21 @@ function freshStore() {
 describe('J6 DomPanel — store layer', () => {
   beforeEach(freshStore)
 
-  it('creates a project with a root node and one page', () => {
-    const { createProject } = useEditorStore.getState()
-    const project = createProject('Test')
-    expect(project.pages).toHaveLength(1)
-    expect(project.pages[0].title).toBe('Home')
-    const page = project.pages[0]
+  it('creates a site with a root node and one page', () => {
+    const { createSite } = useEditorStore.getState()
+    const site = createSite('Test')
+    expect(site.pages).toHaveLength(1)
+    expect(site.pages[0].title).toBe('Home')
+    const page = site.pages[0]
     expect(page.nodes[page.rootNodeId]).toBeDefined()
     expect(page.nodes[page.rootNodeId].moduleId).toBe('base.root')
   })
 
   it('selectNode updates selectedNodeId in store', () => {
     const state = useEditorStore.getState()
-    state.createProject('Test')
-    const project = useEditorStore.getState().project!
-    const page = project.pages[0]
+    state.createSite('Test')
+    const site = useEditorStore.getState().site!
+    const page = site.pages[0]
     const rootId = page.rootNodeId
 
     useEditorStore.getState().selectNode(rootId)
@@ -55,11 +55,11 @@ describe('J6 DomPanel — store layer', () => {
   })
 
   it('insertNode adds child visible in nodes map', () => {
-    const { createProject, insertNode } = useEditorStore.getState()
-    const project = createProject('Test')
-    const page = project.pages[0]
+    const { createSite, insertNode } = useEditorStore.getState()
+    const site = createSite('Test')
+    const page = site.pages[0]
     const nodeId = insertNode('base.heading', { text: 'Hello' }, page.rootNodeId)
-    const updatedPage = useEditorStore.getState().project!.pages[0]
+    const updatedPage = useEditorStore.getState().site!.pages[0]
     expect(updatedPage.nodes[nodeId]).toBeDefined()
     expect(updatedPage.nodes[page.rootNodeId].children).toContain(nodeId)
   })
@@ -235,27 +235,27 @@ describe('J7+J8 PropertiesPanel — store mutations', () => {
   beforeEach(freshStore)
 
   it('updateNodeProps patches a node prop immutably', () => {
-    const { createProject, insertNode, updateNodeProps } = useEditorStore.getState()
-    const project = createProject('Test')
-    const page = project.pages[0]
+    const { createSite, insertNode, updateNodeProps } = useEditorStore.getState()
+    const site = createSite('Test')
+    const page = site.pages[0]
     const nodeId = insertNode('base.heading', { text: 'Old' }, page.rootNodeId)
 
     updateNodeProps(nodeId, { text: 'New' })
 
-    const updatedPage = useEditorStore.getState().project!.pages[0]
+    const updatedPage = useEditorStore.getState().site!.pages[0]
     expect(updatedPage.nodes[nodeId].props.text).toBe('New')
     expect(useEditorStore.getState().canUndo).toBe(true)
   })
 
   it('setBreakpointOverride writes to overrides, not base props', () => {
-    const { createProject, insertNode, setBreakpointOverride } = useEditorStore.getState()
-    const project = createProject('Test')
-    const page = project.pages[0]
+    const { createSite, insertNode, setBreakpointOverride } = useEditorStore.getState()
+    const site = createSite('Test')
+    const page = site.pages[0]
     const nodeId = insertNode('base.heading', { text: 'Base', fontSize: 24 }, page.rootNodeId)
 
     setBreakpointOverride(nodeId, 'mobile', { fontSize: 14 })
 
-    const updatedPage = useEditorStore.getState().project!.pages[0]
+    const updatedPage = useEditorStore.getState().site!.pages[0]
     const node = updatedPage.nodes[nodeId]
     // Base prop untouched
     expect(node.props.fontSize).toBe(24)
@@ -264,9 +264,9 @@ describe('J7+J8 PropertiesPanel — store mutations', () => {
   })
 
   it('togglePropertiesPanel collapses and expands when a node is selected', () => {
-    const { createProject, insertNode, selectNode, togglePropertiesPanel } = useEditorStore.getState()
-    const project = createProject('Test')
-    const page = project.pages[0]
+    const { createSite, insertNode, selectNode, togglePropertiesPanel } = useEditorStore.getState()
+    const site = createSite('Test')
+    const page = site.pages[0]
     const nodeId = insertNode('base.button', { label: 'Button' }, page.rootNodeId)
     selectNode(nodeId)
 
@@ -278,9 +278,9 @@ describe('J7+J8 PropertiesPanel — store mutations', () => {
   })
 
   it('selectNode reopens the Properties panel even when selecting the same node again', () => {
-    const { createProject, insertNode, selectNode, setPropertiesPanel } = useEditorStore.getState()
-    const project = createProject('Test')
-    const page = project.pages[0]
+    const { createSite, insertNode, selectNode, setPropertiesPanel } = useEditorStore.getState()
+    const site = createSite('Test')
+    const page = site.pages[0]
     const nodeId = insertNode('base.button', { label: 'Button' }, page.rootNodeId)
 
     selectNode(nodeId)

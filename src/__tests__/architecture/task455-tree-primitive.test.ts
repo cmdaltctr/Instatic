@@ -3,7 +3,7 @@
  *
  * The old FilesPanel has been retired. The tree primitive remains the shared
  * implementation for structural trees such as the DOM/Layers panel, while the
- * Project Explorer presents user-facing project concepts instead of generated
+ * Site Explorer presents user-facing site concepts instead of generated
  * source-file paths.
  */
 
@@ -19,8 +19,8 @@ const TREE_ROW_TSX = join(ROOT, 'src/editor/ui/Tree/TreeRow.tsx')
 const TREE_ROW_CSS = join(ROOT, 'src/editor/ui/Tree/TreeRow.module.css')
 const DOM_PANEL_TSX = join(ROOT, 'src/editor/components/DomPanel/DomPanel.tsx')
 const DOM_TREE_NODE_TSX = join(ROOT, 'src/editor/components/DomPanel/TreeNode.tsx')
-const PROJECT_EXPLORER_TSX = join(ROOT, 'src/editor/components/ProjectExplorerPanel/ProjectExplorerPanel.tsx')
-const PROJECT_CREATE_DIALOG_TSX = join(ROOT, 'src/editor/components/ProjectCreateDialog/ProjectCreateDialog.tsx')
+const PROJECT_EXPLORER_TSX = join(ROOT, 'src/editor/components/SiteExplorerPanel/SiteExplorerPanel.tsx')
+const PROJECT_CREATE_DIALOG_TSX = join(ROOT, 'src/editor/components/SiteCreateDialog/SiteCreateDialog.tsx')
 const UI_SLICE_TS = join(ROOT, 'src/core/editor-store/slices/uiSlice.ts')
 const LAYOUT_STORAGE_TS = join(ROOT, 'src/editor/layout/panelLayoutStorage.ts')
 const LAYOUT_PERSISTENCE_TS = join(ROOT, 'src/editor/hooks/useEditorLayoutPersistence.ts')
@@ -97,13 +97,13 @@ describe('DomPanel tree usage', () => {
   })
 })
 
-describe('Project Explorer architecture', () => {
-  it('replaces FilesPanel with a concept-oriented Project Explorer', () => {
+describe('Site Explorer architecture', () => {
+  it('replaces FilesPanel with a concept-oriented Site Explorer', () => {
     expect(existsSync(join(ROOT, 'src/editor/components/FilesPanel/index.tsx'))).toBe(false)
     expect(existsSync(PROJECT_EXPLORER_TSX)).toBe(true)
   })
 
-  it('uses one simple project creation dialog and removes the old file modal', () => {
+  it('uses one simple site creation dialog and removes the old file modal', () => {
     expect(existsSync(join(ROOT, 'src/editor/components/NewFileModal/NewFileModal.tsx'))).toBe(false)
     expect(existsSync(join(ROOT, 'src/editor/components/NewFileModal/index.ts'))).toBe(false)
     expect(existsSync(join(ROOT, 'src/core/files/inference.ts'))).toBe(false)
@@ -123,7 +123,7 @@ describe('Project Explorer architecture', () => {
     expect(layoutPersistence.includes('panels?.files')).toBe(false)
   })
 
-  it('does not use the file-tree primitive for project concepts', () => {
+  it('does not use the file-tree primitive for site concepts', () => {
     const source = src(PROJECT_EXPLORER_TSX)
     expect(source.includes("from '../../ui/Tree'") || source.includes('from "../../ui/Tree"')).toBe(false)
     expect(source.includes('<Tree')).toBe(false)

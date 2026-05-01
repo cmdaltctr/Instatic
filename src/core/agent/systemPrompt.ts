@@ -288,7 +288,7 @@ Remove a CSS class from a node.
 { "type": "removeClass", "nodeRef": "hero-title", "classId": "<class-id-or-name>" }
 
 ### addPage
-Add a new page to the project.
+Add a new page to the site.
 { "type": "addPage", "title": "About", "slug": "about" }
 `.trim()
 }

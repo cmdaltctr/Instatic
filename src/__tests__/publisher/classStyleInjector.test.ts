@@ -223,12 +223,12 @@ describe('generateClassCSS', () => {
 // ---------------------------------------------------------------------------
 
 import { collectClassCSS } from '../../core/publisher/cssCollector'
-import type { Project, Page, PageNode } from '../../core/page-tree/types'
+import type { SiteDocument, Page, PageNode } from '../../core/page-tree/types'
 
-function makeProject(
-  classes: Project['classes'],
+function makeSite(
+  classes: SiteDocument['classes'],
   nodeClassIds: Record<string, string[]> = {},
-): Project {
+): SiteDocument {
   const node: PageNode = {
     id: 'root',
     moduleId: 'base.container',
@@ -274,32 +274,32 @@ function makeProject(
 
 describe('collectClassCSS', () => {
   it('returns empty string when no nodes have classIds', () => {
-    const project = makeProject({ cls1: makeClass('cls1', { color: 'red' }) })
-    expect(collectClassCSS(project)).toBe('')
+    const site = makeSite({ cls1: makeClass('cls1', { color: 'red' }) })
+    expect(collectClassCSS(site)).toBe('')
   })
 
   it('only emits CSS for classes actually used by nodes (tree-shaking)', () => {
-    const project = makeProject(
+    const site = makeSite(
       {
         used: makeClass('used', { color: 'green' }),
         unused: makeClass('unused', { color: 'red' }),
       },
       { child1: ['used'] },
     )
-    const css = collectClassCSS(project)
+    const css = collectClassCSS(site)
     expect(css).toContain('.mc-used {')
     expect(css).not.toContain('.mc-unused')
   })
 
   it('emits CSS for all used classes across all nodes', () => {
-    const project = makeProject(
+    const site = makeSite(
       {
         cls1: makeClass('cls1', { fontSize: '14px' }),
         cls2: makeClass('cls2', { fontSize: '18px' }),
       },
       { child1: ['cls1'], child2: ['cls2'] },
     )
-    const css = collectClassCSS(project)
+    const css = collectClassCSS(site)
     expect(css).toContain('.mc-cls1')
     expect(css).toContain('.mc-cls2')
   })
@@ -308,21 +308,21 @@ describe('collectClassCSS', () => {
     const malicious = makeClass('evil', { backgroundImage: 'url(x)' })
     // Insert </style> manually via name abuse — test the sanitizer, not the class gen
     // (bagToCSS already blocks javascript: etc; test the outer sanitizeModuleCSS wrapper)
-    const project = makeProject({ evil: malicious }, { child1: ['evil'] })
-    const css = collectClassCSS(project)
+    const site = makeSite({ evil: malicious }, { child1: ['evil'] })
+    const css = collectClassCSS(site)
     expect(css).not.toMatch(/<\/style\s*>/)
   })
 
   it('gracefully handles missing class references in the registry', () => {
-    const project = makeProject({}, { child1: ['nonexistent-id'] })
-    expect(() => collectClassCSS(project)).not.toThrow()
-    expect(collectClassCSS(project)).toBe('')
+    const site = makeSite({}, { child1: ['nonexistent-id'] })
+    expect(() => collectClassCSS(site)).not.toThrow()
+    expect(collectClassCSS(site)).toBe('')
   })
 
   it('returns empty string when all used class styles are blocked by the sanitiser', () => {
     const evilClass = makeClass('evil', { backgroundImage: 'javascript:alert(1)' })
-    const project = makeProject({ evil: evilClass }, { child1: ['evil'] })
-    const css = collectClassCSS(project)
+    const site = makeSite({ evil: evilClass }, { child1: ['evil'] })
+    const css = collectClassCSS(site)
     // No valid declarations → collectClassCSS should return empty (or whitespace only)
     expect(css.trim()).toBe('')
   })

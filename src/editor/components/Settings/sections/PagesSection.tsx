@@ -14,7 +14,7 @@ import { Input } from '@ui/components/Input'
 import s from '../Settings.module.css'
 
 export function PagesSection() {
-  const project = useEditorStore((state) => state.project)
+  const site = useEditorStore((state) => state.site)
   const activePage = useEditorStore(selectActivePage)
   const addPage = useEditorStore((state) => state.addPage)
   const deletePage = useEditorStore((state) => state.deletePage)
@@ -35,12 +35,12 @@ export function PagesSection() {
 
   const handleAdd = useCallback(() => {
     const title = newTitle.trim()
-    if (!title || !project) return
-    const slug = createUniquePageSlug(title, project.pages)
+    if (!title || !site) return
+    const slug = createUniquePageSlug(title, site.pages)
     addPage(title, slug)
     setNewTitle('')
     setPageError(null)
-  }, [newTitle, project, addPage])
+  }, [newTitle, site, addPage])
 
   const handleStartEdit = (id: string, title: string, slug: string) => {
     setEditingId(id)
@@ -50,10 +50,10 @@ export function PagesSection() {
   }
 
   const handleSaveEdit = useCallback(() => {
-    if (!editingId || !project) return
+    if (!editingId || !site) return
     const title = editTitle.trim()
     const slug = normalizePageSlug(editSlug)
-    const error = pageSlugError(slug) || pageSlugDuplicateError(slug, project.pages, editingId)
+    const error = pageSlugError(slug) || pageSlugDuplicateError(slug, site.pages, editingId)
     if (error) {
       setPageError(error)
       return
@@ -61,17 +61,17 @@ export function PagesSection() {
     if (title) renamePage(editingId, title, slug)
     setEditingId(null)
     setPageError(null)
-  }, [editingId, editTitle, editSlug, project, renamePage])
+  }, [editingId, editTitle, editSlug, site, renamePage])
 
   const handleDeletePage = (id: string) => {
-    if (!project) return
-    if (project.pages.length <= 1) return
+    if (!site) return
+    if (site.pages.length <= 1) return
     deletePage(id)
     setConfirmDeleteId(null)
   }
 
-  if (!project) {
-    return <div className={s.noProject}>No project loaded.</div>
+  if (!site) {
+    return <div className={s.noSite}>Loading site...</div>
   }
 
   return (
@@ -83,7 +83,7 @@ export function PagesSection() {
 
       {/* Page list */}
       <ul role="list" className={s.list}>
-        {project.pages.map((page) => (
+        {site.pages.map((page) => (
           <li key={page.id}>
             {editingId === page.id ? (
               /* Edit row */
@@ -177,10 +177,10 @@ export function PagesSection() {
                     <Button
                       variant="destructive"
                       size="md"
-                      onClick={project.pages.length <= 1 ? undefined : () => setConfirmDeleteId(page.id)}
-                      aria-disabled={project.pages.length <= 1 ? 'true' : undefined}
+                      onClick={site.pages.length <= 1 ? undefined : () => setConfirmDeleteId(page.id)}
+                      aria-disabled={site.pages.length <= 1 ? 'true' : undefined}
                       aria-label={`Delete page ${page.title}`}
-                      title={project.pages.length <= 1 ? 'Cannot delete the last page' : undefined}
+                      title={site.pages.length <= 1 ? 'Cannot delete the last page' : undefined}
                     >
                       Delete
                     </Button>

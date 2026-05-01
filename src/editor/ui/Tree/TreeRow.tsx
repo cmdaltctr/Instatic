@@ -4,7 +4,8 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from 'react'
-import { Icon } from '@ui/icons/Icon'
+import type { IconComponent } from '@ui/icons/types'
+import { ChevronRightIcon } from '@ui/icons/icons/chevron-right'
 import { cn } from '@ui/cn'
 import styles from './TreeRow.module.css'
 
@@ -91,20 +92,20 @@ export function TreeChevron({
       )}
       {...props}
     >
-      <Icon name="chevron-right" size={10} />
+      <ChevronRightIcon size={10} />
     </span>
   )
 }
 
 export interface TreeIconSlotProps extends HTMLAttributes<HTMLSpanElement> {
-  iconName?: string
+  icon?: IconComponent
   iconSize?: number
   iconColor?: string
   children?: ReactNode
 }
 
 export function TreeIconSlot({
-  iconName,
+  icon: SlotIcon,
   iconSize = 12,
   iconColor = 'currentColor',
   className,
@@ -117,7 +118,7 @@ export function TreeIconSlot({
       className={cn(styles.iconSlot, className)}
       {...props}
     >
-      {children ?? (iconName ? <Icon name={iconName} size={iconSize} color={iconColor} /> : null)}
+      {children ?? (SlotIcon ? <SlotIcon size={iconSize} color={iconColor} /> : null)}
     </span>
   )
 }

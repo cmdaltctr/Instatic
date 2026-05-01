@@ -8,7 +8,7 @@
  *
  * Features:
  * - Per-type extension stacks (JSX/TS, CSS, JSON, Markdown, plain text).
- * - Achromatic CM6 theme using --editor-* CSS custom properties (Guideline #376).
+ * - GitHub Dark-inspired CM6 theme using --editor-* CSS custom properties.
  * - Debounced 250ms content sync → updateFileContent() (Contribution #595 §3.3).
  * - Flush-on-switch: the useEffect cleanup flushes any pending edit before
  *   the view is destroyed, so unsaved edits survive file switches.
@@ -24,25 +24,27 @@
  *
  * @see CodeEditorPanel.tsx — parent (lazy-loads this module)
  * @see Contribution #595 §3 — architecture spec
- * @see Guideline #376 — achromatic palette (no hardcoded colors)
+ * @see globals.css — editor syntax palette and chrome design tokens
  * @see Constraint #402 — no inline styles
  */
 
 import { useRef, useEffect, useCallback } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState } from '@codemirror/state'
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { javascript } from '@codemirror/lang-javascript'
 import { css } from '@codemirror/lang-css'
 import { json } from '@codemirror/lang-json'
 import { markdown } from '@codemirror/lang-markdown'
+import { tags as t } from '@lezer/highlight'
 import type { Extension } from '@codemirror/state'
-import type { ProjectFile, ProjectFileType } from '../../../core/files/types'
+import type { SiteFile, SiteFileType } from '../../../core/files/types'
 
 // ---------------------------------------------------------------------------
-// Achromatic CM6 theme — CSS custom properties only (Guideline #376)
+// GitHub Dark-inspired CM6 theme — CSS custom properties only.
 // ---------------------------------------------------------------------------
 // All color values are CSS custom properties from globals.css.
-// No hex, rgb(), or hsl() literals — Guideline #376 strictly prohibits them.
+// No hex, rgb(), or hsl() literals in this lazy-loaded editor module.
 const achromatic = EditorView.theme({
   '&': {
     backgroundColor: 'var(--editor-surface)',
@@ -89,40 +91,6 @@ const achromatic = EditorView.theme({
   '.cm-line': {
     padding: '0 12px 0 4px',
   },
-  // Syntax tokens — achromatic only
-  '.tok-comment': {
-    color: 'var(--editor-text-subtle)',
-    fontStyle: 'italic',
-  },
-  '.tok-keyword': {
-    color: 'var(--editor-text-secondary)',
-    fontWeight: '600',
-  },
-  '.tok-string': {
-    color: 'var(--editor-text)',
-  },
-  '.tok-number': {
-    color: 'var(--editor-text)',
-  },
-  '.tok-operator': {
-    color: 'var(--editor-text-muted)',
-  },
-  '.tok-variableName': {
-    color: 'var(--editor-text)',
-  },
-  '.tok-typeName': {
-    color: 'var(--editor-text-secondary)',
-    fontWeight: '500',
-  },
-  '.tok-propertyName': {
-    color: 'var(--editor-text)',
-  },
-  '.tok-tagName': {
-    color: 'var(--editor-text-secondary)',
-  },
-  '.tok-attributeName': {
-    color: 'var(--editor-text-muted)',
-  },
   '.cm-tooltip': {
     backgroundColor: 'var(--editor-surface-2)',
     border: '1px solid var(--panel-border)',
@@ -130,15 +98,134 @@ const achromatic = EditorView.theme({
   },
 }, { dark: true })
 
+const readableHighlightStyle = HighlightStyle.define([
+  {
+    tag: [
+      t.comment,
+      t.lineComment,
+      t.blockComment,
+      t.docComment,
+      t.meta,
+    ],
+    color: 'var(--editor-syntax-comment)',
+    fontStyle: 'italic',
+  },
+  {
+    tag: [
+      t.keyword,
+      t.definitionKeyword,
+      t.operatorKeyword,
+      t.modifier,
+      t.controlKeyword,
+    ],
+    color: 'var(--editor-syntax-keyword)',
+    fontWeight: '600',
+  },
+  {
+    tag: [
+      t.labelName,
+      t.typeName,
+      t.className,
+      t.namespace,
+      t.macroName,
+      t.tagName,
+      t.function(t.variableName),
+      t.function(t.propertyName),
+    ],
+    color: 'var(--editor-syntax-entity)',
+  },
+  {
+    tag: [
+      t.propertyName,
+      t.definition(t.propertyName),
+      t.attributeName,
+    ],
+    color: 'var(--editor-syntax-property)',
+  },
+  {
+    tag: [
+      t.variableName,
+      t.definition(t.variableName),
+      t.local(t.variableName),
+      t.special(t.variableName),
+    ],
+    color: 'var(--editor-syntax-variable)',
+  },
+  {
+    tag: [
+      t.atom,
+      t.bool,
+      t.number,
+      t.integer,
+      t.float,
+      t.unit,
+      t.color,
+      t.url,
+      t.literal,
+      t.contentSeparator,
+    ],
+    color: 'var(--editor-syntax-constant)',
+  },
+  {
+    tag: [
+      t.string,
+      t.regexp,
+      t.escape,
+      t.special(t.string),
+      t.inserted,
+      t.deleted,
+    ],
+    color: 'var(--editor-syntax-string)',
+  },
+  {
+    tag: [
+      t.operator,
+      t.arithmeticOperator,
+      t.logicOperator,
+      t.compareOperator,
+      t.definitionOperator,
+      t.derefOperator,
+      t.punctuation,
+      t.separator,
+      t.bracket,
+      t.paren,
+      t.squareBracket,
+      t.brace,
+    ],
+    color: 'var(--editor-syntax-operator)',
+  },
+  {
+    tag: [t.heading, t.strong],
+    color: 'var(--editor-syntax-entity)',
+    fontWeight: '700',
+  },
+  {
+    tag: [t.emphasis],
+    color: 'var(--editor-syntax-string)',
+    fontStyle: 'italic',
+  },
+  {
+    tag: [t.link],
+    color: 'var(--editor-syntax-constant)',
+    textDecoration: 'underline',
+  },
+  {
+    tag: t.invalid,
+    color: 'var(--editor-syntax-invalid)',
+  },
+], { themeType: 'dark' })
+
+const readableSyntaxHighlighting = syntaxHighlighting(readableHighlightStyle)
+
 // ---------------------------------------------------------------------------
 // Per-type extension stacks
 // ---------------------------------------------------------------------------
 
 /**
  * Returns the language-specific extension(s) for the given file type.
- * Maps ProjectFileType → CM6 language extension list.
+ * Maps SiteFileType → CM6 language extension list.
  */
-function getLanguageExtensions(type: ProjectFileType, path: string): Extension[] {
+function getLanguageExtensions(type: SiteFileType, path: string): Extension[] {
   switch (type) {
     case 'component':
       // JSX + TypeScript — component files are always TSX
@@ -176,7 +263,7 @@ function getLanguageExtensions(type: ProjectFileType, path: string): Extension[]
 // ---------------------------------------------------------------------------
 
 interface CodeMirrorEditorProps {
-  file: ProjectFile
+  file: SiteFile
   updateFileContent: (id: string, content: string) => void
 }
 
@@ -222,6 +309,7 @@ export default function CodeMirrorEditor({ file, updateFileContent }: CodeMirror
         extensions: [
           basicSetup,
           ...getLanguageExtensions(file.type, file.path),
+          readableSyntaxHighlighting,
           achromatic,
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return

@@ -1,18 +1,16 @@
 /* eslint-disable react-refresh/only-export-components */
 /**
- * base.video - responsive video embed with class-backed frame styling.
+ * base.video - responsive video embed.
  */
 import React from 'react'
 import { type ModuleDefinition, type ModuleComponentProps } from '../../../core/module-engine/types'
 import { registry } from '../../../core/module-engine/registry'
 import { safeUrl } from '../utils/escape'
-import { jsxUrl } from '../../../core/react-publisher/utils'
-import { pxBinding, rawBinding } from '../styleBindings'
 import styles from './video.module.css'
 import { cn } from '../../../ui/cn'
 
 export interface VideoProps extends Record<string, unknown> {
-  source: 'youtube' | 'url'
+  source: 'media' | 'youtube' | 'url'
   youtubeId: string
   videoUrl: string
   autoplay: boolean
@@ -68,7 +66,7 @@ const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props, mcClas
 export const VideoModule: ModuleDefinition<VideoProps> = {
   id: 'base.video',
   name: 'Video',
-  description: 'Embed a YouTube video or HTML5 video file. Frame styling is class-backed.',
+  description: 'Embed a CMS media video or YouTube video.',
   category: 'Media',
   version: '2.0.0',
   icon: 'Play',
@@ -80,8 +78,8 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
       type: 'select',
       label: 'Video source',
       options: [
+        { label: 'Media library', value: 'media' },
         { label: 'YouTube', value: 'youtube' },
-        { label: 'Direct URL', value: 'url' },
       ],
     },
     youtubeId: {
@@ -91,9 +89,10 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
       condition: { field: 'source', eq: 'youtube' },
     },
     videoUrl: {
-      type: 'url',
-      label: 'Video URL',
-      condition: { field: 'source', eq: 'url' },
+      type: 'media',
+      mediaKind: 'video',
+      label: 'Video',
+      condition: { field: 'source', eq: 'media' },
     },
     autoplay: { type: 'toggle', label: 'Autoplay' },
     loop: { type: 'toggle', label: 'Loop' },
@@ -102,7 +101,7 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
   },
 
   defaults: {
-    source: 'youtube',
+    source: 'media',
     youtubeId: '',
     videoUrl: '',
     autoplay: false,
@@ -111,44 +110,7 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
     controls: true,
   },
 
-  classStyleBindings: {
-    aspectRatio: rawBinding(
-      'aspectRatio',
-      {
-        type: 'select',
-        label: 'Aspect ratio',
-        options: [
-          { label: '16:9', value: '16 / 9' },
-          { label: '4:3', value: '4 / 3' },
-          { label: '1:1', value: '1 / 1' },
-          { label: '9:16', value: '9 / 16' },
-        ],
-      },
-      '16 / 9',
-    ),
-    width: rawBinding('width', { type: 'text', label: 'Width', placeholder: '100%' }, '100%'),
-    maxWidth: rawBinding('maxWidth', { type: 'text', label: 'Max width', placeholder: '100%' }, '100%'),
-    borderRadius: pxBinding('borderRadius', { type: 'text', label: 'Border radius', placeholder: '0px' }, 0),
-    backgroundColor: rawBinding('backgroundColor', { type: 'color', label: 'Background' }, '#000000'),
-  },
-
   component: VideoEditor,
-
-  toJsx: (props) => {
-    const isYoutube = props.source === 'youtube'
-    if (isYoutube) {
-      const src = youtubeEmbedUrl(props.youtubeId, props.autoplay)
-      if (!src) return '<></>'
-      return `<iframe className="${MODULE_CLASS}" src={${JSON.stringify(src)}} title="YouTube video" frameBorder="0" allow="autoplay; encrypted-media; fullscreen" allowFullScreen />`
-    }
-
-    const srcAttr = props.videoUrl ? ` src=${jsxUrl(props.videoUrl)}` : ''
-    const autoplay = props.autoplay ? ' autoPlay' : ''
-    const loop = props.loop ? ' loop' : ''
-    const muted = props.muted ? ' muted' : ''
-    const controls = props.controls ? ' controls' : ''
-    return `<video className="${MODULE_CLASS}"${srcAttr}${autoplay}${loop}${muted}${controls} />`
-  },
 
   render: (props) => {
     const isYoutube = String(props.source) === 'youtube'

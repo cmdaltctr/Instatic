@@ -1,6 +1,6 @@
 /**
  * Undo/Redo store tests — verifies J4 requirements:
- * - undo/redo operates only on project state
+ * - undo/redo operates only on site state
  * - canUndo / canRedo flags stay accurate
  * - history is capped at MAX_HISTORY (50)
  * - undo then modify creates a new branch (future is cleared)
@@ -16,7 +16,7 @@ function getStore() {
 beforeEach(() => {
   // Reset store to a clean slate before each test
   useEditorStore.setState({
-    project: null,
+    site: null,
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,
@@ -30,60 +30,60 @@ beforeEach(() => {
 describe('Undo / Redo — basic lifecycle', () => {
   it('canUndo is false before any mutations', () => {
     const store = getStore()
-    store.createProject('Test Project')
+    store.createSite('Test SiteDocument')
     expect(useEditorStore.getState().canUndo).toBe(false)
   })
 
   it('canUndo becomes true after a mutation', () => {
     const store = getStore()
-    const project = store.createProject('Test Project')
-    const rootId = project.pages[0].rootNodeId
+    const site = store.createSite('Test SiteDocument')
+    const rootId = site.pages[0].rootNodeId
     useEditorStore.getState().insertNode('base.heading', {}, rootId)
     expect(useEditorStore.getState().canUndo).toBe(true)
   })
 
-  it('undo restores previous project state', () => {
+  it('undo restores previous site state', () => {
     const s = getStore()
-    const project = s.createProject('Test Project')
-    const rootId = project.pages[0].rootNodeId
-    const nodesBefore = Object.keys(project.pages[0].nodes).length
+    const site = s.createSite('Test SiteDocument')
+    const rootId = site.pages[0].rootNodeId
+    const nodesBefore = Object.keys(site.pages[0].nodes).length
 
     useEditorStore.getState().insertNode('base.heading', {}, rootId)
     const nodesAfter = Object.keys(
-      useEditorStore.getState().project!.pages[0].nodes
+      useEditorStore.getState().site!.pages[0].nodes
     ).length
     expect(nodesAfter).toBe(nodesBefore + 1)
 
     useEditorStore.getState().undo()
     const nodesAfterUndo = Object.keys(
-      useEditorStore.getState().project!.pages[0].nodes
+      useEditorStore.getState().site!.pages[0].nodes
     ).length
     expect(nodesAfterUndo).toBe(nodesBefore)
   })
 
   it('redo re-applies the undone mutation', () => {
     const s = getStore()
-    const project = s.createProject('Test Project')
-    const rootId = project.pages[0].rootNodeId
+    const site = s.createSite('Test SiteDocument')
+    const rootId = site.pages[0].rootNodeId
 
     useEditorStore.getState().insertNode('base.heading', {}, rootId)
     const nodesBeforeUndo = Object.keys(
-      useEditorStore.getState().project!.pages[0].nodes
+      useEditorStore.getState().site!.pages[0].nodes
     ).length
 
     useEditorStore.getState().undo()
     useEditorStore.getState().redo()
 
     const nodesAfterRedo = Object.keys(
-      useEditorStore.getState().project!.pages[0].nodes
+      useEditorStore.getState().site!.pages[0].nodes
     ).length
     expect(nodesAfterRedo).toBe(nodesBeforeUndo)
   })
 
   it('canRedo is true after undo', () => {
     const s = getStore()
-    const project = s.createProject('Test Project')
-    const rootId = project.pages[0].rootNodeId
+    const site = s.createSite('Test SiteDocument')
+    const rootId = site.pages[0].rootNodeId
     useEditorStore.getState().insertNode('base.heading', {}, rootId)
     useEditorStore.getState().undo()
     expect(useEditorStore.getState().canRedo).toBe(true)
@@ -91,8 +91,8 @@ describe('Undo / Redo — basic lifecycle', () => {
 
   it('canRedo is false after redo', () => {
     const s = getStore()
-    const project = s.createProject('Test Project')
-    const rootId = project.pages[0].rootNodeId
+    const site = s.createSite('Test SiteDocument')
+    const rootId = site.pages[0].rootNodeId
     useEditorStore.getState().insertNode('base.heading', {}, rootId)
     useEditorStore.getState().undo()
     useEditorStore.getState().redo()
@@ -101,8 +101,8 @@ describe('Undo / Redo — basic lifecycle', () => {
 
   it('undo clears future when new mutation is made after undo', () => {
     const s = getStore()
-    const project = s.createProject('Test Project')
-    const rootId = project.pages[0].rootNodeId
+    const site = s.createSite('Test SiteDocument')
+    const rootId = site.pages[0].rootNodeId
 
     // Insert → undo → new insertion (new branch)
     useEditorStore.getState().insertNode('base.heading', {}, rootId)
@@ -115,44 +115,44 @@ describe('Undo / Redo — basic lifecycle', () => {
 
   it('multiple mutations are each individually undoable', () => {
     const s = getStore()
-    const project = s.createProject('Test Project')
-    const rootId = project.pages[0].rootNodeId
-    const startCount = Object.keys(project.pages[0].nodes).length
+    const site = s.createSite('Test SiteDocument')
+    const rootId = site.pages[0].rootNodeId
+    const startCount = Object.keys(site.pages[0].nodes).length
 
     useEditorStore.getState().insertNode('base.heading', {}, rootId)
     useEditorStore.getState().insertNode('base.paragraph', {}, rootId)
     useEditorStore.getState().insertNode('base.image', {}, rootId)
 
-    expect(Object.keys(useEditorStore.getState().project!.pages[0].nodes).length).toBe(startCount + 3)
+    expect(Object.keys(useEditorStore.getState().site!.pages[0].nodes).length).toBe(startCount + 3)
 
     useEditorStore.getState().undo()
-    expect(Object.keys(useEditorStore.getState().project!.pages[0].nodes).length).toBe(startCount + 2)
+    expect(Object.keys(useEditorStore.getState().site!.pages[0].nodes).length).toBe(startCount + 2)
 
     useEditorStore.getState().undo()
-    expect(Object.keys(useEditorStore.getState().project!.pages[0].nodes).length).toBe(startCount + 1)
+    expect(Object.keys(useEditorStore.getState().site!.pages[0].nodes).length).toBe(startCount + 1)
 
     useEditorStore.getState().undo()
-    expect(Object.keys(useEditorStore.getState().project!.pages[0].nodes).length).toBe(startCount)
+    expect(Object.keys(useEditorStore.getState().site!.pages[0].nodes).length).toBe(startCount)
   })
 
   it('undo does nothing when canUndo is false', () => {
     const s = getStore()
-    const project = s.createProject('Test Project')
-    const nodesBefore = Object.keys(project.pages[0].nodes).length
+    const site = s.createSite('Test SiteDocument')
+    const nodesBefore = Object.keys(site.pages[0].nodes).length
 
     useEditorStore.getState().undo() // no-op
-    expect(Object.keys(useEditorStore.getState().project!.pages[0].nodes).length).toBe(nodesBefore)
+    expect(Object.keys(useEditorStore.getState().site!.pages[0].nodes).length).toBe(nodesBefore)
   })
 
-  it('createProject resets history', () => {
+  it('createSite resets history', () => {
     const s = getStore()
-    const project = s.createProject('Test Project')
-    const rootId = project.pages[0].rootNodeId
+    const site = s.createSite('Test SiteDocument')
+    const rootId = site.pages[0].rootNodeId
     useEditorStore.getState().insertNode('base.heading', {}, rootId)
     useEditorStore.getState().undo()
 
-    // Create new project — should wipe history
-    useEditorStore.getState().createProject('New Project')
+    // Create new site — should wipe history
+    useEditorStore.getState().createSite('New SiteDocument')
     expect(useEditorStore.getState().canUndo).toBe(false)
     expect(useEditorStore.getState().canRedo).toBe(false)
     expect(useEditorStore.getState()._historyPast).toHaveLength(0)
@@ -161,8 +161,8 @@ describe('Undo / Redo — basic lifecycle', () => {
 
   it('canvas/UI state (zoom, panX) is not affected by undo', () => {
     const s = getStore()
-    const project = s.createProject('Test Project')
-    const rootId = project.pages[0].rootNodeId
+    const site = s.createSite('Test SiteDocument')
+    const rootId = site.pages[0].rootNodeId
 
     useEditorStore.setState({ zoom: 2, panX: 100, panY: 50 })
     useEditorStore.getState().insertNode('base.heading', {}, rootId)

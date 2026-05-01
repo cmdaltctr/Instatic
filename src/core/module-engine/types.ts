@@ -33,6 +33,7 @@ export type PropertyControl = PropertyControlBase &
     | { type: 'select'; options: Array<{ label: string; value: unknown }> }
     | { type: 'toggle' }
     | { type: 'image' }
+    | { type: 'media'; mediaKind: 'image' | 'video' }
     | { type: 'url' }
     | { type: 'richtext' }
     | { type: 'spacing' }
@@ -75,28 +76,17 @@ export type ModuleField =
 export type ModuleFields = Record<string, ModuleField>
 
 // ---------------------------------------------------------------------------
-// Module package dependencies — project manifest, not builder app deps
+// Module package dependencies — dependency-backed editor runtimes
 // ---------------------------------------------------------------------------
 
 export interface ModuleDependencySpec {
-  /** Semver/range written to the exported project's package.json. */
+  /** Semver/range tracked for dependency-backed module runtimes. */
   version: string
   /** true writes to devDependencies; false/omitted writes to dependencies. */
   dev?: boolean
 }
 
 export type ModuleDependencies = Record<string, string | ModuleDependencySpec>
-
-// ---------------------------------------------------------------------------
-// React project export assets — trusted modules only
-// ---------------------------------------------------------------------------
-
-export interface ModuleReactExport {
-  /** Extra import lines needed by generated React page components. */
-  imports?: ReadonlyArray<string>
-  /** Top-level declarations emitted once per generated page when this module is used. */
-  declarations?: ReadonlyArray<string>
-}
 
 // ---------------------------------------------------------------------------
 // Editor runtime sandbox — dependency-backed live previews
@@ -213,8 +203,8 @@ export interface ModuleDefinition<
   defaults: TProps
 
   /**
-   * Project-level package dependencies required when this module is inserted.
-   * These are written to the user's project manifest, not installed into the
+   * SiteDocument-level package dependencies required when this module is inserted.
+   * These are written to the user's site manifest, not installed into the
    * builder app. Runtime dependencies use string shorthand:
    * `{ three: "^0.184.0" }`; dev dependencies use `{ version, dev: true }`.
    */
@@ -245,12 +235,12 @@ export interface ModuleDefinition<
   /**
    * Optional dependency-backed editor runtime. When present, the canvas renders
    * this module in a sandboxed iframe with an import map built from the module's
-   * project dependencies, so packages like `three` do not become builder deps.
+   * site dependencies, so packages like `three` do not become builder deps.
    */
   editorRuntime?: ModuleEditorRuntime
 
   /**
-   * PURE FUNCTION — called by the publisher for each node during static export.
+   * PURE FUNCTION — called by the CMS publisher for each node during page rendering.
    * Constraint #179 (hard): Must have zero side effects.
    * - No React, no ReactDOM, no JSX
    * - No DOM access (no document/window/navigator)
@@ -261,37 +251,6 @@ export interface ModuleDefinition<
    */
   render: (props: TProps, renderedChildren: string[]) => RenderOutput
 
-  /**
-   * Optional source assets for React Project export. Only trusted modules are
-   * allowed to contribute these strings; community modules continue through the
-   * safe HTML fallback and cannot inject compiled source.
-   */
-  reactExport?: ModuleReactExport
-
-  /**
-   * OPTIONAL — JSX source-code generation for React Project export (Phase E).
-   *
-   * Returns a JSX string fragment that, when written into a `.tsx` file and
-   * compiled by Vite/React, produces the equivalent UI for this node.
-   *
-   * `renderedChildren` are already-generated JSX fragments for this node's children.
-   * Concatenate them inside the returned JSX (e.g. `<div>{children.join('\n')}</div>`).
-   *
-   * SECURITY (Constraints #303, #290 — CWE-94 code injection prevention):
-   * - User-controlled string props MUST be embedded as {JSON.stringify(value)}.
-   *   e.g. `<h2>{${JSON.stringify(props.text)}}</h2>` NOT `<h2>${props.text}</h2>`
-   * - Constrained-set props (enums, booleans) and CSS number values may be embedded directly.
-   * - Style objects may use { key: "value" } syntax — CSS values are not directly executable.
-   *
-   * ISOLATION (Constraint #269 / #271):
-   * - Must NOT import from src/core/publisher/ or src/editor/.
-   *
-   * Absence of `toJsx` means the module does not support React Project mode.
-   * The module will still appear in the editor but is filtered from the module
-   * picker when projectMode === 'react' (Guideline #305).
-   * Untrusted community modules must use dangerouslySetInnerHTML fallback (Constraint #304).
-   */
-  toJsx?: (props: TProps, renderedChildren: string[]) => string
 }
 
 // ---------------------------------------------------------------------------

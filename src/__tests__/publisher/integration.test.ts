@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from 'bun:test'
 import { publishPage, renderNode, type RenderContext } from '../../core/publisher/render'
-import { makePage, makeProject, makeModule, makeRegistry } from './helpers'
+import { makePage, makeSite, makeModule, makeRegistry } from './helpers'
 
 // Import REAL base modules — they self-register on import
 import { TextModule } from '../../modules/base/text'
@@ -23,7 +23,6 @@ import { LinkModule } from '../../modules/base/link'
 import { ImageModule } from '../../modules/base/image'
 import { ContainerModule } from '../../modules/base/container'
 import { ListModule } from '../../modules/base/list'
-import { DividerModule } from '../../modules/base/divider'
 import { registry } from '../../core/module-engine/registry'
 
 // Confirm real modules are registered
@@ -32,7 +31,7 @@ const REAL_REGISTRY = registry
 function realCtx(page: ReturnType<typeof makePage>): RenderContext {
   return {
     page,
-    project: makeProject(),
+    site: makeSite(),
     registry: REAL_REGISTRY,
     breakpointId: undefined,
     cssMap: new Map(),
@@ -327,89 +326,6 @@ describe('Publisher + real modules — quote and multi-character escaping', () =
 })
 
 // ---------------------------------------------------------------------------
-// Divider module — CSS property injection safety (Constraint #228)
-// ---------------------------------------------------------------------------
-
-describe('Publisher + real modules — Divider CSS injection safety', () => {
-  it('divider: renders a valid <hr> element with default props', () => {
-    const page = makePage({
-      root: {
-        moduleId: 'base.divider',
-        props: DividerModule.defaults,
-      },
-    })
-    const html = renderNode('root', realCtx(page))
-    expect(html).toContain('<hr')
-    expect(html).toContain('aria-hidden="true"')
-  })
-
-  it('divider: color prop with expression() is blocked from CSS output', () => {
-    const page = makePage({
-      root: {
-        moduleId: 'base.divider',
-        props: { ...DividerModule.defaults, color: 'expression(alert(1))' },
-      },
-    })
-    const html = renderNode('root', realCtx(page))
-    // The expression() CSS injection must not appear in output
-    expect(html).not.toContain('expression(alert')
-  })
-
-  it('divider: width prop with javascript: is not in the CSS style string', () => {
-    const page = makePage({
-      root: {
-        moduleId: 'base.divider',
-        props: { ...DividerModule.defaults, width: 'javascript:alert(1)' },
-      },
-    })
-    const html = renderNode('root', realCtx(page))
-    // javascript: in a CSS width value is syntactically invalid; must not appear
-    expect(html).not.toContain('javascript:')
-  })
-
-  it('divider: color prop with curly brace (}) is blocked — CSS block breakout attempt', () => {
-    // A `}` in a CSS value inside a <style> block would close the current selector
-    // block and allow injection of rogue CSS rules (CWE-74, CSS Injection).
-    // sanitiseCssValue() must reject any value containing `{` or `}`.
-    const page = makePage({
-      root: {
-        moduleId: 'base.divider',
-        props: { ...DividerModule.defaults, color: 'red; } a { color: blue' },
-      },
-    })
-    const html = renderNode('root', realCtx(page))
-    // The entire value is dropped — no `}` appears in CSS output
-    expect(html).not.toContain('}')
-    expect(html).not.toContain('color: blue')
-  })
-
-  it('divider: color prop with curly brace ({) is blocked', () => {
-    const page = makePage({
-      root: {
-        moduleId: 'base.divider',
-        props: { ...DividerModule.defaults, color: 'red; a { color: blue' },
-      },
-    })
-    const html = renderNode('root', realCtx(page))
-    expect(html).not.toContain('{')
-    expect(html).not.toContain('color: blue')
-  })
-
-  it('divider: valid numeric props render correctly without escaping issues', () => {
-    const page = makePage({
-      root: {
-        moduleId: 'base.divider',
-        props: { ...DividerModule.defaults, thickness: 2, marginTop: 24, marginBottom: 24, color: '#cccccc' },
-      },
-    })
-    const html = renderNode('root', realCtx(page))
-    expect(html).toContain('<hr')
-    // No double-escaping of numeric values
-    expect(html).not.toContain('&amp;')
-  })
-})
-
-// ---------------------------------------------------------------------------
 // Richtext props — publisher pass-through (Constraint #299)
 // ---------------------------------------------------------------------------
 
@@ -429,12 +345,12 @@ describe('Publisher — richtext prop pass-through (Constraint #299)', () => {
     }),
   })
   const richtextRegistry = makeRegistry({ 'test.richtextBlock': richtextModule })
-  const richtextProject = makeProject()
+  const richtextSite = makeSite()
 
   function rtCtx(page: ReturnType<typeof makePage>): RenderContext {
     return {
       page,
-      project: richtextProject,
+      site: richtextSite,
       registry: richtextRegistry,
       breakpointId: undefined,
       cssMap: new Map(),
@@ -486,7 +402,7 @@ describe('Publisher — richtext prop pass-through (Constraint #299)', () => {
     })
     const html = renderNode('root', {
       page: plainPage,
-      project: richtextProject,
+      site: richtextSite,
       registry: plainRegistry,
       breakpointId: undefined,
       cssMap: new Map(),
@@ -502,7 +418,7 @@ describe('Publisher — richtext prop pass-through (Constraint #299)', () => {
     const page = makePage({
       root: { moduleId: 'test.richtextBlock', props: { richtext: sanitizedHtml } },
     })
-    const { html: docHtml } = publishPage(page, richtextProject, richtextRegistry)
+    const { html: docHtml } = publishPage(page, richtextSite, richtextRegistry)
     // Richtext must appear in the published document without entity encoding
     expect(docHtml).toContain('<p>Hello <strong>World</strong></p>')
     expect(docHtml).not.toContain('&lt;p&gt;')
@@ -514,7 +430,7 @@ describe('Publisher — richtext prop pass-through (Constraint #299)', () => {
     const page = makePage({
       root: { moduleId: 'test.richtextBlock', props: { richtext: complexHtml } },
     })
-    const { html: docHtml } = publishPage(page, richtextProject, richtextRegistry)
+    const { html: docHtml } = publishPage(page, richtextSite, richtextRegistry)
     expect(docHtml).toContain('<h2>Title</h2>')
     expect(docHtml).toContain('<a href="/page"')
     expect(docHtml).toContain('<code>code</code>')
@@ -545,8 +461,8 @@ describe('publishPage() + real modules — end-to-end document', () => {
       },
     })
 
-    const project = makeProject()
-    const { html } = publishPage(page, project, REAL_REGISTRY)
+    const site = makeSite()
+    const { html } = publishPage(page, site, REAL_REGISTRY)
 
     // Document structure
     expect(html).toContain('<!DOCTYPE html>')
@@ -574,8 +490,8 @@ describe('publishPage() + real modules — end-to-end document', () => {
         props: { ...ImageModule.defaults, src: 'https://example.com/img.jpg', alt: 'Cat & Dog' },
       },
     })
-    const project = makeProject()
-    const { html } = publishPage(page, project, REAL_REGISTRY)
+    const site = makeSite()
+    const { html } = publishPage(page, site, REAL_REGISTRY)
     expect(html).toContain('alt="Cat &amp; Dog"')
     expect(html).not.toContain('alt="Cat &amp;amp; Dog"')
   })

@@ -21,7 +21,7 @@ import '../../modules/base'
 
 function freshStore() {
   useEditorStore.setState({
-    project: null,
+    site: null,
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,
@@ -36,8 +36,8 @@ function freshStore() {
     hasUnsavedChanges: false,
   })
   const s = useEditorStore.getState()
-  const project = s.createProject('Test')
-  const rootId = project.pages[0].rootNodeId
+  const site = s.createSite('Test')
+  const rootId = site.pages[0].rootNodeId
   return { rootId, store: useEditorStore.getState() }
 }
 
@@ -57,7 +57,7 @@ describe('executeAgentAction — insertNode', () => {
     expect(result.success).toBe(true)
     expect(result.nodeId).toBeTruthy()
     // Verify the node was actually inserted
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(Object.values(page.nodes).some((n) => n.moduleId === 'base.text')).toBe(true)
   })
 
@@ -71,7 +71,7 @@ describe('executeAgentAction — insertNode', () => {
     })
 
     expect(result.success).toBe(true)
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     const node = page.nodes[result.nodeId!]
     expect(node.props.tag).toBe('div')
   })
@@ -86,7 +86,7 @@ describe('executeAgentAction — insertNode', () => {
     })
 
     expect(result.success).toBe(true)
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     const node = page.nodes[result.nodeId!]
     expect(node.props.tag).toBe('section')
   })
@@ -95,7 +95,7 @@ describe('executeAgentAction — insertNode', () => {
     const { rootId } = freshStore()
     await executeAgentAction({ type: 'insertNode', moduleId: 'base.text', parentId: rootId })
     await executeAgentAction({ type: 'insertNode', moduleId: 'base.button', parentId: rootId })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     const root = page.nodes[rootId]
     expect(root.children).toHaveLength(2)
   })
@@ -139,7 +139,7 @@ describe('executeAgentAction — deleteNode', () => {
     const deleteResult = await executeAgentAction({ type: 'deleteNode', nodeId })
     expect(deleteResult.success).toBe(true)
 
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(page.nodes[nodeId]).toBeUndefined()
   })
 
@@ -161,7 +161,7 @@ describe('executeAgentAction — updateNodeProps', () => {
       type: 'insertNode', moduleId: 'base.text', parentId: rootId, props: { text: 'Old' },
     })
     await executeAgentAction({ type: 'updateNodeProps', nodeId: nodeId!, patch: { text: 'New' } })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(page.nodes[nodeId!].props.text).toBe('New')
   })
 
@@ -182,7 +182,7 @@ describe('executeAgentAction — updateNodeProps', () => {
     })
 
     expect(result.success).toBe(true)
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(page.nodes[nodeId!].props.text).toBe('Desktop copy')
     expect(page.nodes[nodeId!].breakpointOverrides.mobile.text).toBe('Mobile copy')
   })
@@ -203,7 +203,7 @@ describe('executeAgentAction — moveNode', () => {
     // Move child to c2
     const result = await executeAgentAction({ type: 'moveNode', nodeId: child, newParentId: c2, newIndex: 0 })
     expect(result.success).toBe(true)
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(page.nodes[c2].children).toContain(child)
     expect(page.nodes[c1].children).not.toContain(child)
   })
@@ -218,7 +218,7 @@ describe('executeAgentAction — renameNode', () => {
     const { rootId } = freshStore()
     const { nodeId } = await executeAgentAction({ type: 'insertNode', moduleId: 'base.text', parentId: rootId })
     await executeAgentAction({ type: 'renameNode', nodeId: nodeId!, label: 'Hero Heading' })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(page.nodes[nodeId!].label).toBe('Hero Heading')
   })
 })
@@ -235,7 +235,7 @@ describe('executeAgentAction — createClass', () => {
     })
     expect(result.success).toBe(true)
     expect(result.nodeId).toBeTruthy() // classId returned in nodeId field
-    const classes = useEditorStore.getState().project!.classes
+    const classes = useEditorStore.getState().site!.classes
     expect(Object.values(classes).some((c) => c.name === 'btn-primary')).toBe(true)
   })
 
@@ -257,7 +257,7 @@ describe('executeAgentAction — createClass', () => {
     })
 
     expect(result.success).toBe(true)
-    const cls = useEditorStore.getState().project!.classes[result.nodeId!]
+    const cls = useEditorStore.getState().site!.classes[result.nodeId!]
     expect(cls.styles.fontSize).toBe('64px')
     expect(cls.breakpointStyles.mobile.fontSize).toBe('40px')
     expect(cls.breakpointStyles.mobile.lineHeight).toBe('1.05')
@@ -276,7 +276,7 @@ describe('executeAgentAction — assignClass / removeClass', () => {
     const classId = classResult.nodeId!
 
     await executeAgentAction({ type: 'assignClass', nodeId: nodeId!, classId })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(page.nodes[nodeId!].classIds).toContain(classId)
   })
 
@@ -288,7 +288,7 @@ describe('executeAgentAction — assignClass / removeClass', () => {
 
     await executeAgentAction({ type: 'assignClass', nodeId: nodeId!, classId })
     await executeAgentAction({ type: 'removeClass', nodeId: nodeId!, classId })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(page.nodes[nodeId!].classIds ?? []).not.toContain(classId)
   })
 })
@@ -308,8 +308,8 @@ describe('executeAgentAction — assignClass name-based resolution', () => {
     const result = await executeAgentAction({ type: 'assignClass', nodeId: nodeId!, classId: 'btn-hero' })
     expect(result.success).toBe(true)
 
-    const page = useEditorStore.getState().project!.pages[0]
-    const classes = useEditorStore.getState().project!.classes
+    const page = useEditorStore.getState().site!.pages[0]
+    const classes = useEditorStore.getState().site!.classes
     const heroClass = Object.values(classes).find((c) => c.name === 'btn-hero')!
     expect(page.nodes[nodeId!].classIds).toContain(heroClass.id)
   })
@@ -331,8 +331,8 @@ describe('executeAgentAction — assignClass name-based resolution', () => {
     const result = await executeAgentAction({ type: 'removeClass', nodeId: nodeId!, classId: 'removable' })
     expect(result.success).toBe(true)
 
-    const page = useEditorStore.getState().project!.pages[0]
-    const classes = useEditorStore.getState().project!.classes
+    const page = useEditorStore.getState().site!.pages[0]
+    const classes = useEditorStore.getState().site!.classes
     const cls = Object.values(classes).find((c) => c.name === 'removable')!
     expect(page.nodes[nodeId!].classIds ?? []).not.toContain(cls.id)
   })
@@ -348,7 +348,7 @@ describe('executeAgentAction — assignClass name-based resolution', () => {
     })
     expect(result.success).toBe(true)
 
-    const classes = useEditorStore.getState().project!.classes
+    const classes = useEditorStore.getState().site!.classes
     const cls = Object.values(classes).find((c) => c.name === 'card')!
     expect(cls.styles.padding).toBe('16px')
     expect(cls.styles.borderRadius).toBe('4px')
@@ -366,7 +366,7 @@ describe('executeAgentAction — assignClass name-based resolution', () => {
     })
     expect(result.success).toBe(true)
 
-    const classes = useEditorStore.getState().project!.classes
+    const classes = useEditorStore.getState().site!.classes
     const cls = Object.values(classes).find((c) => c.name === 'responsive-card')!
     expect(cls.styles.gridTemplateColumns).toBe('1fr 1fr')
     expect(cls.breakpointStyles.mobile.gridTemplateColumns).toBe('1fr')
@@ -387,7 +387,7 @@ describe('executeAgentAction — assignClass name-based resolution', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('Breakpoint not found')
 
-    const cls = Object.values(useEditorStore.getState().project!.classes).find((c) => c.name === 'responsive-card')!
+    const cls = Object.values(useEditorStore.getState().site!.classes).find((c) => c.name === 'responsive-card')!
     expect(cls.styles.padding).toBe('24px')
     expect(cls.breakpointStyles.watch).toBeUndefined()
   })
@@ -398,11 +398,11 @@ describe('executeAgentAction — assignClass name-based resolution', () => {
 // ---------------------------------------------------------------------------
 
 describe('executeAgentAction — addPage', () => {
-  it('adds a page to the project', async () => {
+  it('adds a page to the site', async () => {
     freshStore()
     const result = await executeAgentAction({ type: 'addPage', title: 'About', slug: 'about' })
     expect(result.success).toBe(true)
-    const pages = useEditorStore.getState().project!.pages
+    const pages = useEditorStore.getState().site!.pages
     expect(pages.some((p) => p.title === 'About')).toBe(true)
   })
 })
@@ -430,7 +430,7 @@ describe('executeAgentAction — updateNodeProps richtext sanitization (Constrai
       nodeId: nodeId!,
       patch: { richtext: '<p>Hello</p><script>alert(1)</script>' },
     })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     const stored = page.nodes[nodeId!].props.richtext as string
     // XSS must be stripped — executor must call sanitizeRichtext()
     expect(stored).not.toContain('<script>')
@@ -449,7 +449,7 @@ describe('executeAgentAction — updateNodeProps richtext sanitization (Constrai
       nodeId: nodeId!,
       patch: { richtext: '<img src=x onerror=alert(1)>' },
     })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     const stored = page.nodes[nodeId!].props.richtext as string
     expect(stored).not.toContain('onerror')
     expect(stored).not.toContain('alert(1)')
@@ -465,7 +465,7 @@ describe('executeAgentAction — updateNodeProps richtext sanitization (Constrai
       nodeId: nodeId!,
       patch: { bodyHtml: '<a href="javascript:alert(1)">click</a>' },
     })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     const stored = page.nodes[nodeId!].props.bodyHtml as string
     expect(stored).not.toContain('javascript:')
   })
@@ -481,7 +481,7 @@ describe('executeAgentAction — updateNodeProps richtext sanitization (Constrai
       nodeId: nodeId!,
       patch: { richtext: safeHtml },
     })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     const stored = page.nodes[nodeId!].props.richtext as string
     expect(stored).toContain('Bold')
     expect(stored).toContain('italic')
@@ -500,7 +500,7 @@ describe('executeAgentAction — updateNodeProps richtext sanitization (Constrai
       nodeId: nodeId!,
       patch: { text: 'Cats & Dogs' },
     })
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     // "text" should be stored as-is (no DOMPurify treatment)
     expect(page.nodes[nodeId!].props.text).toBe('Cats & Dogs')
   })
@@ -516,7 +516,7 @@ describe('executeAgentAction — insertNode richtext sanitization (Constraint #2
       props: { richtext: '<p>Hello</p><script>alert(1)</script>' },
     })
     expect(result.success).toBe(true)
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     const stored = page.nodes[result.nodeId!].props.richtext as string
     // XSS must be stripped at insertion time too
     expect(stored).not.toContain('<script>')
@@ -549,7 +549,7 @@ describe('executeAgentActions — batch execution', () => {
     expect(results).toHaveLength(2)
     expect(results.every((r) => r.success)).toBe(true)
 
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     const heroId = results[0].nodeId!
     const headingId = results[1].nodeId!
     expect(page.nodes[heroId].children).toContain(headingId)
@@ -605,8 +605,8 @@ describe('executeAgentActions — batch execution', () => {
     expect(results).toHaveLength(5)
     expect(results.every((r) => r.success)).toBe(true)
 
-    const page = useEditorStore.getState().project!.pages[0]
-    const classes = useEditorStore.getState().project!.classes
+    const page = useEditorStore.getState().site!.pages[0]
+    const classes = useEditorStore.getState().site!.classes
     const heroClass = Object.values(classes).find((c) => c.name === 'designer-hero')!
     const titleClass = Object.values(classes).find((c) => c.name === 'designer-title')!
     const heroId = results[2].nodeId!
@@ -639,11 +639,11 @@ describe('executeAgentActions — batch execution', () => {
     expect(results[0].success).toBe(false)
     expect(results[0].error).toContain('Class not found')
 
-    const classes = useEditorStore.getState().project!.classes
+    const classes = useEditorStore.getState().site!.classes
     const createdClass = Object.values(classes).find((c) => c.name === 'agent-title')
     expect(createdClass).toBeUndefined()
 
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(page.nodes[rootId].children).toHaveLength(0)
   })
 
@@ -711,7 +711,7 @@ describe('executeAgentActions — batch execution', () => {
             },
             {
               moduleId: 'base.button',
-              props: { label: 'Start a project' },
+              props: { label: 'Start a site' },
               classIds: ['agent-cta'],
             },
           ],
@@ -723,11 +723,11 @@ describe('executeAgentActions — batch execution', () => {
     expect(results[0].success).toBe(true)
 
     const state = useEditorStore.getState()
-    const page = state.project!.pages[0]
+    const page = state.site!.pages[0]
     const heroId = results[0].nodeId!
     const hero = page.nodes[heroId]
     const title = page.nodes[hero.children[0]]
-    const classes = Object.values(state.project!.classes)
+    const classes = Object.values(state.site!.classes)
     const heroClass = classes.find((c) => c.name === 'agent-hero')
     const titleClass = classes.find((c) => c.name === 'agent-hero-title')
     const ctaClass = classes.find((c) => c.name === 'agent-cta')
@@ -762,7 +762,7 @@ describe('executeAgentActions — batch execution', () => {
     expect(results[0].success).toBe(true)
     expect(results[1].success).toBe(false)
 
-    const page = useEditorStore.getState().project!.pages[0]
+    const page = useEditorStore.getState().site!.pages[0]
     expect(page.nodes[rootId].children).toHaveLength(0)
     expect(Object.values(page.nodes).some((node) => node.moduleId === 'base.container')).toBe(false)
   })

@@ -8,7 +8,7 @@ import {
   type RenderContext,
 } from '../../core/publisher/render'
 import type { ModuleDefinition } from '../../core/module-engine/types'
-import { makeModule, makeRegistry, makePage, makeProject } from './helpers'
+import { makeModule, makeRegistry, makePage, makeSite } from './helpers'
 
 // ---------------------------------------------------------------------------
 // escapeHtml
@@ -140,11 +140,11 @@ describe('renderNode', () => {
     'base.heading': headingDef,
     'base.container': containerDef,
   })
-  const project = makeProject()
+  const site = makeSite()
 
   function ctx(page: ReturnType<typeof makePage>): RenderContext {
     const cssMap = new Map<string, string>()
-    return { page, project, registry, breakpointId: undefined, cssMap }
+    return { page, site, registry, breakpointId: undefined, cssMap }
   }
 
   it('renders a leaf node', () => {
@@ -183,7 +183,7 @@ describe('renderNode', () => {
       h3: { moduleId: 'base.heading', props: { text: 'C', level: 3 } },
     })
     const cssMap = new Map<string, string>()
-    renderNode('root', { page, project, registry, breakpointId: undefined, cssMap })
+    renderNode('root', { page, site, registry, breakpointId: undefined, cssMap })
     expect(cssMap.size).toBe(2) // base.heading + base.container, NOT 4
     expect(cssMap.get('base.heading')).toBe('h1,h2,h3,h4,h5,h6 { font-family: sans-serif; }')
   })
@@ -229,7 +229,7 @@ describe('renderNode', () => {
       root: { moduleId: 'base.link', props: { href: 'javascript:alert(1)' } },
     })
     const cssMap = new Map<string, string>()
-    const html = renderNode('root', { page, project, registry: reg, breakpointId: undefined, cssMap })
+    const html = renderNode('root', { page, site, registry: reg, breakpointId: undefined, cssMap })
     expect(html).not.toContain('javascript:')
     expect(html).toContain('href="#"')
   })
@@ -245,10 +245,10 @@ describe('renderNode', () => {
     const cssMap = new Map<string, string>()
 
     const htmlDesktop = renderNode('root', {
-      page, project, registry, breakpointId: undefined, cssMap,
+      page, site, registry, breakpointId: undefined, cssMap,
     })
     const htmlMobile = renderNode('root', {
-      page, project, registry, breakpointId: 'mobile', cssMap,
+      page, site, registry, breakpointId: 'mobile', cssMap,
     })
 
     expect(htmlDesktop).toBe('<h1>Desktop</h1>')
@@ -268,13 +268,13 @@ describe('publishPage', () => {
     }),
   })
   const registry = makeRegistry({ 'base.heading': headingDef })
-  const project = makeProject()
+  const site = makeSite()
 
   it('produces a complete DOCTYPE html document', () => {
     const page = makePage({
       root: { moduleId: 'base.heading', props: { text: 'Hello' } },
     })
-    const { html } = publishPage(page, project, registry)
+    const { html } = publishPage(page, site, registry)
     expect(html).toContain('<!DOCTYPE html>')
     expect(html).toContain('<html lang="en">')
     expect(html).toContain('<title>Test Page</title>')
@@ -284,14 +284,14 @@ describe('publishPage', () => {
   it('filename is index.html for slug "index"', () => {
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
     page.slug = 'index'
-    const { filename } = publishPage(page, project, registry)
+    const { filename } = publishPage(page, site, registry)
     expect(filename).toBe('index.html')
   })
 
   it('filename is derived from slug for non-index pages', () => {
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
     page.slug = 'about-us'
-    const { filename } = publishPage(page, project, registry)
+    const { filename } = publishPage(page, site, registry)
     expect(filename).toBe('about-us.html')
   })
 
@@ -310,23 +310,23 @@ describe('publishPage', () => {
       h2: { moduleId: 'base.heading', props: { text: 'B' } },
       h3: { moduleId: 'base.heading', props: { text: 'C' } },
     })
-    const { html } = publishPage(page, project, reg)
+    const { html } = publishPage(page, site, reg)
     const count = (html.match(/h1 \{ color: black; \}/g) ?? []).length
     expect(count).toBe(1) // deduplicated — not 3
   })
 
   it('injects design tokens as :root CSS custom properties', () => {
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
-    const { html } = publishPage(page, project, registry)
+    const { html } = publishPage(page, site, registry)
     expect(html).toContain(':root {')
     expect(html).toContain('--color-primary')
     expect(html).toContain('--type-base-size')
   })
 
   it('includes font import link when fontImportUrl is set', () => {
-    const proj = makeProject({
+    const proj = makeSite({
       settings: {
-        ...makeProject().settings,
+        ...makeSite().settings,
         fontImportUrl: 'https://fonts.googleapis.com/css2?family=Inter',
       },
     })
@@ -338,7 +338,7 @@ describe('publishPage', () => {
 
   it('CSP: every published page includes Content-Security-Policy meta tag (Constraint #227)', () => {
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'CSP test' } } })
-    const { html } = publishPage(page, project, registry)
+    const { html } = publishPage(page, site, registry)
     expect(html).toContain('http-equiv="Content-Security-Policy"')
     expect(html).toContain("script-src 'none'")
     expect(html).toContain("default-src 'self'")
@@ -356,7 +356,7 @@ describe('publishPage', () => {
     })
     const reg = makeRegistry({ 'evil.module': evilModuleDef })
     const page = makePage({ root: { moduleId: 'evil.module', props: {} } })
-    const { html } = publishPage(page, project, reg)
+    const { html } = publishPage(page, site, reg)
     // The dangerous sequence is </style> immediately followed by something outside style.
     // After sanitization the </style> from the module is gone — only the real closing tag remains.
     expect(html).not.toMatch(/<\/style>\s*<script/)
@@ -366,9 +366,9 @@ describe('publishPage', () => {
 
   it('CSS injection: </style> in design token value is stripped (Advisory C)', () => {
     // Token values are sanitized via sanitizeCssTokenValue(); {} and </style> are removed.
-    const proj = makeProject({
+    const proj = makeSite({
       settings: {
-        ...makeProject().settings,
+        ...makeSite().settings,
         colorTokens: { '--evil': 'red} </style><script>alert(1)</script><style> :root{' },
       },
     })
@@ -382,8 +382,8 @@ describe('publishPage', () => {
   })
 
   it('URL validation: javascript: in faviconUrl is dropped (Advisory B)', () => {
-    const proj = makeProject({
-      settings: { ...makeProject().settings, faviconUrl: 'javascript:alert(1)' },
+    const proj = makeSite({
+      settings: { ...makeSite().settings, faviconUrl: 'javascript:alert(1)' },
     })
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
     const { html } = publishPage(page, proj, registry)
@@ -393,8 +393,8 @@ describe('publishPage', () => {
   })
 
   it('URL validation: javascript: in fontImportUrl is dropped (Advisory B)', () => {
-    const proj = makeProject({
-      settings: { ...makeProject().settings, fontImportUrl: 'javascript:alert(1)' },
+    const proj = makeSite({
+      settings: { ...makeSite().settings, fontImportUrl: 'javascript:alert(1)' },
     })
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
     const { html } = publishPage(page, proj, registry)
@@ -403,15 +403,15 @@ describe('publishPage', () => {
   })
 
   // WCAG 2.1 AA SC 3.1.1 — lang attribute (Constraint #317 / UX review)
-  it('lang="en" by default when project.settings.language is unset', () => {
+  it('lang="en" by default when site.settings.language is unset', () => {
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
-    const { html } = publishPage(page, project, registry)
+    const { html } = publishPage(page, site, registry)
     expect(html).toContain('<html lang="en">')
   })
 
-  it('lang attribute reflects project.settings.language when set', () => {
-    const proj = makeProject({
-      settings: { ...makeProject().settings, language: 'fr' },
+  it('lang attribute reflects site.settings.language when set', () => {
+    const proj = makeSite({
+      settings: { ...makeSite().settings, language: 'fr' },
     })
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Bonjour' } } })
     const { html } = publishPage(page, proj, registry)
@@ -419,8 +419,8 @@ describe('publishPage', () => {
   })
 
   it('XSS: malicious language value is HTML-escaped in lang attribute', () => {
-    const proj = makeProject({
-      settings: { ...makeProject().settings, language: '"><script>alert(1)</script>' },
+    const proj = makeSite({
+      settings: { ...makeSite().settings, language: '"><script>alert(1)</script>' },
     })
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
     const { html } = publishPage(page, proj, registry)
@@ -432,7 +432,7 @@ describe('publishPage', () => {
   it('slug with path traversal sequences produces a safe filename', () => {
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
     page.slug = '../../etc/passwd'
-    const { filename } = publishPage(page, project, registry)
+    const { filename } = publishPage(page, site, registry)
     // slugToFilename whitelist-strips all non [a-z0-9-] chars — slashes and dots become dashes
     expect(filename).not.toContain('..')
     expect(filename).not.toContain('/')
@@ -443,7 +443,7 @@ describe('publishPage', () => {
   it('slug with null bytes produces a safe filename', () => {
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
     page.slug = 'about\x00page'
-    const { filename } = publishPage(page, project, registry)
+    const { filename } = publishPage(page, site, registry)
     expect(filename).not.toContain('\x00')
     expect(filename).toMatch(/^[a-z0-9-]+\.html$/)
   })
@@ -452,16 +452,16 @@ describe('publishPage', () => {
     const page = makePage({
       root: { moduleId: 'base.heading', props: { text: 'Published' } },
     })
-    const { html } = publishPage(page, project, registry)
+    const { html } = publishPage(page, site, registry)
     expect(html).not.toContain('data-reactroot')
     expect(html).not.toContain('data-testid')
     expect(html).not.toContain('__editor')
     expect(html).not.toContain('zustand')
   })
 
-  it('uses project metaTitle for <title> when set', () => {
-    const proj = makeProject({
-      settings: { ...makeProject().settings, metaTitle: 'My Site — Home' },
+  it('uses site metaTitle for <title> when set', () => {
+    const proj = makeSite({
+      settings: { ...makeSite().settings, metaTitle: 'My Site — Home' },
     })
     const page = makePage({ root: { moduleId: 'base.heading', props: { text: 'Hi' } } })
     const { html } = publishPage(page, proj, registry)
@@ -469,9 +469,9 @@ describe('publishPage', () => {
   })
 
   it('XSS: escapes metaTitle with special chars', () => {
-    const proj = makeProject({
+    const proj = makeSite({
       settings: {
-        ...makeProject().settings,
+        ...makeSite().settings,
         metaTitle: '<script>alert(1)</script>',
       },
     })

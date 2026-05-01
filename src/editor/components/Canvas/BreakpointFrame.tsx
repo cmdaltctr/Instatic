@@ -12,7 +12,7 @@
 import type { CSSProperties } from 'react'
 import type { Page, Breakpoint } from '../../../core/page-tree/types'
 import { CanvasBreakpointContext, NodeRenderer } from './NodeRenderer'
-import { Icon } from '../../../ui/icons/Icon'
+import { PlusBoxIcon } from '@ui/icons/icons/plus-box'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
 import styles from './BreakpointFrame.module.css'
@@ -78,7 +78,7 @@ export function BreakpointFrame({
 function EmptyCanvasState() {
   return (
     <div className={styles.emptyState}>
-      <Icon name="plus-box" size={40} color="var(--editor-text-subtle)" />
+      <PlusBoxIcon size={40} color="var(--editor-text-subtle)" />
       <p className={styles.emptyTitle}>Empty page</p>
       <p className={styles.emptyHint}>
         Add your first element using the toolbar.

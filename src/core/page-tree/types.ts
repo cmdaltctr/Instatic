@@ -13,14 +13,14 @@
 // - Clean Zustand selectors
 // ---------------------------------------------------------------------------
 
-import type { ProjectFile } from '../files/types'
-export type { ProjectFile } from '../files/types'
+import type { SiteFile } from '../files/types'
+export type { SiteFile } from '../files/types'
 
 import type { VisualComponent } from '../visualComponents/types'
 export type { VisualComponent } from '../visualComponents/types'
 
-import type { ProjectPackageJson } from '../project-dependencies/manifest'
-export type { ProjectPackageJson } from '../project-dependencies/manifest'
+import type { SitePackageJson } from '../site-dependencies/manifest'
+export type { SitePackageJson } from '../site-dependencies/manifest'
 
 // ---------------------------------------------------------------------------
 // Phase C — CSS Class System types
@@ -148,7 +148,7 @@ export interface CSSPropertyBag {
  */
 export interface CSSClass {
   id: string
-  /** User-editable name — must be unique within the project */
+  /** User-editable name — must be unique within the site */
   name: string
   description?: string
   /**
@@ -210,7 +210,7 @@ export interface PageNode {
   hidden?: boolean
 
   /**
-   * Ordered class IDs from the project's class registry.
+   * Ordered class IDs from the site's class registry.
    * Applied as className="mc-{id1} mc-{id2}" on the element.
    * Later classes in the array win in cascade order.
    * Defaults to [] when not present (backwards-compatible).
@@ -247,7 +247,7 @@ export interface Breakpoint {
   width: number
   /**
    * @motion/icons kebab-case icon name — e.g. "smartphone", "tablet", "monitor".
-   * Rendered via <Icon name={bp.icon} /> in the editor UI.
+   * Rendered by the editor through the breakpoint icon option list.
    */
   icon: string
 }
@@ -259,12 +259,12 @@ export const DEFAULT_BREAKPOINTS: Breakpoint[] = [
 ]
 
 // ---------------------------------------------------------------------------
-// Page — a single page in the project
+// Page — a single page in the site
 // ---------------------------------------------------------------------------
 
 export interface Page {
   id: string
-  /** URL-safe slug — used as the filename in export and URL path when published */
+  /** URL-safe slug — used as the public URL path when published */
   slug: string
   /** Display title e.g. "Home", "About Us" */
   title: string
@@ -282,7 +282,7 @@ export interface Page {
 }
 
 // ---------------------------------------------------------------------------
-// Project Settings
+// SiteDocument Settings
 // ---------------------------------------------------------------------------
 
 export interface TypeScale {
@@ -292,7 +292,7 @@ export interface TypeScale {
   ratio: number
 }
 
-export interface ProjectSettings {
+export interface SiteSettings {
   metaTitle?: string
   metaDescription?: string
   faviconUrl?: string
@@ -322,64 +322,50 @@ export const DEFAULT_COLOR_TOKENS: Record<string, string> = {
   '--color-muted': '#94a3b8',
 }
 
-export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
+export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   colorTokens: DEFAULT_COLOR_TOKENS,
   typeScale: DEFAULT_TYPE_SCALE,
   shortcuts: {},
 }
 
 // ---------------------------------------------------------------------------
-// Project — the top-level document
+// SiteDocument — the top-level document
 // ---------------------------------------------------------------------------
 
-export interface Project {
+export interface SiteDocument {
   id: string
   name: string
-  /**
-   * Project output mode (Phase E).
-   * - `'html'` (default): static HTML export via the existing publisher.
-   * - `'react'`: JSX code-generation export via the ReactPublisher.
-   *
-   * This field is mutable post-creation (Architect message #1204).
-   * When switching to 'react', a confirmation step warns if any placed
-   * modules lack `toJsx()` (Guideline #305 / UX Reviewer).
-   *
-   * The Export dropdown always shows all three options (HTML / React / Astro)
-   * regardless of projectMode (Architect decision: all options always available).
-   */
-  projectMode: 'html' | 'react'
   pages: Page[]
   /**
-   * Flat list of every non-page file in the project.
+   * Flat list of every non-page file in the site.
    * (Contribution #595 §1 — files data layer)
    *
-   * Pages are NOT stored here — they remain first-class in `pages[]` and are
-   * exported into generated framework source files by the publisher.
+   * Pages are NOT stored here — they remain first-class in `pages[]`.
    *
    * Why flat array: same reasoning as Page.nodes — O(1) path lookup via
    * getFileByPath(), single Immer reference per mutation, trivial serialization.
    * The display tree is derived via buildFileTree() in selectors.ts.
    *
-   * Defaults to [] on hydration of legacy projects (validateProject handles this).
+   * Defaults to [] on hydration of legacy projects (validateSite handles this).
    */
-  files: ProjectFile[]
+  files: SiteFile[]
   /**
    * User-authored reusable canvas trees.
-   * Each VC is published as src/components/{Name}.tsx.
+   * Each VC is stored as a reusable canvas tree.
    * (Contribution #619 — Visual Components data layer)
-   * Defaults to [] on hydration of legacy projects (validateProject handles this).
+   * Defaults to [] on hydration of legacy projects (validateSite handles this).
    */
   visualComponents: VisualComponent[]
   /**
-   * Project-owned package manifest used by the Files panel and React export.
-   * Optional for legacy fixtures/projects; validation and project creation fill
+   * SiteDocument-owned package manifest used by dependency-backed editor runtimes.
+   * Optional for legacy fixtures/projects; validation and site creation fill
    * defaults before normal editor use.
    */
-  packageJson?: ProjectPackageJson
+  packageJson?: SitePackageJson
   breakpoints: Breakpoint[]
-  settings: ProjectSettings
+  settings: SiteSettings
   /**
-   * Global class registry — flat map of all CSSClass definitions for this project.
+   * Global class registry — flat map of all CSSClass definitions for this site.
    * Key is CSSClass.id (nanoid). Applied to nodes via node.classIds[].
    */
   classes: Record<string, CSSClass>

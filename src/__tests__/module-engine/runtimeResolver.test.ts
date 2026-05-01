@@ -42,7 +42,7 @@ describe('runtime dependency resolver', () => {
     expect(importMap.imports.typescript).toBeUndefined()
   })
 
-  it('prefers the project manifest version over the module default range', () => {
+  it('prefers the site manifest version over the module default range', () => {
     const importMap = createModuleImportMap(
       makeModule({ three: '^0.184.0' }),
       {
@@ -56,7 +56,7 @@ describe('runtime dependency resolver', () => {
     expect(importMap.imports.three).toBe('https://esm.sh/three@0.185.0?bundle')
   })
 
-  it('can require dependencies to exist in the project manifest before resolving them', () => {
+  it('can require dependencies to exist in the site manifest before resolving them', () => {
     const importMap = createModuleImportMap(
       makeModule({ three: '^0.184.0' }),
       {
@@ -64,7 +64,7 @@ describe('runtime dependency resolver', () => {
           dependencies: {},
           devDependencies: {},
         },
-        strictProjectManifest: true,
+        strictSiteManifest: true,
       },
     )
 
@@ -80,7 +80,7 @@ describe('runtime dependency resolver', () => {
           dependencies: {},
           devDependencies: { three: '^0.185.0' },
         },
-        strictProjectManifest: true,
+        strictSiteManifest: true,
       },
     )
 

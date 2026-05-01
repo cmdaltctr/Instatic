@@ -13,8 +13,14 @@ import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
 import { SearchBar } from '@ui/components/SearchBar'
 import { Select } from '@ui/components/Select'
-import { Icon } from '../../../ui/icons/Icon'
 import { CloseIcon } from '../../../ui/icons/icons/close'
+import { Settings2Icon } from '@ui/icons/icons/settings-2'
+import { BoxStackIcon } from '@ui/icons/icons/box-stack'
+import { SmartphoneIcon } from '@ui/icons/icons/smartphone'
+import { TabletIcon } from '@ui/icons/icons/tablet'
+import { MonitorIcon } from '@ui/icons/icons/monitor'
+import { LaptopIcon } from '@ui/icons/icons/laptop'
+import { TvIcon } from '@ui/icons/icons/tv'
 import { PropertyControlRenderer } from '../PropertyControls/PropertyControlRenderer'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { Section } from './Section'
@@ -48,7 +54,7 @@ interface StyleMenuPosition {
 }
 
 export function ClassComposer({ classId, cls, moduleDefinition, moduleProps = {} }: ClassComposerProps) {
-  const breakpoints = useEditorStore((s) => s.project?.breakpoints ?? EMPTY_BREAKPOINTS)
+  const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? EMPTY_BREAKPOINTS)
   const updateClassStyles = useEditorStore((s) => s.updateClassStyles)
   const setClassBreakpointStyles = useEditorStore((s) => s.setClassBreakpointStyles)
 
@@ -180,7 +186,7 @@ export function ClassComposer({ classId, cls, moduleDefinition, moduleProps = {}
               options={breakpointOptions.map((bp) => ({
                 value: bp.id,
                 label: `${bp.label}${bp.hasOverrides ? ' (set)' : ''}`,
-                icon: bp.icon,
+                icon: <BreakpointOptionIcon name={bp.icon} />,
               }))}
             />
           </label>
@@ -231,7 +237,7 @@ export function ClassComposer({ classId, cls, moduleDefinition, moduleProps = {}
           {assignedModuleBindings.length > 0 && (
             <Section
               title={`${moduleDefinition?.name ?? 'Module'} styles`}
-              icon="settings-2"
+              icon={Settings2Icon}
               defaultOpen
               meta={`${assignedModuleBindings.length} set`}
             >
@@ -363,21 +369,24 @@ function StyleSearchMenu({
       {moduleBindings.map((binding) => (
         <ContextMenuItem key={binding.key} onClick={() => onAddModuleStyle(binding)}>
           <span aria-hidden="true">
-            <Icon name="settings-2" size={12} />
+            <Settings2Icon size={12} />
           </span>
           <span>{binding.label}</span>
         </ContextMenuItem>
       ))}
       {moduleBindings.length > 0 && propertyItems.length > 0 && <ContextMenuSeparator />}
       {propertySections.map((section) => (
-        section.properties.map((property) => (
-          <ContextMenuItem key={`${section.id}-${String(property)}`} onClick={() => onAddProperty(property)}>
-            <span aria-hidden="true">
-              <Icon name={section.icon} size={12} />
-            </span>
-            <span>{cssPropertyLabel(String(property))}</span>
-          </ContextMenuItem>
-        ))
+        section.properties.map((property) => {
+          const SectionIcon = section.icon
+          return (
+            <ContextMenuItem key={`${section.id}-${String(property)}`} onClick={() => onAddProperty(property)}>
+              <span aria-hidden="true">
+                <SectionIcon size={12} />
+              </span>
+              <span>{cssPropertyLabel(String(property))}</span>
+            </ContextMenuItem>
+          )
+        })
       ))}
     </ContextMenu>
   )
@@ -492,3 +501,21 @@ function hasStyleValue(value: string | number | undefined): value is string | nu
 
 const EMPTY_BREAKPOINTS: Array<{ id: string; label: string; width: number; icon: string }> = []
 const BASE_BREAKPOINT_OPTION = { id: 'base', label: 'Base', icon: 'box-stack', hasOverrides: false }
+
+function BreakpointOptionIcon({ name }: { name: string }) {
+  switch (name) {
+    case 'smartphone':
+      return <SmartphoneIcon size={13} />
+    case 'tablet':
+      return <TabletIcon size={13} />
+    case 'laptop':
+      return <LaptopIcon size={13} />
+    case 'tv':
+      return <TvIcon size={13} />
+    case 'box-stack':
+      return <BoxStackIcon size={13} />
+    case 'monitor':
+    default:
+      return <MonitorIcon size={13} />
+  }
+}

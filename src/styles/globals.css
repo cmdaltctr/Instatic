@@ -3,7 +3,7 @@
 
 /*
  * Global CSS custom properties — design tokens for the editor UI.
- * These map to ProjectSettings.colorTokens for the canvas/published output.
+ * These map to SiteSettings.colorTokens for the canvas/published output.
  * Editor chrome uses its own tokens below.
  */
 :root {
@@ -26,6 +26,17 @@
     --editor-text-secondary: #a1a1aa; /* labels, secondary UI text */
     --editor-text-muted: #71717a; /* muted / placeholder */
     --editor-text-subtle: #52525b; /* disabled / very subtle */
+
+    /* ─── Code Syntax — GitHub Dark inspired ─────────────────────────────── */
+    --editor-syntax-keyword: #ff7b72;
+    --editor-syntax-entity: #d2a8ff;
+    --editor-syntax-property: #7ee787;
+    --editor-syntax-variable: #ffa657;
+    --editor-syntax-string: #a5d6ff;
+    --editor-syntax-constant: #79c0ff;
+    --editor-syntax-comment: #8b949e;
+    --editor-syntax-operator: #c9d1d9;
+    --editor-syntax-invalid: #ffa198;
 
     /* ─── Accent — white (Vercel style) + indigo for canvas selection ─────── */
     --editor-accent: #ffffff;

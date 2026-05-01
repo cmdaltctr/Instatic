@@ -1,18 +1,17 @@
 /**
- * usePersistence — React hook that wires the Zustand store to an IPersistenceAdapter.
+ * usePersistence — React hook that wires the Zustand store to the CMS persistence adapter.
  *
  * Responsibilities:
- *  1. LOAD on mount  — loads the project identified by the URL param from the
- *     adapter; falls back to the most-recently-opened project; falls back to
- *     creating a fresh blank project.
+ *  1. LOAD on mount  — loads the single CMS draft site document; falls back to
+ *     creating a fresh blank draft when the CMS has no draft yet.
  *  2. AUTO-SAVE      — when enabled in preferences, debounced 30 s after the
  *     `hasUnsavedChanges` flag transitions to true. Timer is properly reset on
  *     each new change so that rapid edits collapse into a single save.
  *  3. MANUAL SAVE    — returned as a stable callback for toolbar Save and used
  *     by Cmd+S / Ctrl+S. Resets the unsaved-changes flag.
  *
- * Constraint #230: raw adapter data is validated via `validateProject` before
- * being passed to `store.loadProject()`.
+ * Constraint #230: raw adapter data is validated via `validateSite` before
+ * being passed to `store.loadSite()`.
  *
  * Mount it once at the top of EditorLayout and pass the returned save callback
  * to toolbar chrome that needs an explicit Save action.
@@ -27,22 +26,20 @@
  *   `(s) => s.hasUnsavedChanges` so that `Object.is` comparisons work correctly
  *   and the listener fires ONLY when the flag actually changes — not on every
  *   single store update.  Using an inline object selector like
- *   `(s) => ({ project: s.project, dirty: s.hasUnsavedChanges })` would create
+ *   `(s) => ({ site: s.site, dirty: s.hasUnsavedChanges })` would create
  *   a brand-new object on every evaluation, causing the listener to fire on
  *   every store mutation and leaking unbounded setTimeout instances.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
 import type { IPersistenceAdapter } from '@core/persistence/types'
-import { localAdapter } from '@core/persistence/local'
-import { validateProject, ValidationError } from '@core/persistence/validate'
+import { cmsAdapter } from '@core/persistence/cms'
+import { validateSite, SiteValidationError } from '@core/persistence/validate'
 import {
   readAutoSavePreference,
   subscribeToEditorPrefsChanged,
 } from '@editor/preferences/editorPreferences'
 
-/** localStorage key tracking the most-recently-opened project ID */
-const LAST_PROJECT_KEY = 'pb-last-project-id'
 /** Auto-save debounce interval in milliseconds */
 const AUTO_SAVE_DELAY_MS = 30_000
 
@@ -53,7 +50,7 @@ export interface PersistenceSaveStatus {
 }
 
 export interface PersistenceController {
-  saveProject: () => Promise<void>
+  saveSite: () => Promise<void>
   saveStatus: PersistenceSaveStatus
 }
 
@@ -62,12 +59,11 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 export function usePersistence(
-  requestedProjectId: string | undefined,
-  adapter: IPersistenceAdapter = localAdapter,
-  options: { rememberLastProject?: boolean; markNewProjectUnsaved?: boolean } = {},
+  requestedSiteId = 'default',
+  adapter: IPersistenceAdapter = cmsAdapter,
+  options: { markNewSiteUnsaved?: boolean } = {},
 ): PersistenceController {
-  const rememberLastProject = options.rememberLastProject ?? true
-  const markNewProjectUnsaved = options.markNewProjectUnsaved ?? false
+  const markNewSiteUnsaved = options.markNewSiteUnsaved ?? false
   const [saveStatus, setSaveStatus] = useState<PersistenceSaveStatus>({ state: 'loading' })
   /** Whether the initial load has completed — prevents auto-save before load */
   const loadedRef = useRef(false)
@@ -77,74 +73,92 @@ export function usePersistence(
     adapterRef.current = adapter
   }, [adapter])
 
-  const saveCurrentProject = useCallback(async () => {
-    const { project, setHasUnsavedChanges } = useEditorStore.getState()
-    if (!project) return
+  const saveCurrentSite = useCallback(async () => {
+    const { site, setHasUnsavedChanges } = useEditorStore.getState()
+    if (!site) return
 
     setSaveStatus({ state: 'saving', message: 'Saving draft' })
     try {
-      await adapterRef.current.saveProject(project)
-      if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, project.id)
+      await adapterRef.current.saveSite(site)
       setHasUnsavedChanges(false)
       setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
     } catch (err) {
       setSaveStatus({ state: 'error', message: errorMessage(err, 'Save failed') })
       throw err
     }
-  }, [rememberLastProject])
+  }, [])
 
-  // ─── 1. Load project on mount ──────────────────────────────────────────────
+  // ─── 1. Load site document on mount ────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
 
     async function load() {
       // Read actions point-in-time — no React subscription needed
-      const { loadProject, createProject } = useEditorStore.getState()
+      const {
+        site: existingSite,
+        hasUnsavedChanges,
+        loadSite,
+        createSite,
+        setHasUnsavedChanges,
+      } = useEditorStore.getState()
 
-      const idToTry = requestedProjectId && requestedProjectId !== 'new-project'
-        ? requestedProjectId
-        : rememberLastProject
-          ? localStorage.getItem(LAST_PROJECT_KEY) ?? undefined
-          : undefined
+      if (existingSite) {
+        loadedRef.current = true
+        setSaveStatus(
+          hasUnsavedChanges
+            ? { state: 'unsaved', message: 'Unsaved changes' }
+            : { state: 'saved', lastSavedAt: Date.now() },
+        )
+        return
+      }
+
+      const idToTry = requestedSiteId || 'default'
 
       if (idToTry) {
         try {
-          const raw = await adapterRef.current.loadProject(idToTry)
+          const raw = await adapterRef.current.loadSite(idToTry)
           if (raw && !cancelled) {
             // Constraint #230 — validate before hydrating the store
-            const validated = validateProject(raw)
-            loadProject(validated)
-            if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, validated.id)
+            const validated = validateSite(raw)
+            loadSite(validated)
             loadedRef.current = true
             setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
             return
           }
         } catch (err) {
-          if (err instanceof ValidationError) {
-            console.warn('[persistence] Corrupt project data, creating blank project:', err.message)
+          if (err instanceof SiteValidationError) {
+            console.warn('[persistence] Corrupt CMS site data:', err.message)
           } else {
-            console.warn('[persistence] Failed to load project, creating blank project:', err)
+            console.warn('[persistence] Failed to load CMS site:', err)
           }
+          if (!cancelled) {
+            setSaveStatus({ state: 'error', message: errorMessage(err, 'Failed to load CMS site') })
+          }
+          return
         }
       }
 
-      // Fallback: create a fresh blank project
+      // Bootstrap a fresh draft once for new installs that have an admin/site row
+      // but no page-builder document yet.
       if (!cancelled) {
-        const newProject = createProject('My Project')
-        if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, newProject.id)
+        const created = createSite('My Site')
         loadedRef.current = true
-        if (markNewProjectUnsaved) {
-          useEditorStore.getState().setHasUnsavedChanges(true)
-          setSaveStatus({ state: 'unsaved', message: 'Draft not saved yet' })
-        } else {
+        try {
+          await adapterRef.current.saveSite(created)
           setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
+        } catch (err) {
+          setHasUnsavedChanges(true)
+          setSaveStatus({
+            state: markNewSiteUnsaved ? 'unsaved' : 'error',
+            message: errorMessage(err, 'Draft not saved yet'),
+          })
         }
       }
     }
 
     load()
     return () => { cancelled = true }
-  }, [markNewProjectUnsaved, rememberLastProject, requestedProjectId])
+  }, [markNewSiteUnsaved, requestedSiteId])
 
   // ─── 2. Auto-save (debounced) ──────────────────────────────────────────────
   useEffect(() => {
@@ -161,7 +175,7 @@ export function usePersistence(
       if (!readAutoSavePreference()) return
 
       timer = setTimeout(() => {
-        void saveCurrentProject().catch((err) => {
+        void saveCurrentSite().catch((err) => {
           console.error('[persistence] Auto-save failed:', err)
         })
       }, AUTO_SAVE_DELAY_MS)
@@ -183,15 +197,14 @@ export function usePersistence(
     )
     const prefsUnsub = subscribeToEditorPrefsChanged(scheduleAutoSave)
 
-    // beforeunload flush — prevent data loss on tab close (Phase 5 Gate 3).
+    // beforeunload flush — prevent data loss on tab close.
     // The 30s debounce means the last unsaved edit would be dropped without this.
-    // Fire-and-forget: beforeunload can't await async work. Synchronous adapter
-    // writes (e.g. localStorage) complete reliably; IndexedDB may not.
+    // Fire-and-forget: beforeunload can't await async work.
     function flushOnUnload() {
-      const project = useEditorStore.getState().project
-      if (!project || !loadedRef.current) return
+      const site = useEditorStore.getState().site
+      if (!site || !loadedRef.current) return
       clearTimeout(timer)
-      void adapterRef.current.saveProject(project)
+      void adapterRef.current.saveSite(site)
     }
 
     window.addEventListener('beforeunload', flushOnUnload)
@@ -202,7 +215,7 @@ export function usePersistence(
       clearTimeout(timer)
       window.removeEventListener('beforeunload', flushOnUnload)
     }
-  }, [saveCurrentProject])
+  }, [saveCurrentSite])
 
   // ─── 3. Cmd/Ctrl+S — immediate save ───────────────────────────────────────
   useEffect(() => {
@@ -211,7 +224,7 @@ export function usePersistence(
       e.preventDefault()
 
       try {
-        await saveCurrentProject()
+        await saveCurrentSite()
       } catch (err) {
         console.error('[persistence] Manual save failed:', err)
       }
@@ -219,7 +232,7 @@ export function usePersistence(
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [saveCurrentProject])
+  }, [saveCurrentSite])
 
-  return { saveProject: saveCurrentProject, saveStatus }
+  return { saveSite: saveCurrentSite, saveStatus }
 }

@@ -24,7 +24,7 @@ async function assertOk(res: Response, fallback: string): Promise<void> {
     throw new Error(body.error || fallback)
   } catch (err) {
     if (err instanceof Error && err.message !== 'Unexpected end of JSON input') throw err
-    throw new Error(fallback)
+    throw new Error(fallback, { cause: err })
   }
 }
 
@@ -83,7 +83,7 @@ export async function probeCmsSession(
   fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
   basePath = '/api/cms',
 ): Promise<boolean> {
-  const res = await fetchImpl(`${basePath}/project`, {
+  const res = await fetchImpl(`${basePath}/site`, {
     method: 'GET',
     credentials: 'include',
   })

@@ -73,9 +73,9 @@ describe('CMS auth client', () => {
     })
   })
 
-  it('treats a missing draft project as an authenticated empty CMS site', async () => {
+  it('treats a missing draft site as an authenticated empty CMS site', async () => {
     await expect(probeCmsSession(async () =>
-      new Response(JSON.stringify({ error: 'Draft project not found' }), { status: 404 }),
+      new Response(JSON.stringify({ error: 'draft site not found' }), { status: 404 }),
     )).resolves.toBe(true)
 
     await expect(probeCmsSession(async () =>

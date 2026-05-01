@@ -3,8 +3,8 @@
  *
  * Architecture source: Contribution #619 §2, §3, §6, §10 (Task #436)
  *
- * Manages project.visualComponents[] CRUD.
- * State lives in project.visualComponents (owned by projectSlice);
+ * Manages site.visualComponents[] CRUD.
+ * State lives in site.visualComponents (owned by siteSlice);
  * this slice owns only the action methods — same pattern as filesSlice.
  *
  * Every write boundary:
@@ -12,7 +12,7 @@
  *  - Derives filePath automatically from name (not user-settable).
  *  - Calls wouldCreateCycle() at addNodeToVc boundary and throws on cycle.
  *
- * Constraint #269: MUST NOT import from editor/ or react-publisher/.
+ * Constraint #269: MUST NOT import from editor/.
  * This is a pure data-layer slice.
  */
 
@@ -100,7 +100,7 @@ export interface VisualComponentsSlice {
    *
    * Throws VisualComponentNameError if:
    * - `name` is empty, not PascalCase, a reserved word, a base module name,
-   *   or already used by another VC in the project.
+   *   or already used by another VC in the site.
    */
   createVisualComponent(name: string): string
 
@@ -150,10 +150,10 @@ export interface VisualComponentsSlice {
 export const createVisualComponentsSlice: StateCreator<EditorStore, [], [], VisualComponentsSlice> = (set, get) => ({
 
   createVisualComponent(name) {
-    const { project } = get()
-    if (!project) throw new Error('[visualComponentsSlice] No project loaded')
+    const { site } = get()
+    if (!site) throw new Error('[visualComponentsSlice] Site document is not initialized')
 
-    const validation = validateComponentName(name, project.visualComponents ?? [])
+    const validation = validateComponentName(name, site.visualComponents ?? [])
     if (!validation.ok) {
       throw new VisualComponentNameError(validation.reason, validation.error)
     }
@@ -185,10 +185,10 @@ export const createVisualComponentsSlice: StateCreator<EditorStore, [], [], Visu
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        if (!state.project.visualComponents) state.project.visualComponents = []
-        state.project.visualComponents.push(newVC)
-        state.project.updatedAt = now
+        if (!state.site) return
+        if (!state.site.visualComponents) state.site.visualComponents = []
+        state.site.visualComponents.push(newVC)
+        state.site.updatedAt = now
       }),
     )
 
@@ -196,22 +196,22 @@ export const createVisualComponentsSlice: StateCreator<EditorStore, [], [], Visu
   },
 
   renameVisualComponent(id, newName) {
-    const { project } = get()
-    if (!project) throw new Error('[visualComponentsSlice] No project loaded')
+    const { site } = get()
+    if (!site) throw new Error('[visualComponentsSlice] Site document is not initialized')
 
-    const validation = validateComponentName(newName, project.visualComponents ?? [], id)
+    const validation = validateComponentName(newName, site.visualComponents ?? [], id)
     if (!validation.ok) {
       throw new VisualComponentNameError(validation.reason, validation.error)
     }
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        const vc = (state.project.visualComponents ?? []).find((v) => v.id === id)
+        if (!state.site) return
+        const vc = (state.site.visualComponents ?? []).find((v) => v.id === id)
         if (!vc) return
         vc.name = newName
         vc.filePath = deriveFilePath(newName)
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
@@ -219,21 +219,21 @@ export const createVisualComponentsSlice: StateCreator<EditorStore, [], [], Visu
   deleteVisualComponent(id) {
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        if (!state.project.visualComponents) return
-        const idx = state.project.visualComponents.findIndex((v) => v.id === id)
+        if (!state.site) return
+        if (!state.site.visualComponents) return
+        const idx = state.site.visualComponents.findIndex((v) => v.id === id)
         if (idx === -1) return
-        state.project.visualComponents.splice(idx, 1)
-        state.project.updatedAt = Date.now()
+        state.site.visualComponents.splice(idx, 1)
+        state.site.updatedAt = Date.now()
       }),
     )
   },
 
   addParam(vcId, name, type, defaultValue = '') {
     // Validate param name BEFORE entering Immer (pure read from current state)
-    const { project } = get()
-    if (project) {
-      const vc = (project.visualComponents ?? []).find((v) => v.id === vcId)
+    const { site } = get()
+    if (site) {
+      const vc = (site.visualComponents ?? []).find((v) => v.id === vcId)
       if (vc) {
         const validation = validateParamName(name, vc.params)
         if (!validation.ok) {
@@ -246,8 +246,8 @@ export const createVisualComponentsSlice: StateCreator<EditorStore, [], [], Visu
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        const vc = (state.project.visualComponents ?? []).find((v) => v.id === vcId)
+        if (!state.site) return
+        const vc = (state.site.visualComponents ?? []).find((v) => v.id === vcId)
         if (!vc) return
 
         const newParam: VCParam = {
@@ -258,7 +258,7 @@ export const createVisualComponentsSlice: StateCreator<EditorStore, [], [], Visu
           required: false,
         }
         vc.params.push(newParam)
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
 
@@ -268,22 +268,22 @@ export const createVisualComponentsSlice: StateCreator<EditorStore, [], [], Visu
   removeParam(vcId, paramId) {
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        const vc = (state.project.visualComponents ?? []).find((v) => v.id === vcId)
+        if (!state.site) return
+        const vc = (state.site.visualComponents ?? []).find((v) => v.id === vcId)
         if (!vc) return
         const idx = vc.params.findIndex((p) => p.id === paramId)
         if (idx === -1) return
         vc.params.splice(idx, 1)
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },
 
   addNodeToVc(vcId, parentNodeId, newNode) {
-    const { project } = get()
-    if (!project) throw new Error('[visualComponentsSlice] No project loaded')
+    const { site } = get()
+    if (!site) throw new Error('[visualComponentsSlice] Site document is not initialized')
 
-    const vcs = project.visualComponents ?? []
+    const vcs = site.visualComponents ?? []
 
     // Cycle guard — runs BEFORE any state mutation (slice write boundary, §3)
     if (newNode.moduleId === 'base.visualComponentRef') {
@@ -299,8 +299,8 @@ export const createVisualComponentsSlice: StateCreator<EditorStore, [], [], Visu
 
     set(
       produce((state: EditorStore) => {
-        if (!state.project) return
-        const vc = (state.project.visualComponents ?? []).find((v) => v.id === vcId)
+        if (!state.site) return
+        const vc = (state.site.visualComponents ?? []).find((v) => v.id === vcId)
         if (!vc) return
 
         const parent = findNodeById(vc.rootNode as VCNode, parentNodeId)
@@ -317,7 +317,7 @@ export const createVisualComponentsSlice: StateCreator<EditorStore, [], [], Visu
         if (!parent.childNodes) parent.childNodes = []
         parent.childNodes.push(newNode as unknown as VCNode)
 
-        state.project.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
       }),
     )
   },

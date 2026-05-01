@@ -3,7 +3,7 @@ import { immer } from 'zustand/middleware/immer'
 import { subscribeWithSelector } from 'zustand/middleware'
 import type { Page, PageNode } from '../page-tree/types'
 import type { VisualComponent } from '../visualComponents/types'
-import type { ProjectSlice } from './slices/projectSlice'
+import type { SiteSlice } from './slices/siteSlice'
 import type { SelectionSlice } from './slices/selectionSlice'
 import type { CanvasSlice } from './slices/canvasSlice'
 import type { UiSlice } from './slices/uiSlice'
@@ -12,8 +12,8 @@ import type { FilesSlice } from './slices/filesSlice'
 import type { VisualComponentsSlice } from './slices/visualComponentsSlice'
 import type { SettingsSlice } from './slices/settingsSlice'
 import type { AgentSlice } from '../agent/agentSlice'
-import type { ProjectPanelSlice } from './slices/projectPanelSlice'
-import { createProjectSlice } from './slices/projectSlice'
+import type { SitePanelSlice } from './slices/sitePanelSlice'
+import { createSiteSlice } from './slices/siteSlice'
 import { createSelectionSlice } from './slices/selectionSlice'
 import { createCanvasSlice } from './slices/canvasSlice'
 import { createUiSlice } from './slices/uiSlice'
@@ -22,22 +22,22 @@ import { createFilesSlice } from './slices/filesSlice'
 import { createVisualComponentsSlice } from './slices/visualComponentsSlice'
 import { createSettingsSlice } from './slices/settingsSlice'
 import { createAgentSlice } from '../agent/agentSlice'
-import { createProjectPanelSlice } from './slices/projectPanelSlice'
+import { createSitePanelSlice } from './slices/sitePanelSlice'
 
 /**
  * EditorStore — the central Zustand store for the page builder editor.
  *
- * Composed of 10 slices (6 canonical Phase 0 + agentSlice + projectPanelSlice + filesSlice + visualComponentsSlice):
- *   - projectSlice:        owns Project (pages, nodes, breakpoints, settings, classes, files)
+ * Composed of 10 slices (6 canonical Phase 0 + agentSlice + sitePanelSlice + filesSlice + visualComponentsSlice):
+ *   - siteSlice:        owns SiteDocument (pages, nodes, breakpoints, settings, classes, files)
  *   - selectionSlice:      selectedNodeId, hoveredNodeId
  *   - canvasSlice:         zoom, pan, activeBreakpointId, canvasMode (Constraint #317)
  *   - uiSlice:             panel visibility, unsaved-changes flag, insert picker
  *   - classSlice:          CSS class CRUD + node↔class assignment (Phase C)
- *   - filesSlice:          ProjectFile CRUD (Contribution #595 / Task #429)
+ *   - filesSlice:          SiteFile CRUD (Contribution #595 / Task #429)
  *   - visualComponentsSlice: VisualComponent CRUD (Contribution #619 / Task #436)
  *   - settingsSlice:       settings modal open/close + active section (Guideline #193/#323)
  *   - agentSlice:          AI Agent Panel state + streaming (Phase D)
- *   - projectPanelSlice:   Dependency manifest state
+ *   - sitePanelSlice:   Dependency manifest state
  *
  * All mutations are wrapped in Immer for structural sharing.
  * Use subscribeWithSelector for granular Zustand subscriptions without Context re-renders.
@@ -46,12 +46,12 @@ import { createProjectPanelSlice } from './slices/projectPanelSlice'
  * No panel may maintain a local copy of node data.
  * Constraint #283/#286: No Anthropic SDK imports in this file or any src/ file.
  */
-export type EditorStore = ProjectSlice & SelectionSlice & CanvasSlice & UiSlice & ClassSlice & FilesSlice & VisualComponentsSlice & SettingsSlice & AgentSlice & ProjectPanelSlice
+export type EditorStore = SiteSlice & SelectionSlice & CanvasSlice & UiSlice & ClassSlice & FilesSlice & VisualComponentsSlice & SettingsSlice & AgentSlice & SitePanelSlice
 
 export const useEditorStore = create<EditorStore>()(
   subscribeWithSelector(
     immer((...args) => ({
-      ...createProjectSlice(...args),
+      ...createSiteSlice(...args),
       ...createSelectionSlice(...args),
       ...createCanvasSlice(...args),
       ...createUiSlice(...args),
@@ -60,7 +60,7 @@ export const useEditorStore = create<EditorStore>()(
       ...createVisualComponentsSlice(...args),
       ...createSettingsSlice(...args),
       ...createAgentSlice(...args),
-      ...createProjectPanelSlice(...args),
+      ...createSitePanelSlice(...args),
     }))
   )
 )
@@ -70,9 +70,9 @@ export const useEditorStore = create<EditorStore>()(
 // to keep component subscriptions granular and avoid unnecessary re-renders.
 // ---------------------------------------------------------------------------
 
-/** Select the active page from the project */
+/** Select the active page from the site */
 export const selectActivePage = (s: EditorStore) =>
-  s.project?.pages.find((p) => p.id === s.activePageId) ?? null
+  s.site?.pages.find((p) => p.id === s.activePageId) ?? null
 
 /** Select whether the docked right sidebar is currently taking layout space. */
 export const selectRightSidebarExpanded = (s: EditorStore) =>
@@ -137,7 +137,7 @@ export const selectActiveCanvasPage = (s: EditorStore): Page | null => {
   }
 
   if (activeDocument.kind === 'visualComponent') {
-    const vc = s.project?.visualComponents?.find(
+    const vc = s.site?.visualComponents?.find(
       (v) => v.id === activeDocument.vcId,
     ) ?? null
     if (!vc) return null
@@ -180,7 +180,7 @@ export const selectHoveredNode = (s: EditorStore) => {
 }
 
 // ---------------------------------------------------------------------------
-// Undo / Redo hooks — subscribe only to the flags, not the full project,
+// Undo / Redo hooks — subscribe only to the flags, not the full site,
 // so toolbar buttons re-render only when availability changes.
 // ---------------------------------------------------------------------------
 
