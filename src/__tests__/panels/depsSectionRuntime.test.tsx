@@ -7,6 +7,11 @@ import { makeSite } from '../fixtures'
 import { normalizeSiteRuntimeConfig } from '../../core/site-runtime'
 
 afterEach(cleanup)
+const originalFetch = globalThis.fetch
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+})
 
 function resetStore() {
   const packageJson = {
@@ -59,5 +64,30 @@ describe('DepsSection runtime script dependency usage', () => {
 
     expect(useEditorStore.getState().packageJson.dependencies.motion).toBe('*')
     expect(useEditorStore.getState().site?.packageJson?.dependencies.motion).toBe('*')
+  })
+
+  it('resolves runtime dependencies into the site dependency lock', async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({
+        dependencyLock: {
+          version: 1,
+          packages: {
+            'canvas-confetti': {
+              name: 'canvas-confetti',
+              requested: '^1.9.3',
+              version: '1.9.3',
+              resolvedAt: 123,
+            },
+          },
+          updatedAt: 123,
+        },
+      }), { status: 200 })) as typeof fetch
+
+    render(<DepsSection collapsible={false} defaultExpanded />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve runtime' }))
+    expect(await screen.findByText('1 locked')).toBeDefined()
+    expect(useEditorStore.getState().siteRuntime.dependencyLock.packages['canvas-confetti']?.version).toBe('1.9.3')
+    expect(useEditorStore.getState().site?.runtime?.dependencyLock.packages['canvas-confetti']?.version).toBe('1.9.3')
   })
 })

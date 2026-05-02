@@ -37,6 +37,7 @@ import {
   type RuntimePackageDependencyUsage,
   type SiteRuntimeDiagnostic,
 } from '../../../core/site-runtime'
+import { resolveCmsRuntimeDependencies } from '../../../core/persistence/cmsRuntime'
 import { registry } from '../../../core/module-engine/registry'
 import styles from './DepsSection.module.css'
 
@@ -79,6 +80,7 @@ export function DepsSection({
   const packageJson = useEditorStore((s) => s.packageJson)
   const setDependency = useEditorStore((s) => s.setDependency)
   const removeDependency = useEditorStore((s) => s.removeDependency)
+  const setSiteDependencyLock = useEditorStore((s) => s.setSiteDependencyLock)
 
   // ── Section collapse state ───────────────────────────────────────────────
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
@@ -88,6 +90,8 @@ export function DepsSection({
   const [addName, setAddName] = useState('')
   const [addDev, setAddDev] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  const [resolveStatus, setResolveStatus] = useState<'idle' | 'resolving' | 'resolved' | 'error'>('idle')
+  const [resolveMessage, setResolveMessage] = useState<string | null>(null)
   const [removeConfirm, setRemoveConfirm] = useState<RemoveConfirmState | null>(null)
 
   const cancelRef = useRef<HTMLButtonElement>(null)
@@ -209,6 +213,22 @@ export function DepsSection({
   }, [])
 
   const depCount = totalAll
+  const runtimeDependencyCount = Object.keys(packageJson.dependencies).length
+
+  const handleResolveDependencies = useCallback(() => {
+    setResolveStatus('resolving')
+    setResolveMessage(null)
+    resolveCmsRuntimeDependencies(packageJson)
+      .then((dependencyLock) => {
+        setSiteDependencyLock(dependencyLock)
+        setResolveStatus('resolved')
+        setResolveMessage(`${Object.keys(dependencyLock.packages).length} locked`)
+      })
+      .catch((error) => {
+        setResolveStatus('error')
+        setResolveMessage(error instanceof Error ? error.message : 'Dependency resolution failed')
+      })
+  }, [packageJson, setSiteDependencyLock])
 
   const body = (
     <div
@@ -319,6 +339,28 @@ export function DepsSection({
 
       {/* ─── Add package form ──────────────────────────────────────── */}
       <div className={styles.addForm}>
+        {runtimeDependencyCount > 0 && (
+          <div className={styles.resolveRow}>
+            <Button
+              variant="secondary"
+              size="xs"
+              onClick={handleResolveDependencies}
+              disabled={resolveStatus === 'resolving'}
+            >
+              {resolveStatus === 'resolving' ? 'Resolving' : 'Resolve runtime'}
+            </Button>
+            {resolveMessage && (
+              <span
+                className={styles.resolveStatus}
+                data-status={resolveStatus}
+                role={resolveStatus === 'error' ? 'alert' : undefined}
+              >
+                {resolveMessage}
+              </span>
+            )}
+          </div>
+        )}
+
         <div className={styles.addRow}>
           <div className={styles.addInputArea}>
             <div className={styles.addInputWrapper}>
