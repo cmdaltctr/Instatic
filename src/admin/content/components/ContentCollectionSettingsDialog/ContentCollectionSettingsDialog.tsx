@@ -5,7 +5,7 @@ import type { ContentCollection, UpdateContentCollectionInput } from '@core/cont
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { CloseIcon } from '@ui/icons/icons/close'
-import dialogStyles from '../../../../editor/components/SiteCreateDialog/SiteCreateDialog.module.css'
+import dialogStyles from '@editor/components/SiteCreateDialog/SiteCreateDialog.module.css'
 import styles from '../../ContentPage.module.css'
 import { slugFromTitle } from '../../utils/contentEntryUtils'
 

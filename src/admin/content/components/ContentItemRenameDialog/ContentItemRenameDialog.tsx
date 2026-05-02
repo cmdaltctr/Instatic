@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { CloseIcon } from '@ui/icons/icons/close'
-import dialogStyles from '../../../../editor/components/SiteCreateDialog/SiteCreateDialog.module.css'
+import dialogStyles from '@editor/components/SiteCreateDialog/SiteCreateDialog.module.css'
 import { slugFromTitle } from '../../utils/contentEntryUtils'
 
 export interface ContentItemRenamePayload {

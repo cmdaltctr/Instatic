@@ -9,9 +9,9 @@ import { FileTextIcon } from '@ui/icons/icons/file-text'
 import { SettingsIcon } from '@ui/icons/icons/settings'
 import { UploadIcon } from '@ui/icons/icons/upload'
 import type { ContentCollection, ContentEntry, UpdateContentCollectionInput } from '@core/content/types'
-import { ExplorerItemContextMenu, type ExplorerContextMenuItem } from '../../../../editor/components/ExplorerPanelActions'
-import explorerStyles from '../../../../editor/components/SiteExplorerPanel/SiteExplorerPanel.module.css'
-import { PanelHeader } from '../../../../editor/components/shared/PanelHeader'
+import { ExplorerItemContextMenu, type ExplorerContextMenuItem } from '@editor/components/ExplorerPanelActions'
+import explorerStyles from '@editor/components/SiteExplorerPanel/SiteExplorerPanel.module.css'
+import { PanelHeader } from '@editor/components/shared/PanelHeader'
 import { ContentCollectionSettingsDialog } from '../ContentCollectionSettingsDialog/ContentCollectionSettingsDialog'
 import {
   ContentItemRenameDialog,

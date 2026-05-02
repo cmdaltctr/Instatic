@@ -4,9 +4,9 @@ import { BookOpenIcon } from '@ui/icons/icons/book-open'
 import { ImagesIcon } from '@ui/icons/icons/images'
 import type { IconComponent } from '@ui/icons/types'
 import { useEditorStore } from '@core/editor-store/store'
-import leftSidebarStyles from '../../../../editor/components/LeftSidebar/LeftSidebar.module.css'
-import panelRailStyles from '../../../../editor/components/PanelRail/PanelRail.module.css'
-import { SidebarResizeHandle } from '../../../../editor/components/shared/SidebarResizeHandle'
+import leftSidebarStyles from '@editor/components/LeftSidebar/LeftSidebar.module.css'
+import panelRailStyles from '@editor/components/PanelRail/PanelRail.module.css'
+import { SidebarResizeHandle } from '@editor/components/shared/SidebarResizeHandle'
 
 export type ContentPanelId = 'content' | 'media'
 

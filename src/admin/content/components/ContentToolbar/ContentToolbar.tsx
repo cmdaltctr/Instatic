@@ -9,8 +9,8 @@ import {
   PublishActionGroup,
   type PublishActionMenuItem,
   type PublishActionStatusTone,
-} from '../../../../editor/components/Toolbar/PublishActionGroup'
-import { SettingsButton } from '../../../../editor/components/Toolbar/SettingsButton'
+} from '@editor/components/Toolbar/PublishActionGroup'
+import { SettingsButton } from '@editor/components/Toolbar/SettingsButton'
 import type { SaveMessage } from '../../hooks/useContentEntryDraft'
 
 interface ContentToolbarProps {

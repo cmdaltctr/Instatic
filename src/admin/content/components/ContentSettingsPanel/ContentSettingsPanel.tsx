@@ -8,8 +8,8 @@ import type { CmsMediaAsset } from '@core/persistence'
 import { useEditorStore } from '@core/editor-store/store'
 import { contentCollectionHasField } from '@core/content/fields'
 import type { ContentCollection, ContentEntry, ContentEntryStatus } from '@core/content/types'
-import propertiesStyles from '../../../../editor/components/PropertiesPanel/PropertiesPanel.module.css'
-import { PanelHeader } from '../../../../editor/components/shared/PanelHeader'
+import propertiesStyles from '@editor/components/PropertiesPanel/PropertiesPanel.module.css'
+import { PanelHeader } from '@editor/components/shared/PanelHeader'
 import styles from '../../ContentPage.module.css'
 
 interface ContentSettingsPanelProps {

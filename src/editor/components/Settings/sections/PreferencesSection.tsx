@@ -6,7 +6,7 @@ import { Switch } from '@ui/components/Switch'
 import {
   EDITOR_PREFS_KEY,
   notifyEditorPrefsChanged,
-} from '../../../preferences/editorPreferences'
+} from '@editor/preferences/editorPreferences'
 import s from '../Settings.module.css'
 
 interface EditorPrefs {
