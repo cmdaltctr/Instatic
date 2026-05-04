@@ -14,6 +14,7 @@
 import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Button } from '@ui/components/Button'
+import { EmptyState } from '@ui/components/EmptyState'
 import { useEditorStore } from '@core/editor-store/store'
 import type { FontEntry } from '@core/fonts/schemas'
 import { compareVariants } from '@core/fonts/variants'
@@ -55,32 +56,49 @@ export function FontsSection() {
   return (
     <div className={styles.section}>
       {fonts.length === 0 ? (
-        <p className={styles.empty}>
-          No fonts installed yet. Add a Google font to use it in the canvas and
-          published pages.
-        </p>
+        // Mirror the "No <kind> scales yet." empty state used in the Scales
+        // section so the two empty states inside the Typography panel read
+        // consistently. The CTA opens the same Add Google Font dialog the
+        // bottom-right "Add Google font" button does.
+        <EmptyState
+          plain
+          compact
+          title="No fonts installed yet."
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={() => setDialogOpen(true)}
+            >
+              Add Google font
+            </Button>
+          }
+        />
       ) : (
-        <ul className={styles.list} role="list" aria-label="Installed fonts">
-          {fonts.map((entry) => (
-            <FontRow
-              key={entry.id}
-              entry={entry}
-              onRemove={() => { void handleRemove(entry) }}
-            />
-          ))}
-        </ul>
-      )}
+        <>
+          <ul className={styles.list} role="list" aria-label="Installed fonts">
+            {fonts.map((entry) => (
+              <FontRow
+                key={entry.id}
+                entry={entry}
+                onRemove={() => { void handleRemove(entry) }}
+              />
+            ))}
+          </ul>
 
-      <div className={styles.addRow}>
-        <Button
-          variant="secondary"
-          size="sm"
-          type="button"
-          onClick={() => setDialogOpen(true)}
-        >
-          Add Google font
-        </Button>
-      </div>
+          <div className={styles.addRow}>
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={() => setDialogOpen(true)}
+            >
+              Add Google font
+            </Button>
+          </div>
+        </>
+      )}
 
       {actionError && (
         <p role="alert" className={styles.errorAlert}>{actionError}</p>

@@ -165,6 +165,11 @@ export interface ScaleAdapter<G, C> {
    * `position`: 'top' renders BEFORE the built-in Scales section (e.g. fonts
    *   live above scales for typography). 'bottom' renders AFTER Utilities
    *   (the original behaviour). Default: 'bottom'.
+   *
+   * The render callback receives the currently active scale group, or `null`
+   * when there are no scales (the Fonts library is independent of scales —
+   * the user can still install fonts before any scale exists, and the module
+   * being disabled doesn't disable the fonts library either).
    */
   extraSections?: ReadonlyArray<{
     id: string
@@ -172,7 +177,7 @@ export interface ScaleAdapter<G, C> {
     icon?: IconComponent
     defaultOpen?: boolean
     position?: 'top' | 'bottom'
-    render: (group: G) => React.ReactNode
+    render: (group: G | null) => React.ReactNode
   }>
 }
 
@@ -276,37 +281,18 @@ export function FrameworkScalePanel<G extends GroupShape, C extends GeneratorSha
         </PanelHeader>
 
         <div className={styles.content}>
-          {isDisabled ? (
-            <EmptyState
-              title={`${adapter.title} module is disabled.`}
-              action={
-                <Button variant="secondary" size="sm" onClick={adapter.onToggleDisabled}>
-                  Enable
-                </Button>
-              }
-            />
-          ) : sortedGroups.length === 0 ? (
-            <EmptyState
-              title={`No ${adapter.title.toLowerCase()} scales yet.`}
-              action={
-                <Button variant="secondary" size="sm" onClick={handleAddGroup}>
-                  Create scale
-                </Button>
-              }
-            />
-          ) : activeGroup ? (
-            <GroupEditor<G, C>
-              key={activeGroup.id}
-              group={activeGroup as G}
-              groups={sortedGroups as G[]}
-              adapter={adapter}
-              preferences={preferences}
-              onContextMenu={(e) => handleTabContextMenu(activeGroup.id, e)}
-              onActivateGroup={(value) => setActiveTabId(value)}
-              onAddGroup={handleAddGroup}
-              classGenerators={classGenerators}
-            />
-          ) : null}
+          <PanelBody<G, C>
+            key={activeGroup?.id ?? 'empty'}
+            group={(activeGroup ?? null) as G | null}
+            groups={sortedGroups as G[]}
+            isDisabled={isDisabled}
+            adapter={adapter}
+            preferences={preferences}
+            onContextMenu={(e) => activeGroup && handleTabContextMenu(activeGroup.id, e)}
+            onActivateGroup={(value) => setActiveTabId(value)}
+            onAddGroup={handleAddGroup}
+            classGenerators={classGenerators}
+          />
         </div>
       </aside>
 
@@ -346,12 +332,15 @@ export function FrameworkScalePanel<G extends GroupShape, C extends GeneratorSha
   )
 }
 
-// ─── Group editor ───────────────────────────────────────────────────────────
+// ─── Panel body ─────────────────────────────────────────────────────────────
 
-interface GroupEditorProps<G extends GroupShape, C extends GeneratorShape> {
-  group: G
+interface PanelBodyProps<G extends GroupShape, C extends GeneratorShape> {
+  /** Currently active scale, or null when there are no scales yet. */
+  group: G | null
   /** All scale groups, sorted — needed for the in-section FilterBar tab list. */
   groups: G[]
+  /** Whether the entire scale module is disabled (typography / spacing). */
+  isDisabled: boolean
   adapter: ScaleAdapter<G, C>
   preferences: ReturnType<typeof resolveFrameworkPreferences>
   onContextMenu: (event: MouseEvent<HTMLElement>) => void
@@ -362,16 +351,24 @@ interface GroupEditorProps<G extends GroupShape, C extends GeneratorShape> {
   classGenerators: C[]
 }
 
-function GroupEditor<G extends GroupShape, C extends GeneratorShape>({
+/**
+ * Renders the full vertical stack of sections (top extras → Scales → Utilities
+ * → bottom extras). Empty/disabled states live INSIDE the Scales section's
+ * body — they no longer replace the whole panel — so independent extra
+ * sections (e.g. the Typography → Fonts library) stay reachable even when no
+ * scale exists or the module is disabled.
+ */
+function PanelBody<G extends GroupShape, C extends GeneratorShape>({
   group,
   groups,
+  isDisabled,
   adapter,
   preferences,
   onContextMenu,
   onActivateGroup,
   onAddGroup,
   classGenerators,
-}: GroupEditorProps<G, C>) {
+}: PanelBodyProps<G, C>) {
   // Split extra sections by position so we can render the 'top' ones before
   // the built-in Scales section and the 'bottom' ones after Utilities.
   const topExtraSections = adapter.extraSections?.filter((s) => s.position === 'top') ?? []
@@ -380,7 +377,10 @@ function GroupEditor<G extends GroupShape, C extends GeneratorShape>({
   return (
     <div className={styles.editor}>
       {/* Top-positioned extra sections — e.g. Typography → Fonts library lives
-          above the Scales section so the user encounters fonts first. */}
+          above the Scales section so the user encounters fonts first. These
+          render regardless of whether a scale exists or the module is
+          disabled, because they're independent surfaces (fonts are stored
+          on `site.settings.fonts`, not on the typography framework). */}
       {topExtraSections.map((section) => (
         <Section
           key={section.id}
@@ -393,78 +393,66 @@ function GroupEditor<G extends GroupShape, C extends GeneratorShape>({
       ))}
 
       {/* Scales section — scale picker (FilterBar), name + prefix, mode toggle,
-          fluid/manual editor with chart. The scale picker lives inside the
-          section because it's part of managing scales. The icon comes from
-          the adapter so each panel reuses its rail icon (text-start-t /
-          ruler-dimension). */}
+          fluid/manual editor with chart. When there are no scales or the
+          module is disabled, the section renders an inline empty state so
+          the surrounding sections stay visible. */}
       <Section title="Scales" defaultOpen icon={adapter.scalesSectionIcon}>
         <div className={styles.sectionBody}>
-          <FilterBar<string>
-            items={groups.map<FilterBarItem<string>>((g) => ({
-              value: g.id,
-              label: g.name,
-            }))}
-            value={group.id}
-            onValueChange={onActivateGroup}
-            groupLabel={`${adapter.title} scales`}
-            inlineActions={
-              <Button
-                variant="ghost"
-                size="xs"
-                aria-label={`Add ${adapter.title.toLowerCase()} scale`}
-                onClick={onAddGroup}
-              >
-                Add scale
-              </Button>
-            }
-          />
-
-          <div className={styles.tabHeading} onContextMenu={onContextMenu}>
-            <Input
-              fieldSize="sm"
-              aria-label="Scale name"
-              value={group.name}
-              onChange={(event) => adapter.onUpdateGroup(group.id, { name: event.target.value })}
-            />
-            <Input
-              fieldSize="sm"
-              aria-label="Variable prefix"
-              value={group.namingConvention}
-              onChange={(event) =>
-                adapter.onUpdateGroup(group.id, { namingConvention: event.target.value })
+          {isDisabled ? (
+            <EmptyState
+              plain
+              compact
+              title={`${adapter.title} module is disabled.`}
+              action={
+                <Button variant="secondary" size="sm" onClick={adapter.onToggleDisabled}>
+                  Enable
+                </Button>
               }
-              monospace
             />
-          </div>
-
-          <ModeToggle
-            mode={group.mode}
-            onChange={(mode) => adapter.onUpdateGroup(group.id, { mode })}
-          />
-
-          {group.mode === 'fluid_manual' ? (
-            <ManualEditor group={group} adapter={adapter} preferences={preferences} />
+          ) : group === null ? (
+            <EmptyState
+              plain
+              compact
+              title={`No ${adapter.title.toLowerCase()} scales yet.`}
+              action={
+                <Button variant="secondary" size="sm" onClick={onAddGroup}>
+                  Create scale
+                </Button>
+              }
+            />
           ) : (
-            <FluidEditor group={group} adapter={adapter} preferences={preferences} />
+            <ScalesEditorBody<G, C>
+              group={group}
+              groups={groups}
+              adapter={adapter}
+              preferences={preferences}
+              onContextMenu={onContextMenu}
+              onActivateGroup={onActivateGroup}
+              onAddGroup={onAddGroup}
+            />
           )}
         </div>
       </Section>
 
       {/* Utilities section — class generator (utility class patterns).
-          Same icon for both panels: utility classes are CSS rules, so the
-          braces icon (`{ }`) reads as "code that gets generated". */}
-      <Section title="Utilities" defaultOpen icon={BracesIcon}>
-        <div className={styles.sectionBody}>
-          <ClassGeneratorList<C>
-            groupId={group.id}
-            groupNamingConvention={group.namingConvention}
-            adapter={adapter as unknown as ScaleAdapter<GroupShape, C>}
-            classes={classGenerators}
-          />
-        </div>
-      </Section>
+          Hidden when no scale exists (utility classes are bound to a scale)
+          or when the module is disabled. The icon (`{ }`) reads as "code
+          that gets generated". */}
+      {!isDisabled && group !== null && (
+        <Section title="Utilities" defaultOpen icon={BracesIcon}>
+          <div className={styles.sectionBody}>
+            <ClassGeneratorList<C>
+              groupId={group.id}
+              groupNamingConvention={group.namingConvention}
+              adapter={adapter as unknown as ScaleAdapter<GroupShape, C>}
+              classes={classGenerators}
+            />
+          </div>
+        </Section>
+      )}
 
-      {/* Bottom-positioned extra sections (default placement). */}
+      {/* Bottom-positioned extra sections (default placement). Same as the
+          top extras: independent of scale existence / disabled state. */}
       {bottomExtraSections.map((section) => (
         <Section
           key={section.id}
@@ -476,6 +464,85 @@ function GroupEditor<G extends GroupShape, C extends GeneratorShape>({
         </Section>
       ))}
     </div>
+  )
+}
+
+// ─── Scales editor body ─────────────────────────────────────────────────────
+
+interface ScalesEditorBodyProps<G extends GroupShape, C extends GeneratorShape> {
+  group: G
+  groups: G[]
+  adapter: ScaleAdapter<G, C>
+  preferences: ReturnType<typeof resolveFrameworkPreferences>
+  onContextMenu: (event: MouseEvent<HTMLElement>) => void
+  onActivateGroup: (groupId: string) => void
+  onAddGroup: () => void
+}
+
+/**
+ * The "scale exists, module enabled" body of the Scales section: filter bar,
+ * name/prefix inputs, mode toggle, and the fluid/manual editor.
+ */
+function ScalesEditorBody<G extends GroupShape, C extends GeneratorShape>({
+  group,
+  groups,
+  adapter,
+  preferences,
+  onContextMenu,
+  onActivateGroup,
+  onAddGroup,
+}: ScalesEditorBodyProps<G, C>) {
+  return (
+    <>
+      <FilterBar<string>
+        items={groups.map<FilterBarItem<string>>((g) => ({
+          value: g.id,
+          label: g.name,
+        }))}
+        value={group.id}
+        onValueChange={onActivateGroup}
+        groupLabel={`${adapter.title} scales`}
+        inlineActions={
+          <Button
+            variant="ghost"
+            size="xs"
+            aria-label={`Add ${adapter.title.toLowerCase()} scale`}
+            onClick={onAddGroup}
+          >
+            Add scale
+          </Button>
+        }
+      />
+
+      <div className={styles.tabHeading} onContextMenu={onContextMenu}>
+        <Input
+          fieldSize="sm"
+          aria-label="Scale name"
+          value={group.name}
+          onChange={(event) => adapter.onUpdateGroup(group.id, { name: event.target.value })}
+        />
+        <Input
+          fieldSize="sm"
+          aria-label="Variable prefix"
+          value={group.namingConvention}
+          onChange={(event) =>
+            adapter.onUpdateGroup(group.id, { namingConvention: event.target.value })
+          }
+          monospace
+        />
+      </div>
+
+      <ModeToggle
+        mode={group.mode}
+        onChange={(mode) => adapter.onUpdateGroup(group.id, { mode })}
+      />
+
+      {group.mode === 'fluid_manual' ? (
+        <ManualEditor group={group} adapter={adapter} preferences={preferences} />
+      ) : (
+        <FluidEditor group={group} adapter={adapter} preferences={preferences} />
+      )}
+    </>
   )
 }
 
