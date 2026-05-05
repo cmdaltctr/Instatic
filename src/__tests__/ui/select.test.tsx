@@ -90,7 +90,7 @@ describe('Select', () => {
     expect(combobox.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('closes when the backdrop is clicked', () => {
+  it('closes when a click occurs outside the trigger and menu', () => {
     render(
       <Select
         id="outside-status"
@@ -104,10 +104,12 @@ describe('Select', () => {
     const combobox = screen.getByRole('combobox', { name: /outside status/i })
 
     fireEvent.click(combobox.nextElementSibling as HTMLElement)
+    expect(screen.getByRole('listbox', { name: /outside status/i })).toBeDefined()
 
-    const backdrop = screen.getByRole('listbox', { name: /outside status/i })
-      .previousElementSibling as HTMLElement
-    fireEvent.click(backdrop)
+    // The menu is non-modal (anchored to the trigger via auto-flip
+    // positioning) — dismissal goes through a document-level mousedown
+    // listener that fires on any click outside the trigger and menu.
+    fireEvent.mouseDown(document.body)
 
     expect(screen.queryByRole('listbox', { name: /outside status/i })).toBeNull()
     expect(combobox.getAttribute('aria-expanded')).toBe('false')

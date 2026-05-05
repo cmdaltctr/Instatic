@@ -33,12 +33,18 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@ui/cn'
+import {
+  computeFloatingPosition,
+  type FloatingAlign,
+  type FloatingSide,
+  type ResolvedFloatingSide,
+} from '@ui/lib/floatingPosition'
 import styles from './Tooltip.module.css'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
-export type TooltipSide = 'top' | 'bottom' | 'left' | 'right' | 'auto'
-export type TooltipAlign = 'start' | 'center' | 'end'
+export type TooltipSide = FloatingSide
+export type TooltipAlign = FloatingAlign
 
 export interface TooltipProps {
   /** Tooltip content — string or simple JSX. */
@@ -70,121 +76,10 @@ function getTooltipRoot(): HTMLElement {
 
 // ─── Position computation ─────────────────────────────────────────────────────
 
-const VIEWPORT_MARGIN = 8
-/** Half of the 6px rotated-square arrow. */
+/** Half of the 6px rotated-square arrow — adds outward padding past `offset`. */
 const ARROW_HALF = 3
-/** Minimum arrow offset from bubble edge to keep arrow visually anchored. */
-const ARROW_EDGE_PAD = 6
-
-type ResolvedSide = 'top' | 'bottom' | 'left' | 'right'
-
-interface Position {
-  x: number
-  y: number
-  /** Distance from the bubble's leading edge to the arrow center, in px. */
-  arrowOffset: number
-  side: ResolvedSide
-}
-
-function alignedX(trigger: DOMRect, tooltipWidth: number, align: TooltipAlign): number {
-  if (align === 'start') return trigger.left
-  if (align === 'end') return trigger.right - tooltipWidth
-  return trigger.left + trigger.width / 2 - tooltipWidth / 2
-}
-
-function alignedY(trigger: DOMRect, tooltipHeight: number, align: TooltipAlign): number {
-  if (align === 'start') return trigger.top
-  if (align === 'end') return trigger.bottom - tooltipHeight
-  return trigger.top + trigger.height / 2 - tooltipHeight / 2
-}
-
-function sideCandidate(
-  side: ResolvedSide,
-  trigger: DOMRect,
-  tw: number,
-  th: number,
-  align: TooltipAlign,
-  offset: number,
-): { x: number; y: number; fits: boolean; arrowOffset: number } {
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-
-  let rawX: number
-  let rawY: number
-
-  if (side === 'top') {
-    rawX = alignedX(trigger, tw, align)
-    rawY = trigger.top - th - offset - ARROW_HALF
-  } else if (side === 'bottom') {
-    rawX = alignedX(trigger, tw, align)
-    rawY = trigger.bottom + offset + ARROW_HALF
-  } else if (side === 'left') {
-    rawX = trigger.left - tw - offset - ARROW_HALF
-    rawY = alignedY(trigger, th, align)
-  } else {
-    rawX = trigger.right + offset + ARROW_HALF
-    rawY = alignedY(trigger, th, align)
-  }
-
-  const fits =
-    rawX >= VIEWPORT_MARGIN &&
-    rawX + tw <= vw - VIEWPORT_MARGIN &&
-    rawY >= VIEWPORT_MARGIN &&
-    rawY + th <= vh - VIEWPORT_MARGIN
-
-  const x = Math.max(VIEWPORT_MARGIN, Math.min(rawX, vw - tw - VIEWPORT_MARGIN))
-  const y = Math.max(VIEWPORT_MARGIN, Math.min(rawY, vh - th - VIEWPORT_MARGIN))
-
-  let arrowOffset: number
-  if (side === 'top' || side === 'bottom') {
-    const cx = trigger.left + trigger.width / 2
-    arrowOffset = Math.max(ARROW_EDGE_PAD, Math.min(tw - ARROW_EDGE_PAD, cx - x))
-  } else {
-    const cy = trigger.top + trigger.height / 2
-    arrowOffset = Math.max(ARROW_EDGE_PAD, Math.min(th - ARROW_EDGE_PAD, cy - y))
-  }
-
-  return { x, y, fits, arrowOffset }
-}
-
-function computePosition(
-  trigger: DOMRect,
-  tw: number,
-  th: number,
-  side: TooltipSide,
-  align: TooltipAlign,
-  offset: number,
-): Position {
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-
-  const candidates: ResolvedSide[] =
-    side === 'auto' ? ['top', 'bottom', 'right', 'left'] : [side as ResolvedSide]
-
-  // Try each side in priority order; return on the first that fits.
-  for (const s of candidates) {
-    const c = sideCandidate(s, trigger, tw, th, align, offset)
-    if (c.fits) return { x: c.x, y: c.y, arrowOffset: c.arrowOffset, side: s }
-  }
-
-  // No side fits — pick the one with the most available space and clamp.
-  const scored = (
-    side === 'auto'
-      ? (['top', 'bottom', 'right', 'left'] as ResolvedSide[])
-      : [side as ResolvedSide]
-  ).map((s) => {
-    const space =
-      s === 'top' ? trigger.top :
-      s === 'bottom' ? vh - trigger.bottom :
-      s === 'right' ? vw - trigger.right :
-      trigger.left
-    return { s, space }
-  })
-  scored.sort((a, b) => b.space - a.space)
-  const best = scored[0].s
-  const c = sideCandidate(best, trigger, tw, th, align, offset)
-  return { x: c.x, y: c.y, arrowOffset: c.arrowOffset, side: best }
-}
+/** Tooltip auto-priority: prefer above the trigger, then below, then sides. */
+const TOOLTIP_AUTO_PRIORITY = ['top', 'bottom', 'right', 'left'] as const
 
 // ─── Inner component (all hooks live here) ───────────────────────────────────
 
@@ -204,7 +99,12 @@ function TooltipInner({
 }: Required<Omit<TooltipProps, 'disabled'>>) {
   const id = useId()
   const [shown, setShown] = useState(false)
-  const [position, setPosition] = useState<Position | null>(null)
+  const [position, setPosition] = useState<{
+    x: number
+    y: number
+    arrowOffset: number
+    side: ResolvedFloatingSide
+  } | null>(null)
   // State (not useRef) so closures passed to cloneElement never close over a
   // ref value — which is disallowed during render by react-hooks/refs.
   const [triggerEl, setTriggerEl] = useState<HTMLElement | null>(null)
@@ -222,7 +122,17 @@ function TooltipInner({
     if (!shown || !triggerEl || !bubbleRef.current) return
     const triggerRect = triggerEl.getBoundingClientRect()
     const { width, height } = bubbleRef.current.getBoundingClientRect()
-    setPosition(computePosition(triggerRect, width, height, side, align, offset))
+    setPosition(
+      computeFloatingPosition(triggerRect, {
+        floatingWidth: width,
+        floatingHeight: height,
+        side,
+        align,
+        offset,
+        edgePadding: ARROW_HALF,
+        autoPriority: TOOLTIP_AUTO_PRIORITY,
+      }),
+    )
   }, [shown, triggerEl, side, align, offset])
 
   // Global dismiss: scroll (hide), Escape (hide), pointerdown outside (hide).

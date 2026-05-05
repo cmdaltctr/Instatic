@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -13,11 +14,31 @@ import { Button, type ButtonProps } from '@ui/components/Button'
 import { Separator } from '@ui/components/Separator'
 import { ChevronRightIcon } from 'pixel-art-icons/icons/chevron-right'
 import { cn } from '@ui/cn'
+import {
+  computeFloatingPosition,
+  type FloatingAlign,
+  type FloatingSide,
+  type ResolvedFloatingSide,
+} from '@ui/lib/floatingPosition'
 import styles from './ContextMenu.module.css'
 
-interface ContextMenuProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
+/**
+ * Dropdown auto-priority: prefer opening below the trigger, then above,
+ * then to the right, then to the left.
+ *
+ * This is intentionally different from the Tooltip auto-priority (which
+ * starts at `top`) because dropdown menus that open *upward* by default
+ * feel inverted; users expect them to drop *down*.
+ */
+const DROPDOWN_AUTO_PRIORITY = ['bottom', 'top', 'right', 'left'] as const
+
+interface ContextMenuPositionState {
   x: number
   y: number
+  side: ResolvedFloatingSide
+}
+
+interface ContextMenuProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   ariaLabel: string
   onClose: () => void
   children: ReactNode
@@ -39,12 +60,45 @@ interface ContextMenuProps extends Omit<HTMLAttributes<HTMLDivElement>, 'childre
    * prop undefined and the modal backdrop is used instead.
    */
   triggerRef?: RefObject<HTMLElement | null>
+  /**
+   * Absolute viewport-pixel x coordinate of the menu's left edge.
+   * Use this together with `y` for point-anchored menus (e.g. right-click).
+   * Mutually exclusive with `anchorRef`.
+   */
+  x?: number
+  /** Absolute viewport-pixel y coordinate of the menu's top edge. */
+  y?: number
+  /**
+   * Element whose bounding rect anchors the menu. The menu measures its
+   * own size after mount and picks the side with the most available
+   * viewport space (auto-flip), behaving the same way as <Tooltip>.
+   * Mutually exclusive with `x`/`y`.
+   *
+   * Position recomputes on window resize and capture-phase scroll while
+   * the menu is open, so the menu stays glued to the trigger.
+   */
+  anchorRef?: RefObject<HTMLElement | null>
+  /**
+   * Preferred side relative to the anchor. `'auto'` tries the priority
+   * list `bottom → top → right → left` and picks the first that fits.
+   * Default: `'auto'`. Ignored when `anchorRef` is not provided.
+   */
+  side?: FloatingSide
+  /**
+   * Cross-axis alignment relative to the anchor. Default: `'start'`
+   * (menu's left edge aligns with the anchor's left edge). Ignored when
+   * `anchorRef` is not provided.
+   */
+  align?: FloatingAlign
+  /**
+   * Gap between anchor edge and menu, in px. Default: 6. Ignored when
+   * `anchorRef` is not provided.
+   */
+  offset?: number
 }
 
 export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function ContextMenu(
   {
-    x,
-    y,
     ariaLabel,
     onClose,
     children,
@@ -53,20 +107,18 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
     zIndex = 1000,
     menuClassName,
     triggerRef,
+    x: pointX,
+    y: pointY,
+    anchorRef,
+    side = 'auto',
+    align = 'start',
+    offset = 6,
     onKeyDown,
-    ...props
+    ...domProps
   },
   ref,
 ) {
-  const style = {
-    '--context-menu-x': `${x}px`,
-    '--context-menu-y': `${y}px`,
-    '--context-menu-min-width': `${minWidth}px`,
-    '--context-menu-width': `${width}px`,
-    '--context-menu-z-index': zIndex,
-  } as CSSProperties
 
-  // Non-modal dismiss: clicks/contextmenus outside the menu and trigger close it.
   const menuRef = useRef<HTMLDivElement | null>(null)
   const setMenuRef = (node: HTMLDivElement | null) => {
     menuRef.current = node
@@ -74,13 +126,88 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
     else if (ref) ref.current = node
   }
 
+  // ── Anchor-based auto-flip positioning ────────────────────────────────
+  //
+  // When `anchorRef` is provided, the menu is positioned by measuring
+  // itself and the anchor in a layout effect, then choosing the best side
+  // via the shared floating-position helper. This mirrors the auto-flip
+  // behaviour of <Tooltip> so dropdown menus never overflow off-screen.
+  const [autoPosition, setAutoPosition] = useState<ContextMenuPositionState | null>(null)
+
+  const recomputeAutoPosition = useEvent(() => {
+    if (!anchorRef) return
+    const anchorEl = anchorRef.current
+    const menuEl = menuRef.current
+    if (!anchorEl || !menuEl) return
+    const anchorRect = anchorEl.getBoundingClientRect()
+    const menuRect = menuEl.getBoundingClientRect()
+    // Use the explicit `width` prop (which the CSS renders to) rather than
+    // the measured rect width — this keeps positioning predictable in jsdom
+    // tests and avoids double-counting any layout-time width clamping.
+    const next = computeFloatingPosition(anchorRect, {
+      floatingWidth: width,
+      floatingHeight: menuRect.height,
+      side,
+      align,
+      offset,
+      autoPriority: DROPDOWN_AUTO_PRIORITY,
+    })
+    setAutoPosition({ x: next.x, y: next.y, side: next.side })
+  })
+
+  useLayoutEffect(() => {
+    if (!anchorRef) return
+    recomputeAutoPosition()
+  }, [anchorRef, recomputeAutoPosition])
+
   useEffect(() => {
-    if (!triggerRef) return
+    if (!anchorRef) return
+    function onViewportChange() {
+      recomputeAutoPosition()
+    }
+    window.addEventListener('resize', onViewportChange)
+    window.addEventListener('scroll', onViewportChange, true)
+    return () => {
+      window.removeEventListener('resize', onViewportChange)
+      window.removeEventListener('scroll', onViewportChange, true)
+    }
+  }, [anchorRef, recomputeAutoPosition])
+
+  // Resolve the effective x/y the menu renders at:
+  //   - anchor mode: use the auto-flipped position (or hide until measured)
+  //   - point mode:  use the explicit x/y from the caller
+  const resolvedX = anchorRef ? autoPosition?.x : pointX
+  const resolvedY = anchorRef ? autoPosition?.y : pointY
+  const resolvedSide: ResolvedFloatingSide | undefined = anchorRef
+    ? autoPosition?.side
+    : undefined
+
+  // While we measure the menu in anchor mode, render it off-screen with
+  // visibility:hidden so it doesn't flash at (0, 0) before the layout
+  // effect runs.
+  const measuring = anchorRef && autoPosition === null
+
+  const style = {
+    '--context-menu-x': `${resolvedX ?? 0}px`,
+    '--context-menu-y': `${resolvedY ?? 0}px`,
+    '--context-menu-min-width': `${minWidth}px`,
+    '--context-menu-width': `${width}px`,
+    '--context-menu-z-index': zIndex,
+    ...(measuring ? { visibility: 'hidden' as const } : null),
+  } as CSSProperties
+
+  // Non-modal dismiss: any click outside the menu, the explicit triggerRef
+  // (if set), and the anchor element (if set) closes the menu. The anchor
+  // is included so anchored dropdowns don't re-close themselves when the
+  // user clicks the trigger that just opened them.
+  useEffect(() => {
+    if (!triggerRef && !anchorRef) return
     function handlePointerDown(event: MouseEvent) {
       const target = event.target
       if (!(target instanceof Node)) return
       if (menuRef.current?.contains(target)) return
       if (triggerRef?.current?.contains(target)) return
+      if (anchorRef?.current?.contains(target)) return
       onClose()
     }
     document.addEventListener('mousedown', handlePointerDown, true)
@@ -89,7 +216,7 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
       document.removeEventListener('mousedown', handlePointerDown, true)
       document.removeEventListener('contextmenu', handlePointerDown, true)
     }
-  }, [onClose, triggerRef])
+  }, [onClose, triggerRef, anchorRef])
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
@@ -105,16 +232,18 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
       role="menu"
       aria-label={ariaLabel}
       className={cn(styles.menu, menuClassName)}
+      data-side={resolvedSide}
       style={style}
       onKeyDown={handleKeyDown}
-      {...props}
+      {...domProps}
     >
       {children}
     </div>
   )
 
-  // Non-modal mode (combobox-style): no backdrop, document listener handles dismiss.
-  if (triggerRef) return menu
+  // Non-modal mode (combobox-style or anchor-positioned dropdown): no
+  // backdrop, document listener handles dismiss when triggerRef is set.
+  if (triggerRef || anchorRef) return menu
 
   // Modal mode (right-click context menu): invisible backdrop intercepts clicks.
   return (
@@ -132,6 +261,24 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
     </>
   )
 })
+
+/**
+ * Stable callback wrapper — the latest function is read on each invocation,
+ * so effects can depend on the wrapper without re-subscribing every render.
+ *
+ * Equivalent to React's experimental `useEvent`; inlined here to avoid
+ * pulling a third-party dep just for this one use.
+ */
+function useEvent<TArgs extends unknown[], TReturn>(
+  fn: (...args: TArgs) => TReturn,
+): (...args: TArgs) => TReturn {
+  const ref = useRef(fn)
+  useLayoutEffect(() => {
+    ref.current = fn
+  })
+  const stable = useRef((...args: TArgs) => ref.current(...args))
+  return stable.current
+}
 
 interface ContextMenuItemProps extends Omit<ButtonProps, 'variant' | 'size' | 'menuItem' | 'tone'> {
   danger?: boolean

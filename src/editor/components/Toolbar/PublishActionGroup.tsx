@@ -42,12 +42,6 @@ interface PublishActionGroupProps {
 
 const MENU_WIDTH = 184
 const MENU_GAP = 6
-const VIEWPORT_MARGIN = 8
-
-interface MenuPosition {
-  x: number
-  y: number
-}
 
 export function PublishActionGroup({
   statusLabel,
@@ -67,37 +61,21 @@ export function PublishActionGroup({
   toast,
 }: PublishActionGroupProps) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null)
   const menuId = useId()
   const triggerRef = useRef<HTMLButtonElement | null>(null)
 
   function closeMenu() {
     setMenuOpen(false)
-    setMenuPosition(null)
     triggerRef.current?.focus()
   }
 
   function toggleMenu() {
-    if (menuOpen) {
-      closeMenu()
-      return
-    }
-
-    const trigger = triggerRef.current
-    if (!trigger) return
-    const rect = trigger.getBoundingClientRect()
-    const maxX = window.innerWidth - MENU_WIDTH - VIEWPORT_MARGIN
-    setMenuPosition({
-      x: Math.max(VIEWPORT_MARGIN, Math.min(rect.right - MENU_WIDTH, maxX)),
-      y: rect.bottom + MENU_GAP,
-    })
-    setMenuOpen(true)
+    setMenuOpen((open) => !open)
   }
 
   function handleMenuItemSelect(item: PublishActionMenuItem) {
     if (item.disabled) return
     setMenuOpen(false)
-    setMenuPosition(null)
     void item.onSelect()
   }
 
@@ -156,11 +134,13 @@ export function PublishActionGroup({
           </Button>
         </div>
 
-        {menuOpen && menuPosition && typeof document !== 'undefined' && createPortal(
+        {menuOpen && typeof document !== 'undefined' && createPortal(
           <ContextMenu
             id={menuId}
-            x={menuPosition.x}
-            y={menuPosition.y}
+            anchorRef={triggerRef}
+            side="auto"
+            align="end"
+            offset={MENU_GAP}
             width={MENU_WIDTH}
             minWidth={MENU_WIDTH}
             zIndex={10000}

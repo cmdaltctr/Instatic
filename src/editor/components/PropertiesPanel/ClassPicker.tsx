@@ -57,12 +57,6 @@ import type { CSSClass } from '@core/page-tree/schemas'
 import dialogStyles from '../SiteCreateDialog/SiteCreateDialog.module.css'
 import styles from './ClassPicker.module.css'
 
-interface SuggestionsPosition {
-  x: number
-  y: number
-  width: number
-}
-
 interface ClassContextMenuState {
   x: number
   y: number
@@ -133,7 +127,6 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
 
   const [query, setQuery] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [suggestionsPosition, setSuggestionsPosition] = useState<SuggestionsPosition | null>(null)
   const [contextMenu, setContextMenu] = useState<ClassContextMenuState | null>(null)
   const [renameTarget, setRenameTarget] = useState<CSSClass | null>(null)
   const [classHoverPreviewEnabled, setClassHoverPreviewEnabled] = useState(
@@ -167,24 +160,9 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
     query.trim().length > 0 &&
     !allClasses.some((c) => c.name === query.trim())
 
-  const updateSuggestionsPosition = useCallback(() => {
-    // Anchor vertically to the input (so the dropdown opens just below it),
-    // but use the full input-row width so the menu can span the trailing
-    // action column as well.
-    const inputRect = inputRef.current?.getBoundingClientRect()
-    const rowRect = inputRowRef.current?.getBoundingClientRect() ?? inputRect
-    if (!inputRect || !rowRect) return
-    setSuggestionsPosition({
-      x: rowRect.left,
-      y: inputRect.bottom + 6,
-      width: rowRect.width,
-    })
-  }, [])
-
   const openSuggestions = useCallback(() => {
-    updateSuggestionsPosition()
     setShowSuggestions(true)
-  }, [updateSuggestionsPosition])
+  }, [])
 
   const handleAddExisting = useCallback(
     (classId: string) => {
@@ -192,7 +170,6 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
       clearPreviewNodeClass(nodeId, classId)
       setQuery('')
       setShowSuggestions(false)
-      setSuggestionsPosition(null)
     },
     [nodeId, addNodeClass, clearPreviewNodeClass],
   )
@@ -207,7 +184,6 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
       clearPreviewNodeClass(nodeId)
       setQuery('')
       setShowSuggestions(false)
-      setSuggestionsPosition(null)
     } catch {
       // Class with this name already exists
     }
@@ -240,23 +216,9 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
 
   useEffect(() => () => clearPreviewNodeClass(nodeId), [clearPreviewNodeClass, nodeId])
 
-  useEffect(() => {
-    if (!showSuggestions) return
-    function onViewportChange() {
-      updateSuggestionsPosition()
-    }
-    window.addEventListener('resize', onViewportChange)
-    window.addEventListener('scroll', onViewportChange, true)
-    return () => {
-      window.removeEventListener('resize', onViewportChange)
-      window.removeEventListener('scroll', onViewportChange, true)
-    }
-  }, [showSuggestions, updateSuggestionsPosition])
-
   const closeSuggestions = useCallback(() => {
     clearPreviewNodeClass(nodeId)
     setShowSuggestions(false)
-    setSuggestionsPosition(null)
   }, [clearPreviewNodeClass, nodeId])
 
   const closeContextMenu = useCallback(() => {
@@ -370,13 +332,17 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
 
         {trailingAction}
 
-        {/* Suggestions dropdown */}
-        {showSuggestions && suggestionsPosition && (query.length > 0 || suggestions.length > 0) && createPortal(
+        {/* Suggestions dropdown — anchored to the input row so it spans both
+            the input cell and the trailing-action cell. ContextMenu auto-flips
+            between top/bottom based on viewport space. */}
+        {showSuggestions && (query.length > 0 || suggestions.length > 0) && createPortal(
           <ContextMenu
-            x={suggestionsPosition.x}
-            y={suggestionsPosition.y}
-            width={suggestionsPosition.width}
-            minWidth={suggestionsPosition.width}
+            anchorRef={inputRowRef}
+            side="auto"
+            align="start"
+            offset={6}
+            width={inputRowRef.current?.getBoundingClientRect().width ?? 240}
+            minWidth={inputRowRef.current?.getBoundingClientRect().width ?? 240}
             zIndex={10000}
             ariaLabel="Class suggestions"
             onClose={closeSuggestions}

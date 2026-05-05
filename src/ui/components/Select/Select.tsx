@@ -44,9 +44,7 @@ interface NormalizedSelectOption {
   disabled?: boolean
 }
 
-interface MenuPosition {
-  x: number
-  y: number
+interface MenuSizing {
   width: number
   minWidth: number
 }
@@ -118,7 +116,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   })
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
-  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null)
+  const [menuSizing, setMenuSizing] = useState<MenuSizing | null>(null)
 
   const nativeSelectRef = useRef<HTMLSelectElement | null>(null)
   const selectRef = useRef<HTMLDivElement | null>(null)
@@ -148,45 +146,55 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
     [ref],
   )
 
-  const updateMenuPosition = useCallback(() => {
-    const triggerRect = selectRef.current?.getBoundingClientRect()
-    if (!triggerRect) return
-    // Use the anchor rect for x/width when provided (lets the menu span a
-    // wider parent than the trigger). Vertical positioning always tracks the
-    // trigger so the menu opens directly below the field.
-    const useAnchor = menuPlacement !== 'left-start' && menuAnchorRef?.current != null
-    const anchorRect = useAnchor
-      ? menuAnchorRef!.current!.getBoundingClientRect()
-      : triggerRect
+  // The anchor element used for the dropdown's positioning + width. For
+  // 'bottom-start' a caller may provide a wider anchor (e.g. a multi-cell
+  // grid row) so the menu can extend past the trigger; 'left-start' always
+  // anchors to the trigger so the menu lines up with the field's top edge.
+  //
+  // We resolve which ref to use at open-time (not render-time) because
+  // parent refs may not yet be populated on the first render — the
+  // `menuAnchorRef` is typically set by a `<div ref={menuAnchorRef}>` in
+  // the parent that is committed after this component renders.
+  const resolvedAnchorRef = useRef<HTMLElement | null>(null)
+
+  const resolveActiveAnchor = useCallback((): HTMLElement | null => {
+    if (menuPlacement !== 'left-start' && menuAnchorRef?.current != null) {
+      return menuAnchorRef.current
+    }
+    return selectRef.current
+  }, [menuAnchorRef, menuPlacement])
+
+  const updateMenuSizing = useCallback(() => {
+    const anchor = resolvedAnchorRef.current ?? resolveActiveAnchor()
+    if (!anchor) return
+    resolvedAnchorRef.current = anchor
+    const anchorRect = anchor.getBoundingClientRect()
     const resolvedMinWidth = menuMinWidth ?? anchorRect.width
     const resolvedWidth = Math.max(anchorRect.width, resolvedMinWidth)
-    setMenuPosition({
-      x: menuPlacement === 'left-start'
-        ? Math.max(8, triggerRect.left - resolvedWidth - 6)
-        : anchorRect.left,
-      y: menuPlacement === 'left-start' ? triggerRect.top : triggerRect.bottom + 6,
-      width: resolvedWidth,
-      minWidth: resolvedMinWidth,
-    })
-  }, [menuAnchorRef, menuMinWidth, menuPlacement])
+    setMenuSizing({ width: resolvedWidth, minWidth: resolvedMinWidth })
+  }, [menuMinWidth, resolveActiveAnchor])
 
   const closeMenu = useCallback(() => {
     setOpen(false)
     setActiveIndex(-1)
-    setMenuPosition(null)
+    setMenuSizing(null)
+    resolvedAnchorRef.current = null
   }, [])
 
   const openMenu = useCallback(() => {
     if (disabled) return
-    updateMenuPosition()
+    // Resolve which element to anchor to (parent grid vs trigger) and
+    // capture the choice for the duration of the open menu.
+    resolvedAnchorRef.current = resolveActiveAnchor()
+    updateMenuSizing()
     setActiveIndex(getInitialActiveIndex(normalizedOptions, selectedValue))
     setOpen(true)
-  }, [disabled, normalizedOptions, selectedValue, updateMenuPosition])
+  }, [disabled, normalizedOptions, resolveActiveAnchor, selectedValue, updateMenuSizing])
 
   useEffect(() => {
     if (!open) return
     function handleViewportChange() {
-      updateMenuPosition()
+      updateMenuSizing()
     }
     window.addEventListener('resize', handleViewportChange)
     window.addEventListener('scroll', handleViewportChange, true)
@@ -194,7 +202,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       window.removeEventListener('resize', handleViewportChange)
       window.removeEventListener('scroll', handleViewportChange, true)
     }
-  }, [open, updateMenuPosition])
+  }, [open, updateMenuSizing])
 
   const commitValue = useCallback(
     (nextValue: string) => {
@@ -357,13 +365,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         <ChevronDownIcon size={12} />
       </span>
 
-      {open && menuPosition && createPortal(
+      {open && menuSizing && createPortal(
         <ContextMenu
           id={menuId}
-          x={menuPosition.x}
-          y={menuPosition.y}
-          width={menuPosition.width}
-          minWidth={menuPosition.minWidth}
+          anchorRef={resolvedAnchorRef}
+          side={menuPlacement === 'left-start' ? 'left' : 'auto'}
+          align="start"
+          offset={6}
+          width={menuSizing.width}
+          minWidth={menuSizing.minWidth}
           zIndex={10000}
           ariaLabel={ariaLabel ?? 'Select option'}
           aria-labelledby={ariaLabelledBy}
