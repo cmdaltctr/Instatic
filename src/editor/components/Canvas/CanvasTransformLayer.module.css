@@ -28,6 +28,23 @@
   will-change: transform;
 }
 
+/*
+ * Smooth animation for discrete zoom actions (toolbar buttons, +/− keys,
+ * Cmd/Ctrl+0 reset, Shift+1 fit-to-screen). useCanvas toggles the
+ * data-animating attribute around these store-driven updates so the canvas
+ * eases into the new zoom level instead of snapping.
+ *
+ * Continuous gestures (wheel, trackpad pinch, middle-mouse / space drag)
+ * write the transform every animation frame and DO NOT set this attribute,
+ * so they remain instant — a transition there would visibly lag behind the
+ * cursor.
+ *
+ * The prefers-reduced-motion override in CanvasRoot.tsx disables this.
+ */
+.transformLayer[data-animating='true'] {
+  transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* Empty-site placeholder */
 .noSite {
   color: var(--editor-text-subtle);

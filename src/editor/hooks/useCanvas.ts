@@ -58,11 +58,19 @@ function areCanvasTransformSnapshotsEqual(
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
 }
 
+/**
+ * Duration of the eased zoom transition for discrete actions
+ * (toolbar buttons, +/− keys, reset / fit). Kept in sync with the
+ * `data-animating='true'` rule in CanvasTransformLayer.module.css.
+ */
+const ANIMATED_TRANSFORM_MS = 220
+
 export function useCanvas({ canvasRootRef, transformLayerRef }: UseCanvasOptions) {
   // Ref-based transform — not React state — avoids re-renders during interaction
   const transformRef = useRef<Transform>({ zoom: 1, panX: 0, panY: 0 })
   const rafRef = useRef<number | null>(null)
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const animatingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spaceActiveRef = useRef(false)
   const isDraggingRef = useRef(false)
   const lastPinchMovementRef = useRef(1)
@@ -75,10 +83,39 @@ export function useCanvas({ canvasRootRef, transformLayerRef }: UseCanvasOptions
 
   // ─── DOM write helper ─────────────────────────────────────────────────────
 
-  const applyTransformToDOM = useCallback((t: Transform) => {
-    if (!transformLayerRef.current) return
-    transformLayerRef.current.style.transform =
-      `translate(${t.panX}px, ${t.panY}px) scale(${t.zoom})`
+  /**
+   * Write the transform to the DOM.
+   *
+   * `animated` toggles the `data-animating='true'` attribute on the layer,
+   * which activates a CSS transition on `transform` (see
+   * CanvasTransformLayer.module.css). Used for discrete zoom actions
+   * (toolbar buttons, +/− keys, Cmd/Ctrl+0, Shift+1) so they ease in
+   * instead of snapping. Continuous gestures (wheel / pinch / drag) pass
+   * `animated=false` and remain instant — animating them would visibly
+   * lag the cursor.
+   */
+  const applyTransformToDOM = useCallback((t: Transform, animated = false) => {
+    const el = transformLayerRef.current
+    if (!el) return
+
+    if (animatingTimerRef.current) {
+      clearTimeout(animatingTimerRef.current)
+      animatingTimerRef.current = null
+    }
+
+    if (animated) {
+      el.dataset.animating = 'true'
+      animatingTimerRef.current = setTimeout(() => {
+        delete el.dataset.animating
+        animatingTimerRef.current = null
+      }, ANIMATED_TRANSFORM_MS)
+    } else if (el.dataset.animating) {
+      // A new gesture frame interrupting an in-flight animation: drop the
+      // attribute so wheel/pinch/drag updates land instantly.
+      delete el.dataset.animating
+    }
+
+    el.style.transform = `translate(${t.panX}px, ${t.panY}px) scale(${t.zoom})`
   }, [transformLayerRef])
 
   // Sync from store on mount (restore saved pan/zoom).
@@ -124,7 +161,7 @@ export function useCanvas({ canvasRootRef, transformLayerRef }: UseCanvasOptions
   const resetCanvasView = useCallback(() => {
     resetView()
     transformRef.current = { zoom: 1, panX: 0, panY: 0 }
-    applyTransformToDOM(transformRef.current)
+    applyTransformToDOM(transformRef.current, true)
   }, [resetView, applyTransformToDOM])
 
   // ─── Prevent browser pinch-zoom on Mac trackpad ──────────────────────────
@@ -222,15 +259,31 @@ export function useCanvas({ canvasRootRef, transformLayerRef }: UseCanvasOptions
 
   // ─── Keyboard shortcuts ───────────────────────────────────────────────────
 
+  /**
+   * Resolve the current canvas viewport center, in canvas-local coords.
+   * Used as the zoom origin for keyboard +/− shortcuts so the zoom is
+   * anchored to the middle of the visible area, not the document top-left.
+   */
+  const getViewportCenter = useCallback((): { x: number; y: number } | null => {
+    const el = canvasRootRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    return { x: rect.width / 2, y: rect.height / 2 }
+  }, [canvasRootRef])
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Zoom in/out with +/- keys
+      // Zoom in/out with +/- keys — zoom around the canvas viewport center
       if (e.key === '=' || e.key === '+') {
         e.preventDefault()
-        zoomIn()
+        const c = getViewportCenter()
+        if (c) zoomIn(c.x, c.y)
+        else zoomIn()
       } else if (e.key === '-') {
         e.preventDefault()
-        zoomOut()
+        const c = getViewportCenter()
+        if (c) zoomOut(c.x, c.y)
+        else zoomOut()
       } else if ((e.metaKey || e.ctrlKey) && e.key === '0') {
         e.preventDefault()
         resetCanvasView()
@@ -242,7 +295,7 @@ export function useCanvas({ canvasRootRef, transformLayerRef }: UseCanvasOptions
       }
       // Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z handled by App-level listener
     },
-    [zoomIn, zoomOut, resetCanvasView],
+    [zoomIn, zoomOut, resetCanvasView, getViewportCenter],
   )
 
   // ─── External zoom/pan sync ───────────────────────────────────────────────
@@ -270,7 +323,12 @@ export function useCanvas({ canvasRootRef, transformLayerRef }: UseCanvasOptions
         const cur = transformRef.current
         if (zoom !== cur.zoom || panX !== cur.panX || panY !== cur.panY) {
           transformRef.current = { zoom, panX, panY }
-          applyTransformToDOM(transformRef.current)
+          // External transform updates (toolbar buttons, +/− keys, agent
+          // tools, undo/redo) animate to the new value. Continuous gestures
+          // never reach this branch — by the time their debounced commit
+          // fires, transformRef already matches the store and the guard
+          // above skips the write.
+          applyTransformToDOM(transformRef.current, true)
         }
       },
       { equalityFn: areCanvasTransformSnapshotsEqual },
@@ -377,6 +435,7 @@ export function useCanvas({ canvasRootRef, transformLayerRef }: UseCanvasOptions
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       if (commitTimerRef.current) clearTimeout(commitTimerRef.current)
+      if (animatingTimerRef.current) clearTimeout(animatingTimerRef.current)
     }
   }, [])
 

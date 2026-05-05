@@ -56,8 +56,16 @@ export interface CanvasSlice {
   setCanvasMode: (mode: CanvasMode) => void
   setCanvasView: (view: CanvasView) => void
   resetView: () => void
-  zoomIn: () => void
-  zoomOut: () => void
+  /**
+   * Step zoom up to the next preset level. When `originX`/`originY` are
+   * provided (in viewport-space, relative to the canvas root), the pan is
+   * adjusted so that origin point stays fixed on screen — i.e. the zoom is
+   * "around" that point. Toolbar buttons / keyboard shortcuts pass the
+   * canvas viewport center; without an origin the zoom uses (0, 0) which
+   * pulls content toward the top-left of the document.
+   */
+  zoomIn: (originX?: number, originY?: number) => void
+  zoomOut: (originX?: number, originY?: number) => void
   zoomTo: (zoom: number, originX?: number, originY?: number) => void
 }
 
@@ -115,14 +123,26 @@ export const createCanvasSlice: EditorStoreSliceCreator<CanvasSlice> = (set, get
 
   resetView: () => set({ zoom: DEFAULT_ZOOM, panX: 0, panY: 0 }),
 
-  zoomIn: () => {
-    const { zoom } = get()
-    set({ zoom: nearestZoomStep(zoom, 1) })
+  zoomIn: (originX, originY) => {
+    const { zoom, panX, panY, zoomTo } = get()
+    const next = nearestZoomStep(zoom, 1)
+    if (originX !== undefined && originY !== undefined) {
+      zoomTo(next, originX, originY)
+    } else {
+      // Fallback: keep current pan. Used by call sites that don't have a
+      // viewport rect handy (shouldn't occur for user-facing actions).
+      set({ zoom: next, panX: clampPan(panX), panY: clampPan(panY) })
+    }
   },
 
-  zoomOut: () => {
-    const { zoom } = get()
-    set({ zoom: nearestZoomStep(zoom, -1) })
+  zoomOut: (originX, originY) => {
+    const { zoom, panX, panY, zoomTo } = get()
+    const next = nearestZoomStep(zoom, -1)
+    if (originX !== undefined && originY !== undefined) {
+      zoomTo(next, originX, originY)
+    } else {
+      set({ zoom: next, panX: clampPan(panX), panY: clampPan(panY) })
+    }
   },
 
   /**
