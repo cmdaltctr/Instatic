@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'bun:test'
 import { useEditorStore } from '@core/editor-store/store'
-import { processStreamEvent } from '@core/agent/agentSlice'
+import { processStreamEvent, type AgentBridgeRuntime } from '@core/agent/agentSlice'
 import type { AgentMessage } from '@core/agent/types'
 import '../../modules/base'
+
+// ---------------------------------------------------------------------------
+// Test helpers
+// ---------------------------------------------------------------------------
 
 function freshAgentState() {
   useEditorStore.setState({
@@ -37,36 +41,159 @@ function freshAgentState() {
   return { assistantId, rootId }
 }
 
-describe('processStreamEvent — action failures', () => {
-  it('marks unexecuted tool calls as error instead of leaving them pending', async () => {
-    const { assistantId, rootId } = freshAgentState()
+function emptyBridge(): AgentBridgeRuntime {
+  return { bridgeId: null }
+}
+
+interface InterceptedFetch {
+  url: string
+  body: string
+}
+
+function captureFetch(
+  responses: Array<(call: number, init: RequestInit | undefined) => Response>,
+): { restore: () => void; calls: InterceptedFetch[] } {
+  const original = globalThis.fetch
+  const calls: InterceptedFetch[] = []
+  let callIndex = 0
+  globalThis.fetch = (async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => {
+    const url = typeof input === 'string' ? input : input.toString()
+    calls.push({ url, body: String(init?.body ?? '') })
+    const factory = responses[callIndex] ?? responses[responses.length - 1]
+    callIndex += 1
+    return factory(callIndex - 1, init)
+  }) as typeof fetch
+  return {
+    restore() {
+      globalThis.fetch = original
+    },
+    calls,
+  }
+}
+
+function ndjsonResponse(events: object[]): Response {
+  const body = events.map((event) => JSON.stringify(event)).join('\n') + '\n'
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'application/x-ndjson' },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// processStreamEvent — bridge handshake + tool requests
+// ---------------------------------------------------------------------------
+
+describe('processStreamEvent — bridge handshake', () => {
+  it('captures the bridgeId on bridgeReady', async () => {
+    const { assistantId } = freshAgentState()
+    const bridge = emptyBridge()
 
     await processStreamEvent(
-      {
-        type: 'actions',
-        actions: [
-          { type: 'insertNode', ref: 'hero', moduleId: 'base.container', parentId: rootId },
-          { type: 'insertNode', moduleId: 'base.text', parentRef: 'missing-ref', props: { text: 'Hero', tag: 'h1' } },
-          { type: 'insertNode', moduleId: 'base.button', parentRef: 'hero', props: { label: 'Start' } },
-        ],
-      },
+      { type: 'bridgeReady', bridgeId: 'bridge-xyz' },
       assistantId,
       () => {},
       useEditorStore.setState,
       useEditorStore.getState,
+      bridge,
+      null,
     )
 
-    const state = useEditorStore.getState()
-    const toolCalls = state.agentMessages[0].toolCalls
+    expect(bridge.bridgeId).toBe('bridge-xyz')
+  })
+})
 
-    expect(toolCalls.map((tc) => tc.status)).toEqual(['success', 'error', 'error'])
-    expect(toolCalls[2].result?.error).toContain('Skipped')
-    expect(state.agentError).toContain('Some actions could not be completed')
-    expect(state.agentMessages[0].content).toContain("couldn't complete all changes")
+describe('processStreamEvent — toolRequest dispatches to executor', () => {
+  it('runs the tool against the editor store and POSTs the result', async () => {
+    const { assistantId, rootId } = freshAgentState()
+    const bridge: AgentBridgeRuntime = { bridgeId: 'bridge-1' }
+
+    const intercept = captureFetch([
+      () => new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ])
+
+    try {
+      await processStreamEvent(
+        {
+          type: 'toolRequest',
+          requestId: 'req-1',
+          name: 'insertNode',
+          input: { moduleId: 'base.text', parentId: rootId, props: { text: 'Hi' } },
+        },
+        assistantId,
+        () => {},
+        useEditorStore.setState,
+        useEditorStore.getState,
+        bridge,
+        null,
+      )
+    } finally {
+      intercept.restore()
+    }
+
+    expect(intercept.calls).toHaveLength(1)
+    expect(intercept.calls[0].url).toBe('/api/agent/tool-result')
+    const body = JSON.parse(intercept.calls[0].body) as Record<string, unknown>
+    expect(body.bridgeId).toBe('bridge-1')
+    expect(body.requestId).toBe('req-1')
+    const result = body.result as { success: boolean; nodeId?: string }
+    expect(result.success).toBe(true)
+    expect(result.nodeId).toBeTruthy()
+
+    const page = useEditorStore.getState().site!.pages[0]
+    expect(Object.values(page.nodes).some((n) => n.moduleId === 'base.text')).toBe(true)
   })
 
+  it('reports an error result when the tool input is invalid', async () => {
+    const { assistantId, rootId } = freshAgentState()
+    const bridge: AgentBridgeRuntime = { bridgeId: 'bridge-2' }
+
+    const intercept = captureFetch([
+      () => new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ])
+
+    try {
+      await processStreamEvent(
+        {
+          type: 'toolRequest',
+          requestId: 'req-2',
+          name: 'insertNode',
+          input: { moduleId: 'missing.module', parentId: rootId },
+        },
+        assistantId,
+        () => {},
+        useEditorStore.setState,
+        useEditorStore.getState,
+        bridge,
+        null,
+      )
+    } finally {
+      intercept.restore()
+    }
+
+    expect(intercept.calls).toHaveLength(1)
+    const body = JSON.parse(intercept.calls[0].body) as { result: { success: boolean; error?: string } }
+    expect(body.result.success).toBe(false)
+    expect(body.result.error).toContain('Module not found')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// processStreamEvent — toolStatus rendering for the message thread
+// ---------------------------------------------------------------------------
+
+describe('processStreamEvent — toolStatus badges', () => {
   it('adds and completes SDK tool status badges as they stream', async () => {
     const { assistantId } = freshAgentState()
+    const bridge = emptyBridge()
 
     await processStreamEvent(
       {
@@ -80,6 +207,8 @@ describe('processStreamEvent — action failures', () => {
       () => {},
       useEditorStore.setState,
       useEditorStore.getState,
+      bridge,
+      null,
     )
 
     await processStreamEvent(
@@ -93,90 +222,44 @@ describe('processStreamEvent — action failures', () => {
       () => {},
       useEditorStore.setState,
       useEditorStore.getState,
+      bridge,
+      null,
     )
 
     const toolCalls = useEditorStore.getState().agentMessages[0].toolCalls
     expect(toolCalls).toHaveLength(1)
-    expect(toolCalls[0].source).toBe('sdk')
     expect(toolCalls[0].actionType).toBe('mcp__page_builder__inspect_page')
     expect(toolCalls[0].status).toBe('success')
   })
-
-  it('does not append later success text after an action in the same assistant message failed', async () => {
-    const { assistantId, rootId } = freshAgentState()
-
-    await processStreamEvent(
-      {
-        type: 'actions',
-        actions: [
-          { type: 'insertNode', moduleId: 'base.container', parentId: rootId },
-          { type: 'insertNode', moduleId: 'base.text', parentRef: 'missing-ref', props: { text: 'Hero' } },
-        ],
-      },
-      assistantId,
-      () => {},
-      useEditorStore.setState,
-      useEditorStore.getState,
-    )
-
-    await processStreamEvent(
-      { type: 'text', text: 'Done! The page is ready.' },
-      assistantId,
-      (id, text) => {
-        useEditorStore.setState((state) => ({
-          agentMessages: state.agentMessages.map((message) =>
-            message.id === id ? { ...message, content: message.content + text } : message,
-          ),
-        }))
-      },
-      useEditorStore.setState,
-      useEditorStore.getState,
-    )
-
-    const message = useEditorStore.getState().agentMessages[0]
-    expect(message.content).toContain("couldn't complete all changes")
-    expect(message.content).not.toContain('Done! The page is ready.')
-  })
 })
 
-describe('sendAgentMessage — SDK owns the agent loop', () => {
-  it('does not start a second browser request after successful actions', async () => {
+// ---------------------------------------------------------------------------
+// sendAgentMessage — request lifecycle
+// ---------------------------------------------------------------------------
+
+describe('sendAgentMessage — request lifecycle', () => {
+  it('opens one streaming request and does not relaunch after the SDK loop ends', async () => {
     const { rootId } = freshAgentState()
-    useEditorStore.setState({
-      isAgentStreaming: false,
-      agentMessages: [],
-    })
+    useEditorStore.setState({ isAgentStreaming: false, agentMessages: [] })
 
-    const originalFetch = globalThis.fetch
-    const requests: string[] = []
-
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-      requests.push(String(init?.body ?? ''))
-      const eventStream = requests.length === 1
-        ? [
-          JSON.stringify({
-            type: 'actions',
-            actions: [
-              { type: 'insertNode', moduleId: 'base.container', parentId: rootId },
-            ],
-          }),
-          JSON.stringify({ type: 'done' }),
-        ].join('\n') + '\n'
-        : JSON.stringify({ type: 'done' }) + '\n'
-
-      return new Response(eventStream, {
-        status: 200,
-        headers: { 'Content-Type': 'application/x-ndjson' },
-      })
-    }) as typeof fetch
+    const intercept = captureFetch([
+      () => ndjsonResponse([
+        { type: 'bridgeReady', bridgeId: 'b-1' },
+        { type: 'text', text: 'Inserting hero…' },
+        { type: 'done' },
+      ]),
+    ])
 
     try {
-      await useEditorStore.getState().sendAgentMessage('Make the colors greener.')
+      await useEditorStore.getState().sendAgentMessage('Add a hero')
     } finally {
-      globalThis.fetch = originalFetch
+      intercept.restore()
     }
 
-    expect(requests).toHaveLength(1)
+    // Single POST to /api/agent (no follow-up tool-result POSTs because no
+    // toolRequest was emitted in this canned stream).
+    expect(intercept.calls.filter((c) => c.url === '/api/agent')).toHaveLength(1)
+    void rootId
   })
 
   it('sends the SDK session ID on follow-up requests', async () => {
@@ -190,34 +273,77 @@ describe('sendAgentMessage — SDK owns the agent loop', () => {
     localStorage.clear()
 
     const sessionId = '00000000-0000-4000-8000-000000000001'
-    const requestBodies: Array<Record<string, unknown>> = []
-    const originalFetch = globalThis.fetch
-
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-      requestBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
-      const eventStream = requestBodies.length === 1
-        ? [
-          JSON.stringify({ type: 'session', sessionId }),
-          JSON.stringify({ type: 'done' }),
-        ].join('\n') + '\n'
-        : JSON.stringify({ type: 'done' }) + '\n'
-
-      return new Response(eventStream, {
-        status: 200,
-        headers: { 'Content-Type': 'application/x-ndjson' },
-      })
-    }) as typeof fetch
+    const intercept = captureFetch([
+      () => ndjsonResponse([
+        { type: 'bridgeReady', bridgeId: 'b-1' },
+        { type: 'session', sessionId },
+        { type: 'done' },
+      ]),
+      () => ndjsonResponse([
+        { type: 'bridgeReady', bridgeId: 'b-2' },
+        { type: 'done' },
+      ]),
+    ])
 
     try {
       await useEditorStore.getState().sendAgentMessage('Build a plumber page.')
       await useEditorStore.getState().sendAgentMessage('Use the previous class instead.')
     } finally {
-      globalThis.fetch = originalFetch
+      intercept.restore()
     }
 
-    expect(requestBodies).toHaveLength(2)
-    expect(requestBodies[0].sessionId).toBeUndefined()
+    const queryCalls = intercept.calls.filter((c) => c.url === '/api/agent')
+    expect(queryCalls).toHaveLength(2)
+
+    const firstBody = JSON.parse(queryCalls[0].body) as { sessionId?: string }
+    const secondBody = JSON.parse(queryCalls[1].body) as { sessionId?: string }
+    expect(firstBody.sessionId).toBeUndefined()
     expect(useEditorStore.getState().agentSessionId).toBe(sessionId)
-    expect(requestBodies[1].sessionId).toBe(sessionId)
+    expect(secondBody.sessionId).toBe(sessionId)
+  })
+
+  it('runs a toolRequest from the stream and posts its result back to /api/agent/tool-result', async () => {
+    const { rootId } = freshAgentState()
+    useEditorStore.setState({ isAgentStreaming: false, agentMessages: [] })
+
+    const intercept = captureFetch([
+      () => ndjsonResponse([
+        { type: 'bridgeReady', bridgeId: 'b-3' },
+        {
+          type: 'toolRequest',
+          requestId: 'req-7',
+          name: 'createClass',
+          input: { name: 'pricing-card', styles: { padding: '24px' } },
+        },
+        { type: 'done' },
+      ]),
+      // /api/agent/tool-result acknowledgement
+      () => new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ])
+
+    try {
+      await useEditorStore.getState().sendAgentMessage('Create a pricing card class.')
+    } finally {
+      intercept.restore()
+    }
+
+    const toolResultCalls = intercept.calls.filter((c) => c.url === '/api/agent/tool-result')
+    expect(toolResultCalls).toHaveLength(1)
+    const body = JSON.parse(toolResultCalls[0].body) as {
+      bridgeId: string
+      requestId: string
+      result: { success: boolean; nodeId?: string }
+    }
+    expect(body.bridgeId).toBe('b-3')
+    expect(body.requestId).toBe('req-7')
+    expect(body.result.success).toBe(true)
+    expect(body.result.nodeId).toBeTruthy()
+
+    const classes = useEditorStore.getState().site!.classes
+    expect(Object.values(classes).some((c) => c.name === 'pricing-card')).toBe(true)
+    void rootId
   })
 })

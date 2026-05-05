@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'bun:test'
-import { collectAgentRenderSnapshots } from '@core/agent/renderEvidence'
+import { captureAgentRenderSnapshot } from '@core/agent/renderEvidence'
 
 beforeEach(() => {
   document.body.innerHTML = ''
@@ -32,7 +32,7 @@ function setRect(el: Element, rect: Partial<DOMRectReadOnly>) {
   })
 }
 
-describe('collectAgentRenderSnapshots', () => {
+describe('captureAgentRenderSnapshot — on-demand browser bridge', () => {
   it('captures breakpoint layout, node boxes, and overflow warnings from the canvas DOM', async () => {
     const viewport = document.createElement('div')
     viewport.dataset.breakpointId = 'mobile'
@@ -52,16 +52,43 @@ describe('collectAgentRenderSnapshots', () => {
     viewport.appendChild(wrapper)
     document.body.appendChild(viewport)
 
-    const snapshots = await collectAgentRenderSnapshots({
-      breakpoints: [{ id: 'mobile', label: 'Mobile', width: 375, icon: 'smartphone' }],
-      captureScreenshots: false,
+    const snapshot = await captureAgentRenderSnapshot({
+      breakpointId: 'mobile',
+      captureScreenshot: false,
     })
 
-    expect(snapshots).toHaveLength(1)
-    expect(snapshots[0].layout.viewport.scrollWidth).toBe(420)
-    expect(snapshots[0].layout.nodes[0].nodeId).toBe('title')
-    expect(snapshots[0].layout.warnings.some((warning) =>
+    expect(snapshot).not.toBeNull()
+    expect(snapshot!.breakpointId).toBe('mobile')
+    expect(snapshot!.layout.viewport.scrollWidth).toBe(420)
+    expect(snapshot!.layout.nodes[0].nodeId).toBe('title')
+    expect(snapshot!.layout.warnings.some((warning) =>
       warning.type === 'horizontal-overflow' && warning.nodeId === 'title',
     )).toBe(true)
+  })
+
+  it('returns null when no canvas frame is mounted', async () => {
+    const snapshot = await captureAgentRenderSnapshot({
+      breakpointId: 'mobile',
+      captureScreenshot: false,
+    })
+    expect(snapshot).toBeNull()
+  })
+
+  it('falls back to the first canvas frame when no breakpointId is provided', async () => {
+    const viewport = document.createElement('div')
+    viewport.dataset.breakpointId = 'desktop'
+    Object.defineProperties(viewport, {
+      clientWidth: { configurable: true, value: 1440 },
+      clientHeight: { configurable: true, value: 900 },
+      scrollWidth: { configurable: true, value: 1440 },
+      scrollHeight: { configurable: true, value: 900 },
+    })
+    setRect(viewport, { x: 0, y: 0, width: 1440, height: 900 })
+    document.body.appendChild(viewport)
+
+    const snapshot = await captureAgentRenderSnapshot({
+      captureScreenshot: false,
+    })
+    expect(snapshot?.breakpointId).toBe('desktop')
   })
 })

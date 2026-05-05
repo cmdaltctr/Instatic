@@ -1,57 +1,72 @@
 import type {
-  AgentBreakpointContext,
   AgentLayoutImageContext,
   AgentLayoutNodeContext,
   AgentLayoutRect,
   AgentLayoutReportContext,
   AgentLayoutWarningContext,
-  AgentRenderSnapshotContext,
+  AgentRenderSnapshotPayload,
   AgentScreenshotContext,
 } from './types'
-
-interface CollectAgentRenderSnapshotsOptions {
-  breakpoints: AgentBreakpointContext[]
-  captureScreenshots?: boolean
-  maxScreenshotCount?: number
-}
 
 const MAX_TEXT_LENGTH = 300
 const OVERFLOW_TOLERANCE_PX = 2
 
-export async function collectAgentRenderSnapshots({
-  breakpoints,
-  captureScreenshots = true,
-  maxScreenshotCount = 3,
-}: CollectAgentRenderSnapshotsOptions): Promise<AgentRenderSnapshotContext[]> {
-  if (typeof document === 'undefined') return []
+interface CaptureRenderSnapshotOptions {
+  /** Configured breakpoint id to capture. Defaults to the first canvas frame. */
+  breakpointId?: string
+  /** When false, only layout is collected (no html-to-image) — faster. */
+  captureScreenshot?: boolean
+}
 
-  const frames = Array.from(
-    document.querySelectorAll<HTMLElement>('[data-breakpoint-id]'),
-  )
+/**
+ * Capture a single canvas frame on demand: layout report + optional screenshot.
+ *
+ * Called by the browser-bridge `render_snapshot` tool path when Claude
+ * actually asks for visual feedback — never on every prompt build (that's
+ * the expensive html-to-image cost we used to pay regardless).
+ *
+ * Returns null when no matching canvas frame exists in the DOM (e.g. when
+ * the editor isn't mounted, or the requested breakpoint isn't on screen).
+ */
+export async function captureAgentRenderSnapshot({
+  breakpointId,
+  captureScreenshot = true,
+}: CaptureRenderSnapshotOptions = {}): Promise<AgentRenderSnapshotPayload | null> {
+  if (typeof document === 'undefined') return null
 
-  const snapshots: AgentRenderSnapshotContext[] = []
-  for (const frame of frames) {
-    const breakpointId = frame.dataset.breakpointId
-    if (!breakpointId) continue
+  const frame = findCanvasFrame(breakpointId)
+  if (!frame) return null
 
-    const breakpoint = breakpoints.find((item) => item.id === breakpointId)
-    const layout = collectLayoutReport(frame, breakpointId)
-    const shouldCapture = captureScreenshots && snapshots.length < maxScreenshotCount
-    const screenshot = shouldCapture
-      ? await captureFrameScreenshot(frame)
-      : unavailableScreenshot('Screenshot capture skipped for this breakpoint.')
+  const resolvedBreakpointId = frame.dataset.breakpointId ?? breakpointId ?? ''
+  const layout = collectLayoutReport(frame, resolvedBreakpointId)
+  const screenshot = captureScreenshot
+    ? await captureFrameScreenshot(frame)
+    : unavailableScreenshot('Screenshot capture not requested.')
 
-    snapshots.push({
-      breakpointId,
-      label: breakpoint?.label ?? breakpointId,
-      width: breakpoint?.width ?? Math.round(frame.getBoundingClientRect().width),
-      capturedAt: Date.now(),
-      screenshot,
-      layout,
-    })
+  return {
+    breakpointId: resolvedBreakpointId,
+    label: resolvedBreakpointId,
+    width: Math.round(frame.getBoundingClientRect().width),
+    capturedAt: Date.now(),
+    screenshot,
+    layout,
   }
+}
 
-  return snapshots
+function findCanvasFrame(breakpointId?: string): HTMLElement | null {
+  if (typeof document === 'undefined') return null
+  if (breakpointId) {
+    const exact = document.querySelector<HTMLElement>(
+      `[data-breakpoint-id="${cssAttrEscape(breakpointId)}"]`,
+    )
+    if (exact) return exact
+  }
+  return document.querySelector<HTMLElement>('[data-breakpoint-id]')
+}
+
+function cssAttrEscape(value: string): string {
+  // Escape attribute-value double quotes/backslashes so the selector parses.
+  return value.replace(/[\\"]/g, '\\$&')
 }
 
 function collectLayoutReport(frame: HTMLElement, breakpointId: string): AgentLayoutReportContext {

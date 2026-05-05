@@ -13,7 +13,15 @@
 // Agent actions — the page-builder operations Claude can request
 // ---------------------------------------------------------------------------
 
-type AgentActionType =
+/**
+ * The full set of page-builder write actions exposed as MCP tools to Claude.
+ *
+ * Each action is its own `mcp__page_builder__<name>` tool on the server-side
+ * MCP. The server's tool handler emits a `toolRequest` stream event so the
+ * browser bridge can apply the mutation against the Zustand editor store and
+ * POST a result back to /api/agent/tool-result.
+ */
+export type AgentActionType =
   | 'insertNode'
   | 'insertTree'
   | 'deleteNode'
@@ -25,25 +33,17 @@ type AgentActionType =
   | 'assignClass'
   | 'removeClass'
   | 'addPage'
-  | 'updateSiteSettings'
 
 interface InsertNodeAction {
   type: 'insertNode'
   moduleId: string
-  /** Existing parent node ID. Required unless parentRef is provided. */
-  parentId?: string
-  /** Temporary ref from an earlier insertNode in the same action batch. */
-  parentRef?: string
-  /** Temporary ref name for later actions in the same batch. */
-  ref?: string
+  /** Existing parent node ID. */
+  parentId: string
   /** 0-based insertion index among parent's children. Appends if omitted. */
   index?: number
   /** Initial prop values for the new node. */
   props?: Record<string, unknown>
-  /**
-   * Optional classes to attach immediately after insertion.
-   * Values may be existing class IDs or class names created earlier in the same batch.
-   */
+  /** Optional CSS class IDs (or existing class names) to attach to the new node. */
   classIds?: string[]
 }
 
@@ -56,14 +56,11 @@ interface AgentTreeClassDefinition {
 
 export interface InsertTreeNode {
   moduleId: string
-  /** Temporary ref name for later actions in the same batch. */
-  ref?: string
   /** Initial prop values for the new node. */
   props?: Record<string, unknown>
   /**
-   * Optional classes to attach immediately after insertion.
-   * Values must be existing class IDs, existing class names, or class names
-   * declared in insertTree.classes.
+   * CSS classes to attach. Must be existing class IDs, existing class names,
+   * or names declared in insertTree.classes (those are created first).
    */
   classIds?: string[]
   children?: InsertTreeNode[]
@@ -71,10 +68,8 @@ export interface InsertTreeNode {
 
 interface InsertTreeAction {
   type: 'insertTree'
-  /** Existing parent node ID. Required unless parentRef is provided. */
-  parentId?: string
-  /** Temporary ref from an earlier insertNode/insertTree in the same action batch. */
-  parentRef?: string
+  /** Existing parent node ID. */
+  parentId: string
   /** 0-based insertion index among parent's children. Appends if omitted. */
   index?: number
   /** CSS classes to create/update before inserting the tree. */
@@ -85,16 +80,12 @@ interface InsertTreeAction {
 
 interface DeleteNodeAction {
   type: 'deleteNode'
-  nodeId?: string
-  /** Temporary ref from an earlier insertNode in the same action batch. */
-  nodeRef?: string
+  nodeId: string
 }
 
 interface UpdateNodePropsAction {
   type: 'updateNodeProps'
-  nodeId?: string
-  /** Temporary ref from an earlier insertNode in the same action batch. */
-  nodeRef?: string
+  nodeId: string
   /** Optional configured breakpoint ID. When set, writes a breakpoint prop override. */
   breakpointId?: string
   patch: Record<string, unknown>
@@ -102,21 +93,15 @@ interface UpdateNodePropsAction {
 
 interface MoveNodeAction {
   type: 'moveNode'
-  nodeId?: string
-  /** Temporary ref from an earlier insertNode in the same action batch. */
-  nodeRef?: string
-  newParentId?: string
-  /** Temporary ref for the destination parent created earlier in the same batch. */
-  newParentRef?: string
+  nodeId: string
+  newParentId: string
   /** 0-based position in newParent's children. */
   newIndex: number
 }
 
 interface RenameNodeAction {
   type: 'renameNode'
-  nodeId?: string
-  /** Temporary ref from an earlier insertNode in the same action batch. */
-  nodeRef?: string
+  nodeId: string
   label: string
 }
 
@@ -130,6 +115,7 @@ interface CreateClassAction {
 
 interface UpdateClassStylesAction {
   type: 'updateClassStyles'
+  /** Class ID or existing class name. */
   classId: string
   /** Optional configured breakpoint ID. When set, writes class breakpoint styles. */
   breakpointId?: string
@@ -138,17 +124,15 @@ interface UpdateClassStylesAction {
 
 interface AssignClassAction {
   type: 'assignClass'
-  nodeId?: string
-  /** Temporary ref from an earlier insertNode in the same action batch. */
-  nodeRef?: string
+  nodeId: string
+  /** Class ID or existing class name. */
   classId: string
 }
 
 interface RemoveClassAction {
   type: 'removeClass'
-  nodeId?: string
-  /** Temporary ref from an earlier insertNode in the same action batch. */
-  nodeRef?: string
+  nodeId: string
+  /** Class ID or existing class name. */
   classId: string
 }
 
@@ -156,11 +140,6 @@ interface AddPageAction {
   type: 'addPage'
   title: string
   slug?: string
-}
-
-interface UpdateSiteSettingsAction {
-  type: 'updateSiteSettings'
-  patch: Record<string, unknown>
 }
 
 export type AgentAction =
@@ -175,17 +154,32 @@ export type AgentAction =
   | AssignClassAction
   | RemoveClassAction
   | AddPageAction
-  | UpdateSiteSettingsAction
 
 // ---------------------------------------------------------------------------
 // Execution result
 // ---------------------------------------------------------------------------
+//
+// Single result type used by every browser-bridged tool. The shape is flat
+// with optional fields so the bridge protocol stays uniform — tools that
+// don't need a particular field simply omit it.
 
 export interface AgentActionResult {
   success: boolean
-  /** Returned by insertNode (the new node ID). */
+  /** Set by insertNode / insertTree / createClass — the new node/class ID. */
   nodeId?: string
+  /** Failure detail; Claude reads it from the tool_result block to retry. */
   error?: string
+  /** Set by render_snapshot only — captured browser screenshot + layout. */
+  snapshot?: AgentRenderSnapshotPayload
+}
+
+export interface AgentRenderSnapshotPayload {
+  breakpointId: string
+  label: string
+  width: number
+  capturedAt: number
+  screenshot: AgentScreenshotContext
+  layout: AgentLayoutReportContext
 }
 
 // ---------------------------------------------------------------------------
@@ -198,17 +192,31 @@ interface TextEvent {
   text: string
 }
 
-/** One or more validated page-builder actions to execute in the browser. */
-interface ActionsEvent {
-  type: 'actions'
-  actions: AgentAction[]
+/**
+ * Bridge handshake: the server has accepted the request and assigned a bridge
+ * id. The browser uses this id when POSTing tool-result responses to
+ * /api/agent/tool-result so the server can correlate the response with the
+ * pending MCP tool call.
+ */
+interface BridgeReadyEvent {
+  type: 'bridgeReady'
+  bridgeId: string
 }
 
-/** A single action has been executed and the result is available. */
-interface ActionResultEvent {
-  type: 'actionResult'
-  actionType: AgentActionType
-  result: AgentActionResult
+/**
+ * The server-side MCP write tool needs the browser to apply a mutation
+ * against the live editor store. The browser executes it, then POSTs the
+ * result to /api/agent/tool-result with `{ bridgeId, requestId, result }`.
+ *
+ * `name` is the tool name without the `mcp__page_builder__` prefix
+ * (e.g. `insertNode`, `insertTree`, `createClass`). `input` is the tool's
+ * input object as Claude produced it.
+ */
+interface ToolRequestEvent {
+  type: 'toolRequest'
+  requestId: string
+  name: string
+  input: unknown
 }
 
 /** Stream finished normally. */
@@ -240,8 +248,8 @@ interface SessionEvent {
 
 export type ServerStreamEvent =
   | TextEvent
-  | ActionsEvent
-  | ActionResultEvent
+  | BridgeReadyEvent
+  | ToolRequestEvent
   | ToolStatusEvent
   | SessionEvent
   | DoneEvent
@@ -253,10 +261,12 @@ export type ServerStreamEvent =
 
 export interface AgentToolCall {
   id: string
+  /** SDK tool_use id (`toolu_…`) — correlates UI badges with stream events. */
   externalId?: string
-  source?: 'page-builder' | 'sdk'
+  /** Tool name as Claude saw it (e.g. `mcp__page_builder__insertNode`). */
   actionType: string
-  params: AgentAction | Record<string, unknown>
+  /** Tool input as Claude produced it. */
+  params: Record<string, unknown>
   result: AgentActionResult | null
   status: 'pending' | 'success' | 'error'
 }
@@ -278,12 +288,6 @@ export interface AgentRequestBody {
   prompt: string
   /** Claude Agent SDK session ID to resume for follow-up turns. */
   sessionId?: string
-  /**
-   * Full conversation context — every prior message in this session
-   * including earlier assistant text and tool results. Allows the server
-   * to provide a fallback transcript if the SDK session is unavailable.
-   */
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>
   /**
    * Snapshot of the current page tree injected into the system prompt.
    * Lets the server give Claude accurate context without a separate read call.
@@ -433,8 +437,7 @@ export interface PageContext {
   /**
    * CSS class registry — all classes defined in the site.
    * Use the `id` in assignClass/updateClassStyles for existing classes.
-   * For a class created in the same action batch, use its `name` as the
-   * classId — the executor resolves names automatically.
+   * The executor also resolves classId by name as a fallback.
    */
   classes: Array<{
     id: string
@@ -442,6 +445,4 @@ export interface PageContext {
     styles?: Record<string, unknown>
     breakpointStyles?: Record<string, Record<string, unknown>>
   }>
-  /** Browser-collected render/layout snapshots for canvas breakpoint frames. */
-  renderSnapshots: AgentRenderSnapshotContext[]
 }

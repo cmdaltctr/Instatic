@@ -1,11 +1,20 @@
 /**
- * Phase D — Agent tool executor.
+ * Browser-side executor for page-builder write tools.
  *
- * Maps agent action objects (from the server NDJSON stream) to Zustand
- * store calls. All inputs are validated with TypeBox before touching the store
- * (Constraint #272 — all tool calls must pass validation before dispatch).
+ * The Claude Agent SDK calls these tools server-side (see server/agentTools.ts)
+ * which emits a `toolRequest` stream event so the browser can apply the
+ * mutation against the live editor store. The browser then POSTs the result
+ * back to /api/agent/tool-result; the server-side MCP tool handler returns
+ * the result to the SDK and Claude continues the loop.
  *
- * Constraint #283/#286: No Anthropic SDK imports here.
+ * No batch semantics, no rollback. Each tool call is its own atomic mutation
+ * — successful mutations push history entries normally so Cmd+Z reverts them.
+ * Failed tool calls return an error result; Claude reads the error in the
+ * next turn and decides how to recover.
+ *
+ * Constraint #272 — every input is validated with TypeBox before dispatch.
+ * Constraint #283/#286 — no Anthropic SDK imports here.
+ * Constraint #299 — richtext props are sanitized via DOMPurify before storage.
  */
 
 import { Type, type Static, parseValue } from '@core/utils/typeboxHelpers'
@@ -13,38 +22,29 @@ import type { EditorStore } from '../editor-store/types'
 import { registry } from '../module-engine/registry'
 import { sanitizeRichtext, isRichtextPropKey } from '../sanitize'
 import { getAgentStoreApi } from './storeRef'
-import type {
-  AgentAction,
-  AgentActionResult,
-  InsertTreeNode,
-} from './types'
+import { captureAgentRenderSnapshot } from './renderEvidence'
+import type { AgentActionResult, InsertTreeNode } from './types'
 
 // Live access to the editor store. Routed through `./storeRef` so this module
-// has no static import edge back into `editor-store/store.ts` — that's how the
-// executor → store → agentSlice → executor runtime cycle is broken.
+// has no static import edge back into `editor-store/store.ts`.
 const getStoreState = (): EditorStore => getAgentStoreApi<EditorStore>().getState()
-const setStoreState = (partial: Partial<EditorStore>): void =>
-  getAgentStoreApi<EditorStore>().setState(partial)
 
 // ---------------------------------------------------------------------------
-// Per-action TypeBox schemas (Constraint #272)
+// Per-tool TypeBox schemas
+//
+// Tool names and shapes mirror the AgentAction interfaces in ./types and the
+// Zod schemas in server/agentTools.ts. The server validates the input via
+// the SDK's Zod gate before sending toolRequest; this second pass is defence-
+// in-depth at the store boundary (Constraint #272).
 // ---------------------------------------------------------------------------
 
 const insertNodeSchema = Type.Object({
-  type: Type.Literal('insertNode'),
   moduleId: Type.String({ minLength: 1 }),
-  parentId: Type.Optional(Type.String({ minLength: 1 })),
-  parentRef: Type.Optional(Type.String({ minLength: 1 })),
-  ref: Type.Optional(Type.String({ minLength: 1 })),
+  parentId: Type.String({ minLength: 1 }),
   index: Type.Optional(Type.Integer({ minimum: 0 })),
   props: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   classIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
 })
-
-// Cross-field invariant: either parentId or parentRef must be provided.
-function hasInsertNodeParent(value: Static<typeof insertNodeSchema>): boolean {
-  return Boolean(value.parentId || value.parentRef)
-}
 
 const classStylePatchSchema = Type.Record(
   Type.String(),
@@ -65,7 +65,6 @@ const classDefinitionSchema = Type.Object({
 const insertTreeNodeSchema = Type.Recursive((Self) =>
   Type.Object({
     moduleId: Type.String({ minLength: 1 }),
-    ref: Type.Optional(Type.String({ minLength: 1 })),
     props: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
     classIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
     children: Type.Optional(Type.Array(Self)),
@@ -73,121 +72,62 @@ const insertTreeNodeSchema = Type.Recursive((Self) =>
 )
 
 const insertTreeSchema = Type.Object({
-  type: Type.Literal('insertTree'),
-  parentId: Type.Optional(Type.String({ minLength: 1 })),
-  parentRef: Type.Optional(Type.String({ minLength: 1 })),
+  parentId: Type.String({ minLength: 1 }),
   index: Type.Optional(Type.Integer({ minimum: 0 })),
   classes: Type.Optional(Type.Array(classDefinitionSchema)),
   tree: insertTreeNodeSchema,
 })
 
-// Cross-field invariant: either parentId or parentRef must be provided.
-function hasInsertTreeParent(value: Static<typeof insertTreeSchema>): boolean {
-  return Boolean(value.parentId || value.parentRef)
-}
-
 const deleteNodeSchema = Type.Object({
-  type: Type.Literal('deleteNode'),
-  nodeId: Type.Optional(Type.String({ minLength: 1 })),
-  nodeRef: Type.Optional(Type.String({ minLength: 1 })),
+  nodeId: Type.String({ minLength: 1 }),
 })
 
-// Cross-field invariant: either nodeId or nodeRef must be provided.
-function hasDeleteNodeTarget(value: Static<typeof deleteNodeSchema>): boolean {
-  return Boolean(value.nodeId || value.nodeRef)
-}
-
 const updateNodePropsSchema = Type.Object({
-  type: Type.Literal('updateNodeProps'),
-  nodeId: Type.Optional(Type.String({ minLength: 1 })),
-  nodeRef: Type.Optional(Type.String({ minLength: 1 })),
+  nodeId: Type.String({ minLength: 1 }),
   breakpointId: Type.Optional(Type.String({ minLength: 1 })),
   patch: Type.Record(Type.String(), Type.Unknown()),
 })
 
-// Cross-field invariant: either nodeId or nodeRef must be provided.
-function hasUpdateNodeTarget(value: Static<typeof updateNodePropsSchema>): boolean {
-  return Boolean(value.nodeId || value.nodeRef)
-}
-
 const moveNodeSchema = Type.Object({
-  type: Type.Literal('moveNode'),
-  nodeId: Type.Optional(Type.String({ minLength: 1 })),
-  nodeRef: Type.Optional(Type.String({ minLength: 1 })),
-  newParentId: Type.Optional(Type.String({ minLength: 1 })),
-  newParentRef: Type.Optional(Type.String({ minLength: 1 })),
+  nodeId: Type.String({ minLength: 1 }),
+  newParentId: Type.String({ minLength: 1 }),
   newIndex: Type.Integer({ minimum: 0 }),
 })
 
-// Cross-field invariant 1: either nodeId or nodeRef must be provided.
-function hasMoveNodeSource(value: Static<typeof moveNodeSchema>): boolean {
-  return Boolean(value.nodeId || value.nodeRef)
-}
-
-// Cross-field invariant 2: either newParentId or newParentRef must be provided.
-function hasMoveNodeDestination(value: Static<typeof moveNodeSchema>): boolean {
-  return Boolean(value.newParentId || value.newParentRef)
-}
-
 const renameNodeSchema = Type.Object({
-  type: Type.Literal('renameNode'),
-  nodeId: Type.Optional(Type.String({ minLength: 1 })),
-  nodeRef: Type.Optional(Type.String({ minLength: 1 })),
+  nodeId: Type.String({ minLength: 1 }),
   label: Type.String({ minLength: 1 }),
 })
 
-// Cross-field invariant: either nodeId or nodeRef must be provided.
-function hasRenameNodeTarget(value: Static<typeof renameNodeSchema>): boolean {
-  return Boolean(value.nodeId || value.nodeRef)
-}
-
 const createClassSchema = Type.Object({
-  type: Type.Literal('createClass'),
   name: Type.String({ minLength: 1 }),
   styles: Type.Optional(classStylePatchSchema),
   breakpointStyles: Type.Optional(classBreakpointStylesSchema),
 })
 
 const updateClassStylesSchema = Type.Object({
-  type: Type.Literal('updateClassStyles'),
   classId: Type.String({ minLength: 1 }),
   breakpointId: Type.Optional(Type.String({ minLength: 1 })),
   patch: classStylePatchSchema,
 })
 
 const assignClassSchema = Type.Object({
-  type: Type.Literal('assignClass'),
-  nodeId: Type.Optional(Type.String({ minLength: 1 })),
-  nodeRef: Type.Optional(Type.String({ minLength: 1 })),
+  nodeId: Type.String({ minLength: 1 }),
   classId: Type.String({ minLength: 1 }),
 })
-
-// Cross-field invariant: either nodeId or nodeRef must be provided.
-function hasAssignClassTarget(value: Static<typeof assignClassSchema>): boolean {
-  return Boolean(value.nodeId || value.nodeRef)
-}
 
 const removeClassSchema = Type.Object({
-  type: Type.Literal('removeClass'),
-  nodeId: Type.Optional(Type.String({ minLength: 1 })),
-  nodeRef: Type.Optional(Type.String({ minLength: 1 })),
+  nodeId: Type.String({ minLength: 1 }),
   classId: Type.String({ minLength: 1 }),
 })
 
-// Cross-field invariant: either nodeId or nodeRef must be provided.
-function hasRemoveClassTarget(value: Static<typeof removeClassSchema>): boolean {
-  return Boolean(value.nodeId || value.nodeRef)
-}
-
 const addPageSchema = Type.Object({
-  type: Type.Literal('addPage'),
   title: Type.String({ minLength: 1 }),
   slug: Type.Optional(Type.String()),
 })
 
-const updateSiteSettingsSchema = Type.Object({
-  type: Type.Literal('updateSiteSettings'),
-  patch: Type.Record(Type.String(), Type.Unknown()),
+const renderSnapshotSchema = Type.Object({
+  breakpointId: Type.Optional(Type.String({ minLength: 1 })),
 })
 
 // ---------------------------------------------------------------------------
@@ -196,13 +136,12 @@ const updateSiteSettingsSchema = Type.Object({
 
 /**
  * Resolve a classId that may be either a real nanoid (checked first) or a
- * class name (fallback lookup).  Returns the resolved ID string, or null if
+ * class name (fallback lookup). Returns the resolved ID string, or null if
  * no matching class is found.
  *
- * This bridges the "same-batch ID gap": the agent can't know the nanoid
- * assigned to a class it just created, so it's allowed to pass the class
- * *name* in assignClass / updateClassStyles / removeClass.  The executor
- * transparently resolves it here so callers never need to worry about it.
+ * Lets Claude reference a class by name in tools that only accept a single
+ * class identifier (assignClass/updateClassStyles/removeClass), without
+ * needing to remember the generated nanoid from a previous createClass call.
  */
 function resolveClassId(
   store: EditorStore,
@@ -210,112 +149,19 @@ function resolveClassId(
 ): string | null {
   const classes = store.site?.classes
   if (!classes) return null
-  // Direct ID match (fast path)
   if (classes[classIdOrName]) return classIdOrName
-  // Name-based fallback — use filter instead of find so we can detect ambiguity.
-  // Uniqueness is enforced at createClass/renameClass time (classSlice), but this
-  // guard provides defense-in-depth: if two classes somehow share a name, refuse to
-  // guess rather than silently picking the wrong one.
+  // Filter (not find) so we can detect ambiguity. Uniqueness is enforced at
+  // createClass time in the class slice; this guard is defence-in-depth.
   const matches = Object.values(classes).filter((c) => c.name === classIdOrName)
-  if (matches.length > 1) return null // ambiguous — fail safely
+  if (matches.length > 1) return null
   return matches[0]?.id ?? null
 }
-
-interface AgentExecutionContext {
-  nodeRefs: Map<string, string>
-}
-
-type AgentBatchSnapshot = Pick<
-  EditorStore,
-  | 'site'
-  | 'activePageId'
-  | 'activeDocument'
-  | 'selectedNodeId'
-  | 'hoveredNodeId'
-  | 'activeClassId'
-  | 'hasUnsavedChanges'
-  | '_historyPast'
-  | '_historyFuture'
-  | 'canUndo'
-  | 'canRedo'
->
 
 const EMPTY_TREE_CHILDREN: InsertTreeNode[] = []
 const EMPTY_TREE_CLASS_IDS: string[] = []
 const EMPTY_PROPS: Record<string, unknown> = {}
 const EMPTY_CLASS_STYLES: Record<string, string | number> = {}
 const EMPTY_BREAKPOINT_STYLES: Record<string, Record<string, string | number>> = {}
-
-function cloneSerializable<T>(value: T): T {
-  return value === null || value === undefined ? value : structuredClone(value)
-}
-
-function takeBatchSnapshot(): AgentBatchSnapshot {
-  const state = getStoreState()
-  return {
-    site: cloneSerializable(state.site),
-    activePageId: state.activePageId,
-    activeDocument: cloneSerializable(state.activeDocument),
-    selectedNodeId: state.selectedNodeId,
-    hoveredNodeId: state.hoveredNodeId,
-    activeClassId: state.activeClassId,
-    hasUnsavedChanges: state.hasUnsavedChanges,
-    _historyPast: cloneSerializable(state._historyPast),
-    _historyFuture: cloneSerializable(state._historyFuture),
-    canUndo: state.canUndo,
-    canRedo: state.canRedo,
-  }
-}
-
-function restoreBatchSnapshot(snapshot: AgentBatchSnapshot): void {
-  setStoreState({
-    ...snapshot,
-    site: cloneSerializable(snapshot.site),
-    activeDocument: cloneSerializable(snapshot.activeDocument),
-    _historyPast: cloneSerializable(snapshot._historyPast),
-    _historyFuture: cloneSerializable(snapshot._historyFuture),
-  })
-}
-
-function resolveParentId(
-  action: Static<typeof insertNodeSchema>,
-  context: AgentExecutionContext | undefined,
-): string | null {
-  if (action.parentRef) {
-    return context?.nodeRefs.get(action.parentRef) ?? null
-  }
-  return action.parentId ?? null
-}
-
-function resolveTreeParentId(
-  action: Static<typeof insertTreeSchema>,
-  context: AgentExecutionContext | undefined,
-): string | null {
-  if (action.parentRef) {
-    return context?.nodeRefs.get(action.parentRef) ?? null
-  }
-  return action.parentId ?? null
-}
-
-function resolveNodeId(
-  action: { nodeId?: string; nodeRef?: string },
-  context: AgentExecutionContext | undefined,
-): string | null {
-  if (action.nodeRef) {
-    return context?.nodeRefs.get(action.nodeRef) ?? null
-  }
-  return action.nodeId ?? null
-}
-
-function resolveMoveParentId(
-  action: Static<typeof moveNodeSchema>,
-  context: AgentExecutionContext | undefined,
-): string | null {
-  if (action.newParentRef) {
-    return context?.nodeRefs.get(action.newParentRef) ?? null
-  }
-  return action.newParentId ?? null
-}
 
 function resolveOrCreateClassId(
   store: EditorStore,
@@ -324,7 +170,6 @@ function resolveOrCreateClassId(
 ): string | null {
   const resolved = resolveClassId(store, classIdOrName)
   if (resolved) return resolved
-
   try {
     return store.createClass(classIdOrName, styles).id
   } catch {
@@ -441,7 +286,6 @@ function insertTreeNode(
   node: InsertTreeNode,
   parentId: string,
   index: number | undefined,
-  context: AgentExecutionContext | undefined,
 ): string {
   const nodeId = store.insertNode(
     node.moduleId,
@@ -449,7 +293,6 @@ function insertTreeNode(
     parentId,
     index,
   )
-  if (node.ref) context?.nodeRefs.set(node.ref, nodeId)
 
   const resolved = resolveKnownClassIds(store, node.classIds ?? EMPTY_TREE_CLASS_IDS)
   const classIds = resolved.classIds ?? EMPTY_TREE_CLASS_IDS
@@ -458,306 +301,225 @@ function insertTreeNode(
   }
 
   for (const child of node.children ?? EMPTY_TREE_CHILDREN) {
-    insertTreeNode(store, child, nodeId, undefined, context)
+    insertTreeNode(store, child, nodeId, undefined)
   }
 
   return nodeId
 }
 
 // ---------------------------------------------------------------------------
-// Executor
+// Per-tool implementations
+// ---------------------------------------------------------------------------
+
+function runInsertNode(input: Static<typeof insertNodeSchema>): AgentActionResult {
+  const store = getStoreState()
+  const moduleError = validateRegisteredModule(input.moduleId)
+  if (moduleError) return { success: false, error: moduleError }
+
+  const resolvedClassIds = resolveKnownClassIds(store, input.classIds ?? EMPTY_TREE_CLASS_IDS)
+  if (resolvedClassIds.missing) {
+    return { success: false, error: `Class not found: ${resolvedClassIds.missing}` }
+  }
+  const classIds = resolvedClassIds.classIds ?? EMPTY_TREE_CLASS_IDS
+
+  const sanitizedProps = sanitizeNodeProps(input.props ?? EMPTY_PROPS)
+  const nodeId = store.insertNode(
+    input.moduleId,
+    sanitizedProps,
+    input.parentId,
+    input.index,
+  )
+  for (const classId of classIds) {
+    store.addNodeClass(nodeId, classId)
+  }
+  return { success: true, nodeId }
+}
+
+function runInsertTree(input: Static<typeof insertTreeSchema>): AgentActionResult {
+  const moduleError = validateTreeModules(input.tree as InsertTreeNode)
+  if (moduleError) return { success: false, error: moduleError }
+
+  for (const classDef of input.classes ?? []) {
+    const breakpointError = validateBreakpointStyles(
+      getStoreState(),
+      classDef.breakpointStyles ?? EMPTY_BREAKPOINT_STYLES,
+    )
+    if (breakpointError) return { success: false, error: breakpointError }
+  }
+
+  for (const classDef of input.classes ?? []) {
+    const classId = ensureClassIdWithStyles(
+      getStoreState(),
+      classDef.name,
+      classDef.styles ?? EMPTY_CLASS_STYLES,
+      classDef.breakpointStyles ?? EMPTY_BREAKPOINT_STYLES,
+    )
+    if (!classId) return { success: false, error: `Class could not be created: ${classDef.name}` }
+  }
+
+  const unresolvedClass = ensureTreeClassIds(getStoreState(), input.tree as InsertTreeNode)
+  if (unresolvedClass) {
+    return { success: false, error: `Class could not be resolved: ${unresolvedClass}` }
+  }
+
+  const nodeId = insertTreeNode(
+    getStoreState(),
+    input.tree as InsertTreeNode,
+    input.parentId,
+    input.index,
+  )
+  return { success: true, nodeId }
+}
+
+function runDeleteNode(input: Static<typeof deleteNodeSchema>): AgentActionResult {
+  getStoreState().deleteNode(input.nodeId)
+  return { success: true }
+}
+
+function runUpdateNodeProps(input: Static<typeof updateNodePropsSchema>): AgentActionResult {
+  const store = getStoreState()
+  const sanitizedPatch: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input.patch)) {
+    sanitizedPatch[key] = isRichtextPropKey(key) && typeof value === 'string'
+      ? sanitizeRichtext(value)
+      : value
+  }
+  if (input.breakpointId) {
+    const breakpointError = validateBreakpointId(store, input.breakpointId)
+    if (breakpointError) return { success: false, error: breakpointError }
+    store.setBreakpointOverride(input.nodeId, input.breakpointId, sanitizedPatch)
+  } else {
+    store.updateNodeProps(input.nodeId, sanitizedPatch)
+  }
+  return { success: true }
+}
+
+function runMoveNode(input: Static<typeof moveNodeSchema>): AgentActionResult {
+  getStoreState().moveNode(input.nodeId, input.newParentId, input.newIndex)
+  return { success: true }
+}
+
+function runRenameNode(input: Static<typeof renameNodeSchema>): AgentActionResult {
+  getStoreState().renameNode(input.nodeId, input.label)
+  return { success: true }
+}
+
+function runCreateClass(input: Static<typeof createClassSchema>): AgentActionResult {
+  const store = getStoreState()
+  const breakpointError = validateBreakpointStyles(
+    store,
+    input.breakpointStyles ?? EMPTY_BREAKPOINT_STYLES,
+  )
+  if (breakpointError) return { success: false, error: breakpointError }
+  const cls = store.createClass(
+    input.name,
+    input.styles ?? EMPTY_CLASS_STYLES,
+  )
+  applyClassBreakpointStyles(
+    store,
+    cls.id,
+    input.breakpointStyles ?? EMPTY_BREAKPOINT_STYLES,
+  )
+  return { success: true, nodeId: cls.id }
+}
+
+function runUpdateClassStyles(input: Static<typeof updateClassStylesSchema>): AgentActionResult {
+  const store = getStoreState()
+  const classId = resolveOrCreateClassId(store, input.classId, input.patch)
+  if (!classId) return { success: false, error: `Class not found: ${input.classId}` }
+  if (input.breakpointId) {
+    const breakpointError = validateBreakpointId(store, input.breakpointId)
+    if (breakpointError) return { success: false, error: breakpointError }
+    store.setClassBreakpointStyles(classId, input.breakpointId, input.patch)
+  } else {
+    store.updateClassStyles(classId, input.patch)
+  }
+  return { success: true }
+}
+
+function runAssignClass(input: Static<typeof assignClassSchema>): AgentActionResult {
+  const store = getStoreState()
+  const classId = resolveClassId(store, input.classId)
+  if (!classId) return { success: false, error: `Class not found: ${input.classId}` }
+  store.addNodeClass(input.nodeId, classId)
+  return { success: true }
+}
+
+function runRemoveClass(input: Static<typeof removeClassSchema>): AgentActionResult {
+  const store = getStoreState()
+  const classId = resolveClassId(store, input.classId)
+  if (!classId) return { success: false, error: `Class not found: ${input.classId}` }
+  store.removeNodeClass(input.nodeId, classId)
+  return { success: true }
+}
+
+function runAddPage(input: Static<typeof addPageSchema>): AgentActionResult {
+  getStoreState().addPage(input.title, input.slug)
+  return { success: true }
+}
+
+async function runRenderSnapshot(
+  input: Static<typeof renderSnapshotSchema>,
+): Promise<AgentActionResult> {
+  const snapshot = await captureAgentRenderSnapshot({
+    breakpointId: input.breakpointId,
+    captureScreenshot: true,
+  })
+  if (!snapshot) {
+    return {
+      success: false,
+      error: 'No canvas frame found for the requested breakpoint.',
+    }
+  }
+  return { success: true, snapshot }
+}
+
+// ---------------------------------------------------------------------------
+// Public dispatch — called by the agent slice when a toolRequest event arrives
 // ---------------------------------------------------------------------------
 
 /**
- * Execute a single agent action against the Zustand store.
+ * Apply a single page-builder write tool against the editor store.
  *
- * Validates the action with TypeBox before dispatch (Constraint #272).
- * Returns `{ success: true, nodeId? }` or `{ success: false, error }`.
+ * The browser receives a `toolRequest` event from the server stream,
+ * dispatches the tool here, and POSTs the result back to /api/agent/tool-result
+ * so the server-side MCP tool handler can return the result to Claude.
  */
-export async function executeAgentAction(
-  action: AgentAction,
-  context?: AgentExecutionContext,
+export async function executeAgentTool(
+  toolName: string,
+  rawInput: unknown,
 ): Promise<AgentActionResult> {
-  const store = getStoreState()
-
   try {
-    switch (action.type) {
-      case 'insertNode': {
-        const a = parseValue(insertNodeSchema, action)
-        if (!hasInsertNodeParent(a)) {
-          return { success: false, error: 'Either parentId or parentRef is required' }
-        }
-        const moduleError = validateRegisteredModule(a.moduleId)
-        if (moduleError) return { success: false, error: moduleError }
-        const parentId = resolveParentId(a, context)
-        if (!parentId) {
-          const ref = a.parentRef ? `parentRef "${a.parentRef}"` : 'parentId'
-          return { success: false, error: `Could not resolve ${ref}` }
-        }
-        const resolvedClassIds = resolveKnownClassIds(store, a.classIds ?? EMPTY_TREE_CLASS_IDS)
-        if (resolvedClassIds.missing) {
-          return { success: false, error: `Class not found: ${resolvedClassIds.missing}` }
-        }
-        const classIds = resolvedClassIds.classIds
-        if (!classIds) {
-          return { success: false, error: 'One or more classes could not be resolved for insertNode' }
-        }
-        // Sanitize richtext-keyed props before writing to store (Constraint #299)
-        const sanitizedProps = sanitizeNodeProps(a.props ?? EMPTY_PROPS)
-        const nodeId = store.insertNode(
-          a.moduleId,
-          sanitizedProps,
-          parentId,
-          a.index,
-        )
-        if (a.ref) context?.nodeRefs.set(a.ref, nodeId)
-        for (const classId of classIds) {
-          store.addNodeClass(nodeId, classId)
-        }
-        return { success: true, nodeId }
-      }
-
-      case 'insertTree': {
-        const a = parseValue(insertTreeSchema, action)
-        if (!hasInsertTreeParent(a)) {
-          return { success: false, error: 'Either parentId or parentRef is required' }
-        }
-        const parentId = resolveTreeParentId(a, context)
-        if (!parentId) {
-          const ref = a.parentRef ? `parentRef "${a.parentRef}"` : 'parentId'
-          return { success: false, error: `Could not resolve ${ref}` }
-        }
-        const moduleError = validateTreeModules(a.tree as InsertTreeNode)
-        if (moduleError) return { success: false, error: moduleError }
-
-        for (const classDef of (a.classes ?? [])) {
-          const breakpointError = validateBreakpointStyles(
-            getStoreState(),
-            classDef.breakpointStyles ?? EMPTY_BREAKPOINT_STYLES,
-          )
-          if (breakpointError) return { success: false, error: breakpointError }
-        }
-
-        for (const classDef of (a.classes ?? [])) {
-          const classId = ensureClassIdWithStyles(
-            getStoreState(),
-            classDef.name,
-            classDef.styles ?? EMPTY_CLASS_STYLES,
-            classDef.breakpointStyles ?? EMPTY_BREAKPOINT_STYLES,
-          )
-          if (!classId) return { success: false, error: `Class could not be created: ${classDef.name}` }
-        }
-
-        const unresolvedClass = ensureTreeClassIds(getStoreState(), a.tree as InsertTreeNode)
-        if (unresolvedClass) {
-          return { success: false, error: `Class could not be resolved: ${unresolvedClass}` }
-        }
-
-        const nodeId = insertTreeNode(getStoreState(), a.tree as InsertTreeNode, parentId, a.index, context)
-        return { success: true, nodeId }
-      }
-
-      case 'deleteNode': {
-        const a = parseValue(deleteNodeSchema, action)
-        if (!hasDeleteNodeTarget(a)) {
-          return { success: false, error: 'Either nodeId or nodeRef is required' }
-        }
-        const nodeId = resolveNodeId(a, context)
-        if (!nodeId) {
-          const ref = a.nodeRef ? `nodeRef "${a.nodeRef}"` : 'nodeId'
-          return { success: false, error: `Could not resolve ${ref}` }
-        }
-        store.deleteNode(nodeId)
-        return { success: true }
-      }
-
-      case 'updateNodeProps': {
-        const a = parseValue(updateNodePropsSchema, action)
-        if (!hasUpdateNodeTarget(a)) {
-          return { success: false, error: 'Either nodeId or nodeRef is required' }
-        }
-        const nodeId = resolveNodeId(a, context)
-        if (!nodeId) {
-          const ref = a.nodeRef ? `nodeRef "${a.nodeRef}"` : 'nodeId'
-          return { success: false, error: `Could not resolve ${ref}` }
-        }
-        // Sanitize richtext-keyed props before writing to store (Constraint #299)
-        const sanitizedPatch: Record<string, unknown> = {}
-        for (const [key, value] of Object.entries(a.patch)) {
-          sanitizedPatch[key] = isRichtextPropKey(key) && typeof value === 'string'
-            ? sanitizeRichtext(value)
-            : value
-        }
-        if (a.breakpointId) {
-          const breakpointError = validateBreakpointId(store, a.breakpointId)
-          if (breakpointError) return { success: false, error: breakpointError }
-          store.setBreakpointOverride(nodeId, a.breakpointId, sanitizedPatch)
-        } else {
-          store.updateNodeProps(nodeId, sanitizedPatch)
-        }
-        return { success: true }
-      }
-
-      case 'moveNode': {
-        const a = parseValue(moveNodeSchema, action)
-        if (!hasMoveNodeSource(a)) {
-          return { success: false, error: 'Either nodeId or nodeRef is required' }
-        }
-        if (!hasMoveNodeDestination(a)) {
-          return { success: false, error: 'Either newParentId or newParentRef is required' }
-        }
-        const nodeId = resolveNodeId(a, context)
-        if (!nodeId) {
-          const ref = a.nodeRef ? `nodeRef "${a.nodeRef}"` : 'nodeId'
-          return { success: false, error: `Could not resolve ${ref}` }
-        }
-        const newParentId = resolveMoveParentId(a, context)
-        if (!newParentId) {
-          const ref = a.newParentRef ? `newParentRef "${a.newParentRef}"` : 'newParentId'
-          return { success: false, error: `Could not resolve ${ref}` }
-        }
-        store.moveNode(nodeId, newParentId, a.newIndex)
-        return { success: true }
-      }
-
-      case 'renameNode': {
-        const a = parseValue(renameNodeSchema, action)
-        if (!hasRenameNodeTarget(a)) {
-          return { success: false, error: 'Either nodeId or nodeRef is required' }
-        }
-        const nodeId = resolveNodeId(a, context)
-        if (!nodeId) {
-          const ref = a.nodeRef ? `nodeRef "${a.nodeRef}"` : 'nodeId'
-          return { success: false, error: `Could not resolve ${ref}` }
-        }
-        store.renameNode(nodeId, a.label)
-        return { success: true }
-      }
-
-      case 'createClass': {
-        const a = parseValue(createClassSchema, action)
-        const breakpointError = validateBreakpointStyles(
-          store,
-          a.breakpointStyles ?? EMPTY_BREAKPOINT_STYLES,
-        )
-        if (breakpointError) return { success: false, error: breakpointError }
-        const cls = store.createClass(
-          a.name,
-          a.styles ?? EMPTY_CLASS_STYLES,
-        )
-        applyClassBreakpointStyles(
-          store,
-          cls.id,
-          a.breakpointStyles ?? EMPTY_BREAKPOINT_STYLES,
-        )
-        return { success: true, nodeId: cls.id }
-      }
-
-      case 'updateClassStyles': {
-        const a = parseValue(updateClassStylesSchema, action)
-        // Resolve classId by ID first, then fall back to name lookup.
-        // This lets the agent reference a class it just created in the same
-        // batch by name (since nanoid IDs are unknown at generation time).
-        const ucsResolvedId = resolveOrCreateClassId(
-          store,
-          a.classId,
-          a.patch,
-        )
-        if (!ucsResolvedId) return { success: false, error: `Class not found: ${a.classId}` }
-        if (a.breakpointId) {
-          const breakpointError = validateBreakpointId(store, a.breakpointId)
-          if (breakpointError) return { success: false, error: breakpointError }
-          store.setClassBreakpointStyles(
-            ucsResolvedId,
-            a.breakpointId,
-            a.patch,
-          )
-        } else {
-          store.updateClassStyles(
-            ucsResolvedId,
-            a.patch,
-          )
-        }
-        return { success: true }
-      }
-
-      case 'assignClass': {
-        const a = parseValue(assignClassSchema, action)
-        if (!hasAssignClassTarget(a)) {
-          return { success: false, error: 'Either nodeId or nodeRef is required' }
-        }
-        const nodeId = resolveNodeId(a, context)
-        if (!nodeId) {
-          const ref = a.nodeRef ? `nodeRef "${a.nodeRef}"` : 'nodeId'
-          return { success: false, error: `Could not resolve ${ref}` }
-        }
-        // Resolve classId by ID first, then fall back to name lookup.
-        const acResolvedId = resolveClassId(store, a.classId)
-        if (!acResolvedId) return { success: false, error: `Class not found: ${a.classId}` }
-        store.addNodeClass(nodeId, acResolvedId)
-        return { success: true }
-      }
-
-      case 'removeClass': {
-        const a = parseValue(removeClassSchema, action)
-        if (!hasRemoveClassTarget(a)) {
-          return { success: false, error: 'Either nodeId or nodeRef is required' }
-        }
-        const nodeId = resolveNodeId(a, context)
-        if (!nodeId) {
-          const ref = a.nodeRef ? `nodeRef "${a.nodeRef}"` : 'nodeId'
-          return { success: false, error: `Could not resolve ${ref}` }
-        }
-        // Resolve classId by ID first, then fall back to name lookup.
-        const rcResolvedId = resolveClassId(store, a.classId)
-        if (!rcResolvedId) return { success: false, error: `Class not found: ${a.classId}` }
-        store.removeNodeClass(nodeId, rcResolvedId)
-        return { success: true }
-      }
-
-      case 'addPage': {
-        const a = parseValue(addPageSchema, action)
-        store.addPage(a.title, a.slug)
-        return { success: true }
-      }
-
-      case 'updateSiteSettings': {
-        const a = parseValue(updateSiteSettingsSchema, action)
-        // updateSiteSettings is a shallow merge via updateNodeProps pattern
-        // (site settings live in site.settings — use the settings slice if available)
-        // For now, emit a warning since there's no direct store method
-        console.warn('[agent] updateSiteSettings action ignored — no store method yet', a)
-        return { success: false, error: 'updateSiteSettings not yet implemented' }
-      }
-
-      default: {
-        const exhaustive: never = action
-        return { success: false, error: `Unknown action type: ${(exhaustive as AgentAction).type}` }
-      }
+    switch (toolName) {
+      case 'insertNode':
+        return runInsertNode(parseValue(insertNodeSchema, rawInput))
+      case 'insertTree':
+        return runInsertTree(parseValue(insertTreeSchema, rawInput))
+      case 'deleteNode':
+        return runDeleteNode(parseValue(deleteNodeSchema, rawInput))
+      case 'updateNodeProps':
+        return runUpdateNodeProps(parseValue(updateNodePropsSchema, rawInput))
+      case 'moveNode':
+        return runMoveNode(parseValue(moveNodeSchema, rawInput))
+      case 'renameNode':
+        return runRenameNode(parseValue(renameNodeSchema, rawInput))
+      case 'createClass':
+        return runCreateClass(parseValue(createClassSchema, rawInput))
+      case 'updateClassStyles':
+        return runUpdateClassStyles(parseValue(updateClassStylesSchema, rawInput))
+      case 'assignClass':
+        return runAssignClass(parseValue(assignClassSchema, rawInput))
+      case 'removeClass':
+        return runRemoveClass(parseValue(removeClassSchema, rawInput))
+      case 'addPage':
+        return runAddPage(parseValue(addPageSchema, rawInput))
+      case 'render_snapshot':
+        return await runRenderSnapshot(parseValue(renderSnapshotSchema, rawInput))
+      default:
+        return { success: false, error: `Unknown page-builder tool: ${toolName}` }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return { success: false, error: message }
   }
-}
-
-/**
- * Execute a batch of agent actions in order.
- * Stops on first failure (fail-fast) and returns all results up to the failure.
- */
-export async function executeAgentActions(
-  actions: AgentAction[],
-): Promise<AgentActionResult[]> {
-  const results: AgentActionResult[] = []
-  const snapshot = takeBatchSnapshot()
-  const context: AgentExecutionContext = { nodeRefs: new Map() }
-  for (const action of actions) {
-    const result = await executeAgentAction(action, context)
-    results.push(result)
-    if (!result.success) {
-      restoreBatchSnapshot(snapshot)
-      break
-    }
-  }
-  return results
 }

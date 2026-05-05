@@ -1,66 +1,159 @@
 /**
- * Phase D — Agent server endpoint handler.
+ * Agent server endpoints.
  *
- * Uses the Claude Agent SDK (@anthropic-ai/claude-agent-sdk) to run
- * Claude as a page builder assistant. Streams NDJSON back to the browser.
+ * Two HTTP entry points:
+ *
+ *   POST /api/agent
+ *     Browser opens a streaming NDJSON request with { prompt, sessionId,
+ *     pageContext }. The server runs the Claude Agent SDK with our page-builder
+ *     MCP. Tool calls reach Claude as real MCP tools — both the read tools
+ *     (handled server-side from the page snapshot) and write tools (bridged
+ *     to the browser via toolRequest events).
+ *
+ *   POST /api/agent/tool-result
+ *     Browser POSTs { bridgeId, requestId, result } to deliver the outcome of
+ *     a write tool it just executed against the editor store. The server uses
+ *     the bridgeId to find the in-flight MCP tool handler and resolve its
+ *     pending promise so Claude sees the tool_result and continues.
  *
  * Auth: ambient Claude Code credentials (claude auth login) — Constraint #385.
  * No API key, no endpoint URL, no environment variable required.
- *
- * Architecture:
- * - Browser POSTs { prompt, messages, pageContext }
- * - This handler runs query() with a custom system prompt + tools: []
- * - Claude responds with text that may include <pb:actions> JSON blocks
- * - Handler parses action blocks, validates the JSON, streams events:
- *     { type: "text", text: "..." }
- *     { type: "actions", actions: [...] }
- *     { type: "done" }
- *     { type: "error", message: "..." }
- *
- * Constraint #272 — tool calls validated before dispatch:
- * The server validates action JSON structure before forwarding.
- * Full TypeBox validation happens in the browser executor (executor.ts).
  */
 
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk'
+import { nanoid } from 'nanoid'
 import { Type, safeParseValue, formatValueErrors } from '@core/utils/typeboxHelpers'
 import { buildSystemPrompt } from '../src/core/agent/systemPrompt'
-import {
-  buildAgentResponseEventsFromText,
-  createAgentResponseStreamParser,
-  type AgentResponseStreamParser,
-} from '../src/core/agent/actionBlocks'
-import { createPageBuilderMcpServer } from './agentTools'
+import { createPageBuilderMcpServer, type PageBuilderBridge } from './agentTools'
+import { jsonResponse } from './http'
 import type {
+  AgentActionResult,
   AgentRequestBody,
   ServerStreamEvent,
 } from '../src/core/agent/types'
 
 // ---------------------------------------------------------------------------
-// Request validation
+// Bridge registry — maps bridgeId → in-flight tool resolvers
 // ---------------------------------------------------------------------------
 //
-// AgentRequestBody is the shape this endpoint expects. We validate the outer
-// envelope strictly (prompt is required, messages is an array, etc.) but treat
-// pageContext as a passthrough — its full schema lives in src/core/agent/types
-// and the rest of the request flow is already typed against it. Strict
-// validation of pageContext can come later as its own pass.
-//
-// Surfaced by /audit-types — this was an `as AgentRequestBody` cast.
+// When the SDK calls a write MCP tool, the tool handler stores `{ resolve,
+// reject }` keyed by a freshly-minted requestId. The browser receives the
+// matching `toolRequest` stream event, applies the mutation locally, and POSTs
+// to /api/agent/tool-result with `{ bridgeId, requestId, result }`. That POST
+// looks up the entry here and resolves the resolver — the MCP tool handler
+// returns the result to the SDK, the SDK sends tool_result back to Claude.
+
+interface PendingToolResolver {
+  resolve(result: AgentActionResult): void
+  reject(err: Error): void
+}
+
+interface BridgeContext {
+  pending: Map<string, PendingToolResolver>
+}
+
+// Module-level registry shared between the streaming handler and the
+// /api/agent/tool-result endpoint. A bridge lives only for the duration of
+// one stream — destroyBridge() is called from the stream's finally block.
+const activeBridges = new Map<string, BridgeContext>()
+
+function createBridgeContext(): { bridgeId: string; bridge: BridgeContext } {
+  const bridgeId = nanoid()
+  const bridge: BridgeContext = { pending: new Map() }
+  activeBridges.set(bridgeId, bridge)
+  return { bridgeId, bridge }
+}
+
+function destroyBridge(bridgeId: string): void {
+  const bridge = activeBridges.get(bridgeId)
+  if (!bridge) return
+  if (bridge.pending.size > 0) {
+    // Pending entries at stream-end mean the browser never POSTed a tool-result
+    // for an in-flight tool call — usually a routing or transport bug. Surface
+    // it so diagnosing a frozen agent loop doesn't require source diving.
+    console.warn(
+      `[agentHandler] Bridge ${bridgeId} closed with ${bridge.pending.size} pending tool result(s).`,
+    )
+  }
+  for (const pending of bridge.pending.values()) {
+    pending.reject(new Error('Agent stream ended before tool result arrived.'))
+  }
+  bridge.pending.clear()
+  activeBridges.delete(bridgeId)
+}
+
+function resolvePendingToolResult(
+  bridgeId: string,
+  requestId: string,
+  result: AgentActionResult,
+): boolean {
+  const bridge = activeBridges.get(bridgeId)
+  if (!bridge) return false
+  const pending = bridge.pending.get(requestId)
+  if (!pending) return false
+  bridge.pending.delete(requestId)
+  pending.resolve(result)
+  return true
+}
+
+// ---------------------------------------------------------------------------
+// Request body schemas
+// ---------------------------------------------------------------------------
 
 const AgentRequestBodySchema = Type.Object({
   prompt: Type.String({ minLength: 1 }),
   sessionId: Type.Optional(Type.String()),
-  messages: Type.Array(Type.Object({
-    role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]),
-    content: Type.String(),
-  })),
-  // pageContext kept loose for now — see comment above.
+  // pageContext stays loose at this boundary — its full schema lives in
+  // src/core/agent/types and the rest of the request flow is typed against it.
   pageContext: Type.Unknown(),
 })
 
+// Render snapshot wire shape — set only when the bridged tool was
+// `render_snapshot`. Other tools omit the field entirely.
+const AgentToolResultSnapshotSchema = Type.Object({
+  breakpointId: Type.String(),
+  label: Type.String(),
+  width: Type.Number(),
+  capturedAt: Type.Number(),
+  screenshot: Type.Object({
+    status: Type.Union([
+      Type.Literal('ok'),
+      Type.Literal('unavailable'),
+      Type.Literal('error'),
+    ]),
+    mimeType: Type.Optional(Type.String()),
+    data: Type.Optional(Type.String()),
+    width: Type.Optional(Type.Number()),
+    height: Type.Optional(Type.Number()),
+    error: Type.Optional(Type.String()),
+  }),
+  layout: Type.Object({
+    breakpointId: Type.String(),
+    viewport: Type.Object({
+      width: Type.Number(),
+      height: Type.Number(),
+      scrollWidth: Type.Number(),
+      scrollHeight: Type.Number(),
+    }),
+    nodes: Type.Array(Type.Unknown()),
+    images: Type.Array(Type.Unknown()),
+    warnings: Type.Array(Type.Unknown()),
+  }),
+})
+
+const AgentToolResultBodySchema = Type.Object({
+  bridgeId: Type.String({ minLength: 1 }),
+  requestId: Type.String({ minLength: 1 }),
+  result: Type.Object({
+    success: Type.Boolean(),
+    nodeId: Type.Optional(Type.String()),
+    error: Type.Optional(Type.String()),
+    snapshot: Type.Optional(AgentToolResultSnapshotSchema),
+  }),
+})
+
 // ---------------------------------------------------------------------------
-// NDJSON stream helpers
+// NDJSON encoding
 // ---------------------------------------------------------------------------
 
 function encodeEvent(event: ServerStreamEvent): Uint8Array {
@@ -68,7 +161,7 @@ function encodeEvent(event: ServerStreamEvent): Uint8Array {
 }
 
 // ---------------------------------------------------------------------------
-// SDK stream translation
+// SDK message → ServerStreamEvent translation
 // ---------------------------------------------------------------------------
 
 interface StreamingToolState {
@@ -80,7 +173,6 @@ interface StreamingToolState {
 interface AgentSdkStreamState {
   sessionId: string | null
   sawPartialAssistantMessage: boolean
-  textParser: AgentResponseStreamParser
   toolsByIndex: Map<number, StreamingToolState>
   toolNamesById: Map<string, string>
 }
@@ -89,7 +181,6 @@ export function createAgentSdkStreamState(): AgentSdkStreamState {
   return {
     sessionId: null,
     sawPartialAssistantMessage: false,
-    textParser: createAgentResponseStreamParser(),
     toolsByIndex: new Map(),
     toolNamesById: new Map(),
   }
@@ -150,7 +241,7 @@ function getServerStreamEventsFromPartialMessage(
   if (event.type === 'content_block_delta') {
     const delta = event.delta as Record<string, unknown> | undefined
     if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
-      return state.textParser.push(delta.text)
+      return [{ type: 'text', text: delta.text }]
     }
     if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
       const tool = state.toolsByIndex.get(Number(event.index))
@@ -197,10 +288,6 @@ function getServerStreamEventsFromPartialMessage(
     }]
   }
 
-  if (event.type === 'message_stop') {
-    return state.textParser.flush()
-  }
-
   return []
 }
 
@@ -232,7 +319,7 @@ function getServerStreamEventsFromCompleteAssistantMessage(
     }
   }
 
-  events.unshift(...buildAgentResponseEventsFromText(text))
+  if (text) events.unshift({ type: 'text', text })
   return events
 }
 
@@ -249,9 +336,23 @@ function getServerStreamEventsFromUserMessage(
         toolCallId,
         name: state.toolNamesById.get(toolCallId) ?? 'tool',
         status: block.is_error ? 'error' : 'success',
-        error: block.is_error ? 'Tool call failed.' : undefined,
+        error: block.is_error ? extractToolErrorMessage(block) : undefined,
       }
     })
+}
+
+function extractToolErrorMessage(block: Record<string, unknown>): string {
+  const content = block.content
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    const text = content
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+      .map((item) => (typeof item.text === 'string' ? item.text : ''))
+      .filter(Boolean)
+      .join('\n')
+    if (text) return text
+  }
+  return 'Tool call failed.'
 }
 
 function getMessageContentBlocks(message: unknown): Array<Record<string, unknown>> {
@@ -277,21 +378,32 @@ function parseMaybeJson(value: string): unknown {
 // SDK query options
 // ---------------------------------------------------------------------------
 
-const PAGE_BUILDER_ALLOWED_TOOLS = [
-  'mcp__page_builder__list_modules',
-  'mcp__page_builder__list_classes',
-  'mcp__page_builder__list_breakpoints',
-  'mcp__page_builder__inspect_page',
-  'mcp__page_builder__search_nodes',
-  'mcp__page_builder__inspect_node',
-  'mcp__page_builder__inspect_class',
-  'mcp__page_builder__inspect_layout',
-  'mcp__page_builder__render_snapshot',
-]
+// Bound the corrective tool-loop. Plenty for the agent to do several rounds
+// of inspect → fix → retry, but stops runaway sequences.
+const AGENT_MAX_TURNS = 30
 
-const DISALLOWED_CLAUDE_TOOLS = [
-  'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep',
-  'WebFetch', 'WebSearch', 'TodoWrite',
+// Toolset policy for the in-app AI panel.
+//
+// The panel's job is editing live sites. Filesystem mutations and shell
+// access have no real use case here and would be a serious managed-mode risk
+// (the same handler runs both self-hosted and managed). We block the whole
+// filesystem/shell family. Claude keeps:
+//   - the `page_builder` MCP (page mutations + read-only discovery)
+//   - Skill (advisory guidance — pure-prompt skills like react-best-practices
+//     still work; skills that depend on Read/Write/Bash become no-ops)
+//   - WebFetch, WebSearch (looking up docs)
+//   - Task, TodoWrite, AskUserQuestion (lifecycle / coordination)
+//
+// Real code authoring (custom modules, plugin scaffolding, running tests)
+// belongs in a regular Claude Code terminal session, not this panel.
+const PAGE_BUILDER_DISALLOWED_TOOLS = [
+  'Bash',
+  'Read',
+  'Write',
+  'Edit',
+  'Glob',
+  'Grep',
+  'NotebookEdit',
 ]
 
 type PageBuilderMcpServer = ReturnType<typeof createPageBuilderMcpServer>
@@ -301,22 +413,26 @@ export function buildAgentQueryOptions({
   pageBuilderMcpServer,
   sessionId,
 }: {
-  systemPrompt: string
+  // Array form so the static prefix can be cached. buildSystemPrompt() returns
+  // [staticPrefix, SYSTEM_PROMPT_DYNAMIC_BOUNDARY, dynamicSuffix] — the SDK
+  // applies cache_control to everything before the boundary marker.
+  systemPrompt: string[]
   pageBuilderMcpServer: PageBuilderMcpServer
   sessionId?: string
 }): Options {
   const options: Options = {
     systemPrompt,
     cwd: process.cwd(),
-    // Disable ALL Claude Code built-in tools — Claude only uses page-builder MCP.
-    tools: [],
     mcpServers: {
       page_builder: pageBuilderMcpServer,
     },
     includePartialMessages: true,
-    allowedTools: PAGE_BUILDER_ALLOWED_TOOLS,
-    // Prevent Claude Code from writing to the filesystem.
-    disallowedTools: DISALLOWED_CLAUDE_TOOLS,
+    // Enable every discovered skill — pure-prompt skills (react-best-practices,
+    // composition-patterns, claude-api, etc.) inform Claude's MCP tool choices
+    // even though Read/Write/Bash are blocked.
+    skills: 'all',
+    disallowedTools: PAGE_BUILDER_DISALLOWED_TOOLS,
+    maxTurns: AGENT_MAX_TURNS,
   }
 
   if (sessionId) options.resume = sessionId
@@ -331,15 +447,10 @@ function normalizeResumeSessionId(value: unknown): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// handleAgentRequest
+// handleAgentRequest — POST /api/agent
 // ---------------------------------------------------------------------------
 
-/**
- * Handle a POST /api/agent request.
- * Returns a streaming Response with NDJSON lines.
- */
 export async function handleAgentRequest(req: Request): Promise<Response> {
-  // CORS preflight handled by the server before reaching here.
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
   }
@@ -358,19 +469,51 @@ export async function handleAgentRequest(req: Request): Promise<Response> {
       { status: 400 },
     )
   }
-  // The downstream code reads body.pageContext as PageContext; the loose schema
-  // keeps it as unknown for now. Cast back to the interface so the rest of the
-  // file's typing is preserved without invasive changes.
   const body: AgentRequestBody = parsed.value as AgentRequestBody
   const { prompt, pageContext } = body
 
   const systemPrompt = buildSystemPrompt(pageContext)
-  const pageBuilderMcpServer = createPageBuilderMcpServer(pageContext)
   const resumeSessionId = normalizeResumeSessionId(body.sessionId)
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let bridgeId: string | null = null
+      let streamClosed = false
+
+      const closeStream = () => {
+        if (streamClosed) return
+        streamClosed = true
+        try { controller.close() } catch { /* already closed */ }
+      }
+
+      const enqueueEvent = (event: ServerStreamEvent): void => {
+        if (streamClosed) return
+        try {
+          controller.enqueue(encodeEvent(event))
+        } catch {
+          streamClosed = true
+        }
+      }
+
       try {
+        const { bridgeId: id, bridge } = createBridgeContext()
+        bridgeId = id
+
+        const browserBridge: PageBuilderBridge = {
+          enqueueEvent,
+          callBrowser(name, input) {
+            const requestId = nanoid()
+            return new Promise<AgentActionResult>((resolve, reject) => {
+              bridge.pending.set(requestId, { resolve, reject })
+              enqueueEvent({ type: 'toolRequest', requestId, name, input })
+            })
+          },
+        }
+
+        // Tell the browser how to address tool-result responses.
+        enqueueEvent({ type: 'bridgeReady', bridgeId })
+
+        const pageBuilderMcpServer = createPageBuilderMcpServer(pageContext, browserBridge)
         const streamState = createAgentSdkStreamState()
 
         for await (const message of query({
@@ -382,28 +525,26 @@ export async function handleAgentRequest(req: Request): Promise<Response> {
           }),
         })) {
           for (const event of getServerStreamEventsFromSdkMessage(message, streamState)) {
-            controller.enqueue(encodeEvent(event))
+            enqueueEvent(event)
           }
 
           if (message.type === 'assistant') {
-            // Guard: SDK sets message.error instead of message.message on auth/billing failure
-            // Constraint #388: log server-side, never forward raw SDK error details to browser
+            // Constraint #388: log auth/billing failures server-side, never
+            // forward raw SDK error details to the browser.
             const sdkMsg = message as {
               type: 'assistant'
-              message?: { content: Array<{ type: string; text?: string }> }
+              message?: unknown
               error?: unknown
             }
             if (!sdkMsg.message) {
               console.error('[agentHandler] SDK assistant message unavailable (auth/billing error):', sdkMsg.error)
-              controller.enqueue(
-                encodeEvent({ type: 'error', message: 'Agent authentication or billing error. Check your Claude credentials.' }),
-              )
-              controller.close()
+              enqueueEvent({
+                type: 'error',
+                message: 'Agent authentication or billing error. Check your Claude credentials.',
+              })
               return
             }
           } else if (message.type === 'result') {
-            // Check for result-level error (safety refusal, context overflow, etc.)
-            // Constraint #388: log errors server-side, never forward raw SDK content to browser
             const resultMsg = message as {
               type: 'result'
               is_error?: boolean
@@ -412,27 +553,26 @@ export async function handleAgentRequest(req: Request): Promise<Response> {
             }
             if (resultMsg.is_error) {
               console.error('[agentHandler] SDK result error:', resultMsg.subtype, resultMsg.errors)
-              controller.enqueue(
-                encodeEvent({ type: 'error', message: 'Agent session ended with an error. Please try again.' }),
-              )
-              controller.close()
+              enqueueEvent({
+                type: 'error',
+                message: 'Agent session ended with an error. Please try again.',
+              })
               return
             }
           }
         }
 
-        controller.enqueue(encodeEvent({ type: 'done' }))
-        controller.close()
+        enqueueEvent({ type: 'done' })
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error'
-        console.error('[agentHandler] query failed:', message)
-        // Emit error event then close
-        try {
-          controller.enqueue(encodeEvent({ type: 'error', message: 'Agent session failed. Please try again.' }))
-          controller.close()
-        } catch {
-          // Controller already closed
-        }
+        const detail = err instanceof Error ? err.message : 'Unknown error'
+        console.error('[agentHandler] query failed:', detail)
+        enqueueEvent({
+          type: 'error',
+          message: 'Agent session failed. Please try again.',
+        })
+      } finally {
+        if (bridgeId) destroyBridge(bridgeId)
+        closeStream()
       }
     },
   })
@@ -442,7 +582,56 @@ export async function handleAgentRequest(req: Request): Promise<Response> {
     headers: {
       'Content-Type': 'application/x-ndjson',
       'Cache-Control': 'no-cache',
-      'X-Accel-Buffering': 'no', // disable Nginx proxy buffering for SSE
+      'X-Accel-Buffering': 'no',
     },
   })
+}
+
+// ---------------------------------------------------------------------------
+// handleAgentToolResult — POST /api/agent/tool-result
+// ---------------------------------------------------------------------------
+
+export async function handleAgentToolResult(req: Request): Promise<Response> {
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, { status: 405 })
+  }
+
+  let rawBody: unknown
+  try {
+    rawBody = await req.json()
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const parsed = safeParseValue(AgentToolResultBodySchema, rawBody)
+  if (!parsed.ok) {
+    return jsonResponse(
+      { error: `Invalid request body: ${formatValueErrors(AgentToolResultBodySchema, rawBody)}` },
+      { status: 400 },
+    )
+  }
+
+  const { bridgeId, requestId, result } = parsed.value as {
+    bridgeId: string
+    requestId: string
+    result: AgentActionResult
+  }
+  const ok = resolvePendingToolResult(bridgeId, requestId, result)
+  if (!ok) {
+    // Stream may have closed before this POST landed (user aborted, server
+    // dropped the connection). Acknowledge with 404 so the client can stop
+    // retrying.
+    return jsonResponse({ ok: false }, { status: 404 })
+  }
+  return jsonResponse({ ok: true })
+}
+
+// ---------------------------------------------------------------------------
+// Single dispatch entry — used by the Vite dev plugin which mounts on /api/agent
+// ---------------------------------------------------------------------------
+
+export async function handleAgentRouteRequest(req: Request): Promise<Response> {
+  const url = new URL(req.url)
+  if (url.pathname === '/api/agent/tool-result') return handleAgentToolResult(req)
+  return handleAgentRequest(req)
 }

@@ -1,16 +1,24 @@
 /**
- * Phase D — Agent store slice.
+ * Agent store slice — drives the AI Assistant panel.
  *
- * Manages the AI Agent Panel's conversation state. The agent communicates
- * via AGENT_API_PATH (see agentConfig.ts) — the Vite dev server proxies
- * the route to the local Bun agent server (port 3001) which runs the Claude
- * Agent SDK with ambient Claude Code credentials. No API key, no endpoint
- * configuration, no env var required (Constraint #385).
+ * The browser opens a streaming NDJSON request against AGENT_API_PATH (the
+ * Vite proxy forwards to the local Bun agent server, which runs the Claude
+ * Agent SDK with ambient Claude Code credentials — Constraint #385).
  *
- * Stream protocol:
- *   Browser POSTs { prompt, messages, pageContext } to AGENT_API_PATH.
- *   Server streams NDJSON: one ServerStreamEvent per line.
- *   Browser reads the stream, dispatches actions, updates conversation.
+ * Wire protocol (server → browser, NDJSON, one ServerStreamEvent per line):
+ *   bridgeReady   first event; carries bridgeId for tool-result POSTs
+ *   text          chunk of assistant text
+ *   toolStatus    SDK tool-call lifecycle (read + write tools)
+ *   toolRequest   server asks the browser to apply a write tool
+ *   session       Claude Agent SDK session id (for follow-up resume)
+ *   error         server-side terminal error
+ *   done          stream finished cleanly
+ *
+ * When a `toolRequest` arrives, the browser dispatches it through the
+ * executor (which validates inputs and mutates the Zustand store), then
+ * POSTs the result to AGENT_TOOL_RESULT_PATH so the server-side MCP tool
+ * handler can return the result to Claude. There is no separate <pb:actions>
+ * DSL — every page mutation is a real MCP tool call.
  *
  * Guideline #254 (Performance):
  *   Text deltas are batched via rAF buffer before committing to the store
@@ -27,12 +35,11 @@ import type {
 } from '../module-engine/types'
 import { Type } from '@core/utils/typeboxHelpers'
 import type { Page } from '../page-tree/schemas'
-import { executeAgentActions } from './executor'
-import { AGENT_API_PATH } from './agentConfig'
-import { stripAgentActionBlocks } from './actionBlocks'
-import { collectAgentRenderSnapshots } from './renderEvidence'
+import { executeAgentTool } from './executor'
+import { AGENT_API_PATH, AGENT_TOOL_RESULT_PATH } from './agentConfig'
 import { safeParseJson } from '@core/utils/jsonValidate'
 import type {
+  AgentActionResult,
   AgentModuleContext,
   AgentModulePropContext,
   AgentModuleStyleContext,
@@ -44,22 +51,26 @@ import type {
 } from './types'
 
 // ---------------------------------------------------------------------------
-// Stream event schema
+// Stream-event schema
 //
-// Discriminated union mirrors ServerStreamEvent from ./types. Deep fields
-// (actions[], result) pass through as unknown — those have their own
-// validators downstream (executor.ts uses Zod schemas per AgentAction). The
-// schema here catches malformed envelopes from the server, which is the
-// failure mode we actually need to defend against in the streaming reader.
-// Surfaced by /audit-types.
+// Discriminated union mirrors ServerStreamEvent from ./types. Tool-input
+// payloads pass through as Unknown — the executor validates each call's input
+// at the dispatch boundary. The schema here catches malformed envelopes from
+// the server, which is the failure mode the streaming reader needs to defend
+// against.
+// ---------------------------------------------------------------------------
 
 const ServerStreamEventSchema = Type.Union([
   Type.Object({ type: Type.Literal('text'), text: Type.String() }),
-  Type.Object({ type: Type.Literal('actions'), actions: Type.Array(Type.Unknown()) }),
   Type.Object({
-    type: Type.Literal('actionResult'),
-    actionType: Type.String(),
-    result: Type.Unknown(),
+    type: Type.Literal('bridgeReady'),
+    bridgeId: Type.String(),
+  }),
+  Type.Object({
+    type: Type.Literal('toolRequest'),
+    requestId: Type.String(),
+    name: Type.String(),
+    input: Type.Unknown(),
   }),
   Type.Object({
     type: Type.Literal('toolStatus'),
@@ -94,9 +105,8 @@ export interface AgentSlice {
 
   /**
    * Send a user message and stream the assistant response.
-   * Uses the Vite proxy path `/api/agent` → local Bun server → Claude Agent SDK.
+   * Routes via the Vite proxy `/api/agent` → local Bun server → Claude Agent SDK.
    * No endpoint configuration required (Constraint #385).
-   * @param content  The user's message text.
    */
   sendAgentMessage(content: string): Promise<void>
 
@@ -128,12 +138,48 @@ function clearStoredAgentSessionId(siteId: string | null | undefined): void {
 }
 
 // ---------------------------------------------------------------------------
+// Bridge runtime — set on `bridgeReady`, read on `toolRequest`
+// ---------------------------------------------------------------------------
+
+export interface AgentBridgeRuntime {
+  bridgeId: string | null
+}
+
+async function postToolResult(
+  bridgeId: string,
+  requestId: string,
+  result: AgentActionResult,
+  signal: AbortSignal | null,
+): Promise<void> {
+  try {
+    const res = await fetch(AGENT_TOOL_RESULT_PATH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bridgeId, requestId, result }),
+      signal: signal ?? undefined,
+    })
+    if (!res.ok) {
+      // 404 means the bridge is gone (stream closed before our POST landed) —
+      // expected race during abort. Anything else is a routing/config issue
+      // that would silently leave the agent loop hung server-side.
+      console.error(
+        `[AgentSlice] tool-result POST failed: ${res.status} ${res.statusText}`,
+        { bridgeId, requestId },
+      )
+    }
+  } catch (err) {
+    // Network failure or user abort. Server cleans up pending tool resolvers
+    // when its bridge is destroyed, so Claude's loop fails with a tool error
+    // there.
+    if (err instanceof Error && err.name === 'AbortError') return
+    console.error('[AgentSlice] Failed to post tool-result:', err)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
 
-// Contribute this slice's fields to the combined `EditorStore` type via TS
-// module augmentation. See `../editor-store/types.ts` for why we use this
-// pattern.
 declare module '@core/editor-store/types' {
   interface EditorStore extends AgentSlice {}
 }
@@ -154,9 +200,9 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
     const id = _pendingAssistantId
     _pendingText = ''
     set((state) => {
-        const msg = state.agentMessages.find((m) => m.id === id)
-        if (msg) msg.content += text
-      })
+      const msg = state.agentMessages.find((m) => m.id === id)
+      if (msg) msg.content += text
+    })
   }
 
   function scheduleFlush() {
@@ -211,10 +257,6 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
 
     // ── sendAgentMessage ─────────────────────────────────────────────────────
     async sendAgentMessage(content) {
-      // Route via Vite dev proxy (AGENT_API_PATH) → local Bun agent server.
-      // No API key or endpoint configuration required (Constraint #385).
-      const endpoint = AGENT_API_PATH
-
       if (get().isAgentStreaming) return // one request at a time
 
       const siteId = get().site?.id ?? null
@@ -229,7 +271,6 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
         })
       }
 
-      // Add user message
       const userMsg: AgentMessage = {
         id: nanoid(),
         role: 'user',
@@ -238,7 +279,6 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
         timestamp: Date.now(),
       }
 
-      // Create assistant placeholder
       const assistantId = nanoid()
       const assistantMsg: AgentMessage = {
         id: assistantId,
@@ -249,52 +289,37 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
       }
 
       set((state) => {
-          state.agentMessages.push(userMsg)
-          state.agentMessages.push(assistantMsg)
-          state.agentError = null
-          state.isAgentStreaming = true
-        })
+        state.agentMessages.push(userMsg)
+        state.agentMessages.push(assistantMsg)
+        state.agentError = null
+        state.isAgentStreaming = true
+      })
 
-      // Build conversation history (prior messages)
-      const priorMessages = get()
-        .agentMessages.filter((m) => m.id !== userMsg.id && m.id !== assistantId)
-        .map((m) => ({
-          role: m.role,
-          content: m.role === 'assistant'
-            ? stripAgentActionBlocks(m.content)
-            : m.content,
-        }))
-        .filter((m) => m.content.trim().length > 0)
-
-      // Start streaming
       _abortController = new AbortController()
+      const bridge: AgentBridgeRuntime = { bridgeId: null }
 
-      const runAgentRequest = async (
-        requestPrompt: string,
-        pageContext: PageContext,
-      ): Promise<void> => {
+      try {
+        const pageContext = buildCurrentPageContext(get)
         const body: AgentRequestBody = {
-          prompt: requestPrompt,
+          prompt: content,
           sessionId: resumeSessionId ?? undefined,
-          messages: priorMessages,
           pageContext,
         }
-        const res = await fetch(endpoint, {
+        const res = await fetch(AGENT_API_PATH, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
-          signal: _abortController?.signal,
+          signal: _abortController.signal,
         })
 
         if (!res.ok) {
           if (res.status === 502) {
-            // 502 = agent server not reachable (safe status code — not raw SDK error text)
             console.error('[AgentSlice] 502 — agent server unreachable')
             set({ agentError: 'Agent server is not running. Start it with: bun run dev' })
             set((state) => {
-                const msg = state.agentMessages.find((m) => m.id === assistantId)
-                if (msg && !msg.content) msg.content = '_(agent error)_'
-              })
+              const msg = state.agentMessages.find((m) => m.id === assistantId)
+              if (msg && !msg.content) msg.content = '_(agent error)_'
+            })
             return
           }
           throw new Error(`Agent request failed: ${res.status} ${res.statusText}`)
@@ -318,35 +343,32 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
             const trimmed = line.trim()
             if (!trimmed) continue
             const parsed = safeParseJson(trimmed, ServerStreamEventSchema)
-            if (!parsed.ok) continue // skip malformed or wrong-shape lines
-            // Cast back to the source-of-truth interface; deep fields
-            // (actions, result) are validated downstream.
+            if (!parsed.ok) continue
             const event = parsed.value as ServerStreamEvent
-            await processStreamEvent(event, assistantId, appendTextDelta, set, get)
+            await processStreamEvent(
+              event,
+              assistantId,
+              appendTextDelta,
+              set,
+              get,
+              bridge,
+              _abortController?.signal ?? null,
+            )
           }
         }
 
-        // Flush any remaining text
         flushPendingText()
-      }
-
-      try {
-        const initialPageContext = await buildCurrentLivePageContext(get)
-        await runAgentRequest(content, initialPageContext)
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
-          // User aborted — treat as normal end
           flushPendingText()
         } else {
-          // CWE-209 (Constraint #388): never surface raw error details in the UI.
-          // Log internally; show fixed copy to the user only.
+          // Constraint #388 (CWE-209): never surface raw error details.
           console.error('[AgentSlice] sendAgentMessage error:', err)
           set({ agentError: 'Something went wrong. Please try again.' })
-          // Mark assistant message as error
           set((state) => {
-              const msg = state.agentMessages.find((m) => m.id === assistantId)
-              if (msg && !msg.content) msg.content = '_(agent error)_'
-            })
+            const msg = state.agentMessages.find((m) => m.id === assistantId)
+            if (msg && !msg.content) msg.content = '_(agent error)_'
+          })
         }
       } finally {
         _abortController = null
@@ -366,110 +388,66 @@ export async function processStreamEvent(
   appendText: (id: string, text: string) => void,
   set: EditorStoreSet,
   get: () => EditorStore,
+  bridge: AgentBridgeRuntime,
+  signal: AbortSignal | null,
 ): Promise<void> {
   switch (event.type) {
     case 'text': {
-      const msg = get().agentMessages.find((m) => m.id === assistantId)
-      if (msg?.toolCalls.some((toolCall) => toolCall.status === 'error')) break
       appendText(assistantId, event.text)
       break
     }
 
-    case 'actions': {
-      // Execute each action in the browser's Zustand store
-      const actions = event.actions
-      if (!actions.length) break
+    case 'bridgeReady': {
+      bridge.bridgeId = event.bridgeId
+      break
+    }
 
-      // Add tool call placeholders
-      const toolCalls: AgentToolCall[] = actions.map((a) => ({
-        id: nanoid(),
-        source: 'page-builder',
-        actionType: a.type,
-        params: a,
-        result: null,
-        status: 'pending' as const,
-      }))
-
-      set((state) => {
-          const msg = state.agentMessages.find((m) => m.id === assistantId)
-          if (msg) msg.toolCalls.push(...toolCalls)
-        })
-
-      // Execute (async, but actions are synchronous Zustand mutations)
-      const results = await executeAgentActions(actions)
-      const hasFailure = results.some((result) => !result.success)
-
-      // Update tool call statuses
-      set((state) => {
-          const msg = state.agentMessages.find((m) => m.id === assistantId)
-          if (!msg) return
-          toolCalls.forEach((tc, idx) => {
-            const found = msg.toolCalls.find((c) => c.id === tc.id)
-            if (!found) return
-            const res = results[idx]
-            if (res) {
-              found.result = res
-              found.status = res.success ? 'success' : 'error'
-            } else if (hasFailure) {
-              found.result = {
-                success: false,
-                error: 'Skipped because a previous action failed.',
-              }
-              found.status = 'error'
-            }
-          })
-        })
-      if (hasFailure) {
-        set((state) => {
-            state.agentError = 'Some actions could not be completed. The page may be partially updated.'
-            const msg = state.agentMessages.find((m) => m.id === assistantId)
-            if (!msg || msg.content.includes("couldn't complete all changes")) return
-            const notice = "I couldn't complete all changes. Some actions failed, so I stopped before applying the rest."
-            msg.content = msg.content.trimEnd()
-              ? `${msg.content.trimEnd()}\n\n${notice}`
-              : notice
-          })
+    case 'toolRequest': {
+      const result = await executeAgentTool(event.name, event.input)
+      if (!bridge.bridgeId) {
+        console.error('[AgentSlice] toolRequest received before bridgeReady')
+        break
       }
+      await postToolResult(bridge.bridgeId, event.requestId, result, signal)
       break
     }
 
     case 'toolStatus': {
       set((state) => {
-          const msg = state.agentMessages.find((m) => m.id === assistantId)
-          if (!msg) return
+        const msg = state.agentMessages.find((m) => m.id === assistantId)
+        if (!msg) return
 
-          const existing = msg.toolCalls.find((toolCall) => toolCall.externalId === event.toolCallId)
-          if (existing) {
-            existing.status = event.status
-            existing.params = event.input && typeof event.input === 'object'
-              ? event.input as Record<string, unknown>
-              : existing.params
-            existing.result = event.status === 'pending'
-              ? null
-              : {
-                  success: event.status === 'success',
-                  error: event.status === 'error' ? event.error ?? 'Tool call failed.' : undefined,
-                }
-            return
-          }
+        const existing = msg.toolCalls.find((toolCall) => toolCall.externalId === event.toolCallId)
+        if (existing) {
+          existing.status = event.status
+          existing.params = event.input && typeof event.input === 'object'
+            ? event.input as Record<string, unknown>
+            : existing.params
+          existing.result = event.status === 'pending'
+            ? null
+            : {
+                success: event.status === 'success',
+                error: event.status === 'error' ? event.error ?? 'Tool call failed.' : undefined,
+              }
+          return
+        }
 
-          msg.toolCalls.push({
-            id: nanoid(),
-            externalId: event.toolCallId,
-            source: 'sdk',
-            actionType: event.name,
-            params: event.input && typeof event.input === 'object'
-              ? event.input as Record<string, unknown>
-              : {},
-            result: event.status === 'pending'
-              ? null
-              : {
-                  success: event.status === 'success',
-                  error: event.status === 'error' ? event.error ?? 'Tool call failed.' : undefined,
-                },
-            status: event.status,
-          })
+        msg.toolCalls.push({
+          id: nanoid(),
+          externalId: event.toolCallId,
+          actionType: event.name,
+          params: event.input && typeof event.input === 'object'
+            ? event.input as Record<string, unknown>
+            : {},
+          result: event.status === 'pending'
+            ? null
+            : {
+                success: event.status === 'success',
+                error: event.status === 'error' ? event.error ?? 'Tool call failed.' : undefined,
+              },
+          status: event.status,
         })
+      })
       break
     }
 
@@ -484,15 +462,14 @@ export async function processStreamEvent(
     }
 
     case 'error': {
-      // CWE-209 (Constraint #388): server error messages may contain internal
-      // details. Log them server-side; propagate only fixed copy to the UI.
+      // Constraint #388: server messages may carry internal detail. Log
+      // server-side; show fixed copy in the UI.
       console.error('[AgentSlice] Server error event:', event.message)
       set({ agentError: 'Something went wrong. Please try again.' })
       break
     }
 
     case 'done':
-    case 'actionResult':
     default:
       break
   }
@@ -516,11 +493,9 @@ export function buildPageContext(
       availableModules: [],
       selectedNodeId: null,
       classes: [],
-      renderSnapshots: [],
     }
   }
 
-  // Build parent map for context
   const parentMap: Record<string, string | null> = {}
   for (const node of Object.values(activePage.nodes)) {
     for (const childId of node.children) {
@@ -567,29 +542,15 @@ export function buildPageContext(
     availableModules,
     selectedNodeId: state.selectedNodeId,
     classes,
-    renderSnapshots: [],
   }
 }
 
-async function buildLivePageContext(
-  state: EditorStore,
-  activePage: Page | undefined,
-): Promise<PageContext> {
-  const context = buildPageContext(state, activePage)
-  return {
-    ...context,
-    renderSnapshots: await collectAgentRenderSnapshots({
-      breakpoints: context.breakpoints,
-    }),
-  }
-}
-
-async function buildCurrentLivePageContext(get: () => EditorStore): Promise<PageContext> {
+function buildCurrentPageContext(get: () => EditorStore): PageContext {
   const storeState = get()
   const activePage = storeState.site?.pages.find(
     (p) => p.id === storeState.activePageId,
   ) ?? storeState.site?.pages[0]
-  return buildLivePageContext(storeState, activePage)
+  return buildPageContext(storeState, activePage)
 }
 
 function moduleDefinitionToAgentContext(mod: AnyModuleDefinition): AgentModuleContext {
@@ -719,3 +680,7 @@ function toSerializableValue(value: unknown): unknown {
 
   return String(value)
 }
+
+// AgentToolCall is re-exported for tests/UI consumers that import it via
+// agentSlice indirectly. It still lives in ./types.
+export type { AgentToolCall }

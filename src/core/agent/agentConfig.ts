@@ -14,3 +14,11 @@
 
 /** Vite dev-proxy path for the agent API. The proxy forwards to the local Bun server. */
 export const AGENT_API_PATH = '/api/agent' as const
+
+/**
+ * Browser-bridge response endpoint. The browser POSTs `{ bridgeId, requestId,
+ * result }` here after applying a write tool against the editor store; the
+ * server resolves the in-flight MCP tool-call promise so Claude receives the
+ * tool_result and continues the agent loop.
+ */
+export const AGENT_TOOL_RESULT_PATH = '/api/agent/tool-result' as const

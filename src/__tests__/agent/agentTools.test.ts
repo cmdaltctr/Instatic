@@ -2,7 +2,6 @@ import { describe, expect, it } from 'bun:test'
 import {
   buildPageBuilderToolContext,
   inspectPageClass,
-  inspectLayoutSnapshot,
   inspectPageNode,
   searchPageNodes,
 } from '../../../server/agentTools'
@@ -66,58 +65,6 @@ function makeContext(): PageContext {
         },
       },
     ],
-    renderSnapshots: [
-      {
-        breakpointId: 'mobile',
-        label: 'Mobile',
-        width: 375,
-        capturedAt: 123,
-        screenshot: {
-          status: 'ok',
-          mimeType: 'image/png',
-          data: 'abc123',
-          width: 375,
-          height: 600,
-        },
-        layout: {
-          breakpointId: 'mobile',
-          viewport: {
-            width: 375,
-            height: 600,
-            scrollWidth: 390,
-            scrollHeight: 600,
-          },
-          nodes: [
-            {
-              nodeId: 'title',
-              moduleId: 'base.text',
-              label: undefined,
-              text: 'Design tools',
-              rect: { x: 8, y: 16, width: 420, height: 64 },
-              visible: true,
-              computed: {
-                display: 'block',
-                position: 'static',
-                overflow: 'visible',
-                color: 'rgb(17, 24, 39)',
-                backgroundColor: 'rgba(0, 0, 0, 0)',
-                fontSize: '36px',
-                lineHeight: '38px',
-              },
-            },
-          ],
-          images: [],
-          warnings: [
-            {
-              type: 'horizontal-overflow',
-              severity: 'warning',
-              message: 'Node extends beyond the breakpoint viewport.',
-              nodeId: 'title',
-            },
-          ],
-        },
-      },
-    ],
   }
 }
 
@@ -144,7 +91,6 @@ describe('page-builder agent tools', () => {
     expect(snapshot.page.activeBreakpointId).toBe('mobile')
     expect(snapshot.page.breakpoints.map((breakpoint) => breakpoint.id)).toEqual(['mobile', 'desktop'])
     expect(snapshot.page.nodes.map((node) => node.id)).toEqual(['root', 'title'])
-    expect(snapshot.renderSnapshots.map((item) => item.breakpointId)).toEqual(['mobile'])
   })
 
   it('searches existing nodes by text, module, and assigned class name', () => {
@@ -194,17 +140,7 @@ describe('page-builder agent tools', () => {
     expect(inspected.class?.assignedNodes.map((node) => node.id)).toEqual(['title'])
   })
 
-  it('returns captured layout warnings for a breakpoint', () => {
-    const snapshot = buildPageBuilderToolContext(makeContext())
-
-    const layout = inspectLayoutSnapshot(snapshot, { breakpointId: 'mobile' })
-
-    expect(layout.layout?.viewport.scrollWidth).toBe(390)
-    expect(layout.layout?.warnings[0]).toEqual({
-      type: 'horizontal-overflow',
-      severity: 'warning',
-      message: 'Node extends beyond the breakpoint viewport.',
-      nodeId: 'title',
-    })
-  })
+  // render_snapshot is now an on-demand browser-bridge tool — captured lazily
+  // when Claude calls it, not pre-loaded into PageContext. The browser-side
+  // capture is exercised by agentSlice's toolRequest path.
 })

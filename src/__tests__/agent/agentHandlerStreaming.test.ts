@@ -25,7 +25,7 @@ describe('agent handler SDK streaming', () => {
 
   it('passes the browser session ID to the SDK resume option', () => {
     const options = buildAgentQueryOptions({
-      systemPrompt: 'system',
+      systemPrompt: ['system'],
       pageBuilderMcpServer: { type: 'sdk', name: 'page_builder' },
       sessionId: '00000000-0000-4000-8000-000000000001',
     })

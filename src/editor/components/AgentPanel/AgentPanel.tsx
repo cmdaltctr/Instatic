@@ -24,7 +24,6 @@
 
 import { useRef, useEffect, useCallback, memo } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
-import { stripAgentActionBlocks } from '@core/agent/actionBlocks'
 import type { AgentMessage, AgentToolCall } from '@core/agent/types'
 import { DeleteIcon } from 'pixel-art-icons/icons/delete'
 import { SquareIcon } from 'pixel-art-icons/icons/square'
@@ -251,7 +250,7 @@ interface MessageBubbleProps {
 
 const MessageBubble = memo(function MessageBubble({ msg }: MessageBubbleProps) {
   const isUser = msg.role === 'user'
-  const visibleContent = isUser ? msg.content : stripAgentActionBlocks(msg.content)
+  const visibleContent = msg.content
 
   return (
     <div className={cn(styles.messageBubble, isUser ? styles.messageBubbleUser : styles.messageBubbleAssistant)}>

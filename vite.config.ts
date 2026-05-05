@@ -28,7 +28,14 @@ function shouldProxyPublicSiteRequest(req: IncomingMessage): boolean {
   const { pathname } = new URL(req.url, CMS_DEV_SERVER_ORIGIN)
   if (isEditorAppPath(pathname)) return false
 
+  // Bun server namespaces — explicitly proxied even though they carry a file
+  // extension. The fallthrough rule below rejects anything with `.<ext>` to
+  // avoid swallowing requests for editor static assets, which means we have
+  // to opt in any backend route whose URL ends with `.something`.
+  //   /_pb/assets/  → runtime script bundles (esbuild output)
+  //   /_pb/css/     → per-site published CSS bundle (reset / framework / style)
   if (pathname.startsWith('/_pb/assets/')) return true
+  if (pathname.startsWith('/_pb/css/')) return true
 
   return pathname === '/' || !FILE_EXTENSION_RE.test(pathname)
 }
@@ -122,13 +129,29 @@ function agentDevPlugin(): Plugin {
         // ssrLoadModule uses Vite's esbuild pipeline; reloading per request keeps
         // AI prompt/tool changes visible during development without restarting Vite.
         const mod = await server.ssrLoadModule(handlerPath)
-        return mod.handleAgentRequest as (req: Request) => Promise<Response>
+        return mod.handleAgentRouteRequest as (req: Request) => Promise<Response>
       }
 
-      // NOTE: this path must match AGENT_API_PATH in src/core/agent/agentConfig.ts
+      // Mount on the root middleware (no path prefix) and gate on the URL
+      // ourselves. Connect's path-prefix mount strips the prefix from req.url
+      // — relying on req.originalUrl to forward the full path is fragile across
+      // Connect versions and was the source of bridge-routing hangs. Keeping
+      // req.url intact lets handleAgentRouteRequest dispatch reliably between
+      // /api/agent and /api/agent/tool-result.
       server.middlewares.use(
-        '/api/agent',
-        (req: IncomingMessage, res: ServerResponse) => {
+        (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+          const url = req.url ?? ''
+          if (url !== '/api/agent' && url !== '/api/agent/tool-result') {
+            return next()
+          }
+          handleAgentMiddleware(req, res)
+        },
+      )
+
+      function handleAgentMiddleware(
+        req: IncomingMessage,
+        res: ServerResponse,
+      ): void {
           const origin = req.headers.origin ?? null
           const corsHeaders: Record<string, string> = {
             'Access-Control-Allow-Origin': origin ?? '*',
@@ -166,8 +189,10 @@ function agentDevPlugin(): Plugin {
                 const body = Buffer.concat(chunks)
 
                 // Wrap Node IncomingMessage into the Web API Request that
-                // handleAgentRequest expects.
-                const fakeReq = new Request('http://localhost/api/agent', {
+                // handleAgentRouteRequest expects. req.url is the full path
+                // (no prefix-mount stripping) so handleAgentRouteRequest can
+                // dispatch /api/agent vs /api/agent/tool-result reliably.
+                const fakeReq = new Request(`http://localhost${req.url ?? '/api/agent'}`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body,
@@ -220,8 +245,7 @@ function agentDevPlugin(): Plugin {
               }
             })()
           })
-        },
-      )
+      }
     },
   }
 }
