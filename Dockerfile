@@ -30,11 +30,11 @@ COPY --chown=bun:bun package.json bun.lock ./
 COPY --chown=bun:bun server ./server
 COPY --chown=bun:bun src ./src
 
-RUN mkdir -p /app/uploads && chown -R bun:bun /app
+RUN mkdir -p /app/uploads /app/data && chown -R bun:bun /app
 
 USER bun
 EXPOSE 3001
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD bun --eval "const port = process.env.PORT ?? '3001'; const res = await fetch('http://127.0.0.1:' + port + '/health'); process.exit(res.ok ? 0 : 1)"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["bun", "run", "server/healthcheck.ts"]
 
 CMD ["bun", "run", "server/index.ts"]

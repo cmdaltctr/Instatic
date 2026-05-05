@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { nanoid } from 'nanoid'
-import type { DbClient } from './db'
+import type { DbClient } from './db/client'
 import {
   SESSION_COOKIE_NAME,
   createSessionToken,
@@ -100,6 +100,8 @@ import {
   readJsonObject,
   setCookieHeader,
 } from '../http'
+import { loginRateLimit } from './rateLimit'
+import { clientIp, isStateChangingMethod, originAllowed } from './security'
 
 interface CmsHandlerOptions {
   uploadsDir?: string
@@ -125,8 +127,58 @@ function readNullableString(body: Record<string, unknown>, key: string): string 
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
-function sessionCookie(token: string, expires: Date): string {
-  return `${SESSION_COOKIE_NAME}=${token}; Path=/; Expires=${expires.toUTCString()}; HttpOnly; SameSite=Lax`
+/**
+ * True when the inbound request was made over HTTPS.
+ *
+ * Trusts `X-Forwarded-Proto` from a reverse proxy (e.g. Caddy in
+ * compose.tls.yml) and falls back to the request URL's protocol when no
+ * proxy is involved.
+ *
+ * Spoofing X-Forwarded-Proto from a direct (non-proxied) HTTP client doesn't
+ * gain the attacker anything: it would cause the server to set `Secure`,
+ * which makes browsers refuse to send the cookie over HTTP. So the worst
+ * case is the attacker locks themselves out, not a privilege escalation.
+ */
+function requestIsHttps(req: Request): boolean {
+  const forwardedProto = req.headers.get('x-forwarded-proto')
+  if (forwardedProto) return forwardedProto.toLowerCase() === 'https'
+  return req.url.startsWith('https://')
+}
+
+function sessionCookieAttributes(secure: boolean): string {
+  // HttpOnly  — JS in the browser cannot read the cookie (XSS mitigation)
+  // SameSite=Lax — cross-origin POST/PUT/DELETE don't carry the cookie (CSRF)
+  // Secure    — browser only sends the cookie over HTTPS (set when applicable)
+  const base = 'Path=/; HttpOnly; SameSite=Lax'
+  return secure ? `${base}; Secure` : base
+}
+
+function sessionCookie(req: Request, token: string, expires: Date): string {
+  const attrs = sessionCookieAttributes(requestIsHttps(req))
+  return `${SESSION_COOKIE_NAME}=${token}; ${attrs}; Expires=${expires.toUTCString()}`
+}
+
+function clearSessionCookie(req: Request): string {
+  const attrs = sessionCookieAttributes(requestIsHttps(req))
+  return `${SESSION_COOKIE_NAME}=; ${attrs}; Max-Age=0`
+}
+
+/**
+ * A fixed argon2id hash, computed once per process. Used by the login handler
+ * as the verification target when the supplied email doesn't match any admin
+ * user — keeping the response time constant prevents an attacker from
+ * learning which emails belong to admins via timing analysis.
+ *
+ * The hashed plaintext is deliberately not a real password and never grants
+ * access; verifyPassword against this hash returns false for every input.
+ *
+ * Eagerly kicked off at module load so the very first unknown-email login
+ * doesn't pay the one-time hashing cost (~50ms) and stand out as slower
+ * than the steady-state.
+ */
+const dummyPasswordHashCache: Promise<string> = hashPassword('not-a-real-account-placeholder')
+function getDummyPasswordHash(): Promise<string> {
+  return dummyPasswordHashCache
 }
 
 function readCookie(req: Request, name: string): string {
@@ -330,6 +382,16 @@ export async function handleCmsRequest(
 ): Promise<Response> {
   const url = new URL(req.url)
 
+  // CSRF defense in depth: reject state-changing requests whose Origin
+  // header doesn't match the request's own origin (or a dev allowlist
+  // entry). SameSite=Lax already covers most CSRF; this closes the
+  // same-site-different-subdomain edge case and gives a clear 403 instead
+  // of executing a forged action. Safe methods (GET/HEAD/OPTIONS) are not
+  // checked — they shouldn't mutate state by definition.
+  if (isStateChangingMethod(req.method) && !originAllowed(req)) {
+    return jsonResponse({ error: 'Forbidden: invalid origin' }, { status: 403 })
+  }
+
   if (url.pathname === '/api/cms/setup/status') {
     if (req.method !== 'GET') return methodNotAllowed()
     return jsonResponse(await getSetupStatus(db))
@@ -382,11 +444,39 @@ export async function handleCmsRequest(
     const body = await readJsonObject(req)
     const email = readString(body, 'email').toLowerCase()
     const password = readString(body, 'password')
-    const admin = await findAdminByEmail(db, email)
 
-    if (!admin || !(await verifyPassword(password, admin.password_hash))) {
+    // Rate limit per (client-ip, email) tuple. The bucket is consumed BEFORE
+    // any DB lookup or password verification — an attacker who triggers the
+    // 429 cannot make us burn argon2id CPU cycles.
+    const rateLimitKey = `${clientIp(req)}|${email}`
+    const decision = loginRateLimit.consume(rateLimitKey)
+    if (!decision.ok) {
+      return jsonResponse(
+        { error: 'Too many login attempts. Try again later.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
+        },
+      )
+    }
+
+    // Constant-time path: ALWAYS run argon2id verify, even when the email
+    // doesn't match a user. Without this, "user not found" returns in ~5ms
+    // while "user found, wrong password" takes ~100ms — a timing oracle for
+    // email enumeration. We verify against a fixed dummy hash on the no-user
+    // branch; the result is always false, but the latency profile is the
+    // same as the real branch.
+    const admin = await findAdminByEmail(db, email)
+    const verifiedHash = admin?.password_hash ?? (await getDummyPasswordHash())
+    const passwordOk = await verifyPassword(password, verifiedHash)
+
+    if (!admin || !passwordOk) {
       return jsonResponse({ error: 'Invalid email or password' }, { status: 401 })
     }
+
+    // Successful login → release this user's bucket so a forgotten password
+    // followed by a correct attempt doesn't continue eating into the quota.
+    loginRateLimit.reset(rateLimitKey)
 
     const token = createSessionToken()
     const expiresAt = sessionExpiry()
@@ -396,17 +486,14 @@ export async function handleCmsRequest(
       expiresAt,
     })
 
-    return setCookieHeader(jsonResponse({ ok: true }), sessionCookie(token, expiresAt))
+    return setCookieHeader(jsonResponse({ ok: true }), sessionCookie(req, token, expiresAt))
   }
 
   if (url.pathname === '/api/cms/logout') {
     if (req.method !== 'POST') return methodNotAllowed()
     const idHash = await getSessionHash(req)
     if (idHash) await deleteSessionByHash(db, idHash)
-    return setCookieHeader(
-      jsonResponse({ ok: true }),
-      `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
-    )
+    return setCookieHeader(jsonResponse({ ok: true }), clearSessionCookie(req))
   }
 
   if (url.pathname === '/api/cms/site') {

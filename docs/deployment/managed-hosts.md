@@ -8,7 +8,6 @@ Set these variables in the provider dashboard:
 
 ```txt
 DATABASE_URL=postgres://...
-SESSION_SECRET=<long random string>
 STATIC_DIR=/app/dist
 UPLOADS_DIR=/app/uploads
 ```

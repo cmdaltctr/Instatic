@@ -35,7 +35,6 @@ docker run -d \
   --name page-builder-cms \
   -p 3001:3001 \
   -e DATABASE_URL="postgres://user:password@host:5432/page_builder" \
-  -e SESSION_SECRET="$(openssl rand -hex 32)" \
   -e STATIC_DIR=/app/dist \
   -e UPLOADS_DIR=/app/uploads \
   -v page-builder-uploads:/app/uploads \
@@ -51,8 +50,7 @@ http://localhost:3001/admin
 
 ## Required Runtime Variables
 
-- `DATABASE_URL`: Postgres connection string.
-- `SESSION_SECRET`: long random secret. Generate one with `openssl rand -hex 32`.
+- `DATABASE_URL`: Postgres or SQLite connection string (e.g. `postgres://...` or `sqlite:/app/data/cms.db`).
 - `STATIC_DIR`: built asset directory. Use `/app/dist` in the Docker image.
 - `UPLOADS_DIR`: upload directory. Use `/app/uploads` in the Docker image.
 - `PORT`: optional. Defaults to `3001`; managed hosts may set this automatically.

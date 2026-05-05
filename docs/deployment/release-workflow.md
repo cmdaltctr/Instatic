@@ -65,7 +65,6 @@ Then they edit `.env`:
 ```txt
 PAGE_BUILDER_IMAGE=ghcr.io/GITHUB_OWNER/IMAGE_NAME:latest
 POSTGRES_PASSWORD=<random hex password>
-SESSION_SECRET=<random hex secret>
 ```
 
 And start:

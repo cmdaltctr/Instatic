@@ -2,24 +2,20 @@ import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
 
 describe('self-host docker config', () => {
-  it('defines app and postgres services', () => {
+  it('defines a postgres dev service for `bun run dev` to manage', () => {
     const compose = readFileSync('docker-compose.yml', 'utf8')
-    expect(compose).toContain('app:')
     expect(compose).toContain('postgres:')
     expect(compose).toContain('postgres:16')
   })
 
-  it('defines persistent postgres and uploads volumes', () => {
+  it('defines a persistent postgres volume in the dev compose', () => {
     const compose = readFileSync('docker-compose.yml', 'utf8')
     expect(compose).toContain('postgres_data:')
-    expect(compose).toContain('uploads:')
-    expect(compose).toContain('/app/uploads')
   })
 
   it('documents required environment variables', () => {
     const env = readFileSync('.env.example', 'utf8')
     expect(env).toContain('DATABASE_URL=')
-    expect(env).toContain('SESSION_SECRET=')
     expect(env).toContain('UPLOADS_DIR=')
   })
 
@@ -49,7 +45,6 @@ describe('self-host docker config', () => {
     expect(compose).toContain('condition: service_healthy')
     expect(compose).toContain('postgres_data:')
     expect(compose).toContain('uploads:')
-    expect(compose).toContain('${SESSION_SECRET:?')
     expect(compose).toContain('${POSTGRES_PASSWORD:?')
     expect(buildOverride).toContain('build:')
     expect(buildOverride).toContain('dockerfile: Dockerfile')
@@ -64,7 +59,6 @@ describe('self-host docker config', () => {
     const releaseDocs = readFileSync('docs/deployment/release-workflow.md', 'utf8')
 
     expect(env).toContain('POSTGRES_PASSWORD=')
-    expect(env).toContain('SESSION_SECRET=')
     expect(readme).toContain('Self-hosted CMS')
     expect(vpsDocs).toContain('docker compose -f compose.prod.yml up -d')
     expect(vpsDocs).toContain('docker compose -f compose.prod.yml pull app')

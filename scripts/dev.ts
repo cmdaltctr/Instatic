@@ -3,18 +3,18 @@
  *
  * `bun run dev` is the only thing a developer should need.
  *
- * Default behaviour (no DATABASE_URL in the environment): the script
- * manages a local docker postgres for you.
+ * Default behaviour (no DATABASE_URL in the environment): the script uses
+ * SQLite at ./.tmp/dev.db — no Docker or any other external services required.
+ * The parent directory is created automatically on first run.
+ *
+ * Postgres mode: set DATABASE_URL=postgres://... to run against a Postgres
+ * database. The script will manage a local docker postgres for you:
  *
  *   1. Verifies the docker daemon is reachable.
  *   2. Starts the `postgres` compose service if it isn't running.
  *   3. Stops the `app` compose service if it IS running (it would
  *      otherwise hold port 3001 and block the local cms).
  *   4. Waits until postgres actually accepts connections.
- *
- * Escape hatch: if `DATABASE_URL` is set in the environment, the script
- * trusts it, skips all docker postgres management, and just spawns the
- * cms + vite against whatever database you pointed it at.
  *
  * Either way, the script then:
  *
@@ -25,14 +25,15 @@
  *     and signals so Ctrl+C cleanly kills both.
  */
 
+import { mkdir } from 'node:fs/promises'
+import { dirname } from 'node:path'
+import { isSqliteUrl } from '../server/cms/db'
+
 const CMS_PORT = Number(process.env.PORT ?? '3001')
 const VITE_PORT = 5173
 const POSTGRES_HOST = '127.0.0.1'
 const POSTGRES_PORT = 5433
-// Mirrors docker-compose.yml: same user/password/db, host port 5433 → container 5432.
-const DEFAULT_DATABASE_URL = `postgres://page_builder:page_builder@${POSTGRES_HOST}:${POSTGRES_PORT}/page_builder`
-const DATABASE_URL = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL
-const USES_LOCAL_POSTGRES = process.env.DATABASE_URL === undefined
+const DATABASE_URL = process.env.DATABASE_URL ?? 'sqlite:./.tmp/dev.db'
 
 const decoder = new TextDecoder()
 
@@ -221,7 +222,11 @@ function checkPortAvailable(port: number, name: string): void {
 
 // --- main -----------------------------------------------------------------
 
-if (USES_LOCAL_POSTGRES) {
+if (isSqliteUrl(DATABASE_URL)) {
+  const dbPath = DATABASE_URL.replace(/^sqlite:|^file:/, '')
+  await mkdir(dirname(dbPath), { recursive: true })
+  log(`Using SQLite at ${dbPath} — skipping Postgres docker provisioning`)
+} else {
   if (!dockerInstalled()) {
     fail('Docker is not installed. Install Docker Desktop, or set DATABASE_URL to point at your own postgres.')
   }
@@ -231,8 +236,6 @@ if (USES_LOCAL_POSTGRES) {
   ensurePostgresRunning()
   stopAppContainerIfRunning()
   await waitForPostgresReady()
-} else {
-  log('DATABASE_URL is set in the environment — skipping docker postgres setup.')
 }
 
 checkPortAvailable(CMS_PORT, 'cms')

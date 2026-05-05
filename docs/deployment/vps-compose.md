@@ -42,14 +42,12 @@ Edit `.env` and replace:
 ```txt
 PAGE_BUILDER_IMAGE=ghcr.io/GITHUB_OWNER/IMAGE_NAME:latest
 POSTGRES_PASSWORD=replace-with-a-long-random-hex-password
-SESSION_SECRET=replace-with-a-long-random-hex-secret
 ```
 
-Generate safe values with:
+Generate a safe password with:
 
 ```sh
 openssl rand -hex 24
-openssl rand -hex 32
 ```
 
 ## 4. Start The Stack
