@@ -1,0 +1,362 @@
+/**
+ * SpacingBoxControl — visual box-model editor for padding & margin.
+ *
+ * Echoes the classic Chrome DevTools box-model diagram:
+ *   - Outer dashed rectangle = margin.
+ *   - Inner solid rectangle = padding (50% of margin, centred).
+ *   - Two corner-to-corner diagonals through both layers — DASHED while
+ *     they cross the margin region, SOLID inside the padding region.
+ *
+ * Each side of each box is a `.segment` element that fills the entire
+ * box body but uses a `clip-path` polygon to define the visible /
+ * clickable region — a trapezoid for margin (around the inner padding
+ * box) and a triangle for padding (formed by the corner-to-corner
+ * diagonals). The segment provides a generous hover hit area; the
+ * actual <input> sits on top, transparent and centred at the segment's
+ * centroid, so clicking anywhere in the segment focuses the input.
+ *
+ * The whole widget is locked to a square aspect ratio so the diagonals
+ * always read as a clean 45° X regardless of panel width.
+ */
+
+.root {
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+    aspect-ratio: 1 / 1;
+    min-width: 0;
+}
+
+/* ── Box (margin / padding) ──────────────────────────────────────────────── */
+
+.box {
+    position: relative;
+    display: block;
+    border: 1px dashed var(--input-border);
+    background: rgba(255, 255, 255, 0.012);
+    transition: border-color 120ms ease;
+}
+
+.box:hover {
+    border-color: var(--input-border-hover);
+}
+
+/* Margin box fills the (square) root so its diagonals are 45°. */
+.box--margin {
+    width: 100%;
+    height: 100%;
+}
+
+/* Padding box — solid border + opaque background so it visually
+ * interrupts the margin's dashed diagonals where the two layers
+ * overlap. Sized automatically by its parent .boxInner (inset: 25% of
+ * a square margin box → padding box is also square). */
+.box--padding {
+    border-style: solid;
+    background: var(--editor-surface);
+}
+
+/* ── Diagonal overlay (corner-to-corner X) ───────────────────────────────── */
+/*
+ * Sits ABOVE the segments (z-index 2) but is pointer-events: none so it
+ * doesn't intercept clicks. This way the segment hover background paints
+ * underneath the diagonals — the diagonals stay visible while a segment
+ * is highlighted.
+ */
+.boxDiagonals {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.diagonal {
+    stroke: rgba(255, 255, 255, 0.16);
+    stroke-width: 1;
+    fill: none;
+    /* preserveAspectRatio="none" stretches the line geometry to exactly
+     * cover the box; vector-effect keeps the stroke a constant 1px so
+     * the corner-to-corner line doesn't visually thicken on long boxes. */
+    vector-effect: non-scaling-stroke;
+}
+
+.diagonalDashed {
+    stroke: rgba(255, 255, 255, 0.14);
+    stroke-dasharray: 3 3;
+}
+
+/* ── Box header — tiny label chip overlapping the border (top-left) ──────── */
+
+.boxHeader {
+    position: absolute;
+    top: -7px;
+    left: 6px;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    height: 12px;
+    padding: 0 3px;
+    background: var(--editor-bg);
+}
+
+.boxLabel {
+    color: var(--editor-text-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+.boxHeaderActions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+}
+
+.linkBtn,
+.clearBtn {
+    color: var(--editor-text-muted);
+}
+
+.linkBtn:hover,
+.clearBtn:hover {
+    color: var(--editor-text);
+}
+
+.linkBtnActive,
+.linkBtnActive:hover {
+    color: var(--editor-accent);
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+
+.boxBody {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+}
+
+/*
+ * Inner box wrapper — occupies the central 50% of the margin box so its
+ * corner-to-corner diagonals pass through the padding box's outer
+ * corners. Only rendered for the margin box (which hosts the nested
+ * padding box); the padding box has no inner placeholder.
+ */
+.boxInner {
+    position: absolute;
+    inset: 25%;
+    z-index: 0;
+    display: flex;
+}
+
+.boxInner > * {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+}
+
+/* ── Segments — clickable hit areas with hover background ───────────────── */
+/*
+ * Each segment is a position:absolute element that fills the entire box
+ * body. clip-path defines both its visible region AND its hit-test
+ * region: trapezoid for margin (around the inner padding box), triangle
+ * for padding (one of the four wedges formed by the diagonals). The
+ * segments don't overlap each other's hit areas because their clip-paths
+ * tile the box exactly.
+ */
+.segment {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    cursor: text;
+    background-color: transparent;
+    transition: background-color 100ms ease;
+}
+
+.segment:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.segment:focus-within,
+.segmentFocused {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Margin trapezoids — hug the gutter between margin and padding (50% nesting). */
+.box--margin .segment--top {
+    clip-path: polygon(0 0, 100% 0, 75% 25%, 25% 25%);
+}
+.box--margin .segment--right {
+    clip-path: polygon(100% 0, 100% 100%, 75% 75%, 75% 25%);
+}
+.box--margin .segment--bottom {
+    clip-path: polygon(25% 75%, 75% 75%, 100% 100%, 0 100%);
+}
+.box--margin .segment--left {
+    clip-path: polygon(0 0, 25% 25%, 25% 75%, 0 100%);
+}
+
+/* Padding triangles — quadrants formed by the corner-to-corner diagonals. */
+.box--padding .segment--top {
+    clip-path: polygon(0 0, 100% 0, 50% 50%);
+}
+.box--padding .segment--right {
+    clip-path: polygon(100% 0, 100% 100%, 50% 50%);
+}
+.box--padding .segment--bottom {
+    clip-path: polygon(0 100%, 100% 100%, 50% 50%);
+}
+.box--padding .segment--left {
+    clip-path: polygon(0 0, 0 100%, 50% 50%);
+}
+
+/* ── Side input — transparent text-style input centred in segment ────────── */
+/*
+ * Each input sits at its segment's geometric centroid:
+ *   - Margin trapezoid centroid → 12.5% from the outer edge.
+ *   - Padding triangle centroid → 1/6 (≈ 16.67%) from the outer edge.
+ *
+ * The input itself is borderless / transparent so it reads as the value
+ * label inside the segment; the segment's hover background provides the
+ * visual feedback. Click anywhere in the segment focuses the input.
+ */
+.sideInput.sideInput {
+    position: absolute;
+    z-index: 3;
+    width: 38px;
+    min-width: 38px;
+    min-height: 20px;
+    padding: 0 3px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--editor-text);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+}
+
+.segment[data-state="unset"] .sideInput.sideInput {
+    color: var(--editor-text-muted);
+}
+
+.sideInput.sideInput::placeholder {
+    color: var(--editor-text-subtle);
+    font-weight: 500;
+}
+
+.sideInput.sideInput:hover,
+.sideInput.sideInput:focus,
+.sideInput.sideInput:focus-visible {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    outline: none;
+}
+
+/* Margin centroids — half-way through the gutter (12.5%). */
+.box--margin .segment--top .sideInput {
+    top: 12.5%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+.box--margin .segment--bottom .sideInput {
+    bottom: 12.5%;
+    left: 50%;
+    transform: translate(-50%, 50%);
+}
+.box--margin .segment--left .sideInput {
+    left: 12.5%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+.box--margin .segment--right .sideInput {
+    right: 12.5%;
+    top: 50%;
+    transform: translate(50%, -50%);
+}
+
+/* Padding centroids — 1/6 from the box edge (centroid of the wedge). */
+.box--padding .segment--top .sideInput {
+    top: 16.6667%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+.box--padding .segment--bottom .sideInput {
+    bottom: 16.6667%;
+    left: 50%;
+    transform: translate(-50%, 50%);
+}
+.box--padding .segment--left .sideInput {
+    left: 16.6667%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+.box--padding .segment--right .sideInput {
+    right: 16.6667%;
+    top: 50%;
+    transform: translate(50%, -50%);
+}
+
+/* When linked + uniform, all four sides read as one unit. */
+.segmentLinked .sideInput.sideInput {
+    color: var(--editor-text-bright);
+}
+
+/* ── Side autocomplete menu — uses ContextMenu / ContextMenuItem ────────── */
+/*
+ * The menu chrome (background, border, shadow, padding, positioning) is
+ * provided by the shared ContextMenu primitive. We add small section
+ * headers so the dropdown can show "Suggested" matches first and the
+ * full token list below.
+ */
+.sideMenuHeader {
+    display: block;
+    padding: 6px 9px 4px;
+    color: var(--editor-text-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-transform: uppercase;
+    pointer-events: none;
+    user-select: none;
+}
+
+.sideMenuItem.sideMenuItem {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    gap: 8px;
+    text-align: left;
+    font-weight: 500;
+}
+
+.sideMenuToken {
+    color: var(--editor-text);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.sideMenuVar {
+    overflow: hidden;
+    color: var(--editor-text-muted);
+    font-family: var(
+        --editor-mono,
+        ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        monospace
+    );
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

@@ -11,6 +11,7 @@ import { useEditorStore } from '@core/editor-store/store'
 import type { CSSClass, CSSPropertyBag } from '@core/page-tree/schemas'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { Section } from './Section'
+import { SpacingBoxControl } from './SpacingBoxControl/SpacingBoxControl'
 import {
   CLASS_STYLE_SECTIONS,
   cssPropertyLabel,
@@ -20,6 +21,8 @@ import {
 } from './cssControlTypes'
 import styles from './ClassComposer.module.css'
 import sectionStyles from './Section.module.css'
+
+const SPACING_SECTION_ID = 'spacing'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -46,6 +49,8 @@ export function ClassComposer({
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
   const updateClassStyles = useEditorStore((s) => s.updateClassStyles)
   const setClassBreakpointStyles = useEditorStore((s) => s.setClassBreakpointStyles)
+  const setPreviewClassStyles = useEditorStore((s) => s.setPreviewClassStyles)
+  const clearPreviewClassStyles = useEditorStore((s) => s.clearPreviewClassStyles)
 
   const activeTab = getActiveStyleTab(activeBreakpointId)
 
@@ -77,6 +82,24 @@ export function ClassComposer({
     [handleChange],
   )
 
+  // Preview a transient style patch on the canvas while a property
+  // control's hover-suggestion menu is open. The preview lives entirely
+  // in store UI state — no class document mutation, no history entry.
+  const handlePreview = useCallback(
+    (patch: Partial<CSSPropertyBag>) => {
+      setPreviewClassStyles({
+        classId,
+        breakpointId: activeTab !== 'base' ? activeTab : null,
+        styles: patch,
+      })
+    },
+    [classId, activeTab, setPreviewClassStyles],
+  )
+
+  const handleClearPreview = useCallback(() => {
+    clearPreviewClassStyles(classId)
+  }, [classId, clearPreviewClassStyles])
+
   return (
     <div className={styles.styleSections}>
       {visibleStyleSections.map((section) => (
@@ -88,6 +111,8 @@ export function ClassComposer({
             activeTab={activeTab}
             onChange={handleChange}
             onRemove={handleRemoveProperty}
+            onPreview={handlePreview}
+            onClearPreview={handleClearPreview}
           />
         </div>
       ))}
@@ -109,6 +134,8 @@ interface ClassStyleSectionProps {
   activeTab: string
   onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
   onRemove: (property: keyof CSSPropertyBag) => void
+  onPreview: (patch: Partial<CSSPropertyBag>) => void
+  onClearPreview: () => void
 }
 
 function ClassStyleSection({
@@ -118,6 +145,8 @@ function ClassStyleSection({
   activeTab,
   onChange,
   onRemove,
+  onPreview,
+  onClearPreview,
 }: ClassStyleSectionProps) {
   const setCount = section.properties.filter((prop) => hasStyleValue(storedStyles[prop])).length
 
@@ -131,27 +160,42 @@ function ClassStyleSection({
       meta={setCount > 0 ? `${setCount} set` : undefined}
     >
       <div className={sectionStyles.sectionBody}>
-        {section.properties.map((prop) => {
-          const storedValue = storedStyles[prop]
-          const isSet = hasStyleValue(storedValue)
-          const currentValue = currentStyles[prop]
-          const fallbackValue = hasStyleValue(currentValue)
-            ? currentValue
-            : getCSSPropertyDefaultValue(prop)
+        {section.id === SPACING_SECTION_ID ? (
+          // Spacing section uses a single visual box-model widget instead of
+          // a stack of 10 padding/margin rows. The widget owns shorthand
+          // collapse and writes through the same onChange/onRemove pipeline.
+          <SpacingBoxControl
+            key={activeTab}
+            storedStyles={storedStyles}
+            currentStyles={currentStyles}
+            onChange={onChange}
+            onRemove={onRemove}
+            onPreview={onPreview}
+            onClearPreview={onClearPreview}
+          />
+        ) : (
+          section.properties.map((prop) => {
+            const storedValue = storedStyles[prop]
+            const isSet = hasStyleValue(storedValue)
+            const currentValue = currentStyles[prop]
+            const fallbackValue = hasStyleValue(currentValue)
+              ? currentValue
+              : getCSSPropertyDefaultValue(prop)
 
-          return (
-            <ClassPropertyRow
-              key={`${activeTab}-${String(prop)}`}
-              property={prop}
-              // storedValue is narrowed to string | number by the isSet guard above
-              value={isSet ? (storedValue as string | number) : undefined}
-              placeholder={!isSet ? fallbackValue : undefined}
-              isSet={isSet}
-              onChange={onChange}
-              onRemove={onRemove}
-            />
-          )
-        })}
+            return (
+              <ClassPropertyRow
+                key={`${activeTab}-${String(prop)}`}
+                property={prop}
+                // storedValue is narrowed to string | number by the isSet guard above
+                value={isSet ? (storedValue as string | number) : undefined}
+                placeholder={!isSet ? fallbackValue : undefined}
+                isSet={isSet}
+                onChange={onChange}
+                onRemove={onRemove}
+              />
+            )
+          })
+        )}
       </div>
     </Section>
   )

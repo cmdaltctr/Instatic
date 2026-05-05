@@ -25,6 +25,19 @@ export interface ClassPreviewAssignment {
   classId: string
 }
 
+/**
+ * Transient style preview applied on top of a class while a user hovers a
+ * suggestion in a property control (e.g. spacing token dropdown). The
+ * canvas style injector reads this and emits a higher-specificity rule so
+ * the change is visible without committing to history.
+ */
+export interface ClassStylesPreview {
+  classId: string
+  /** Breakpoint id to scope the preview to, or null/undefined for the base styles. */
+  breakpointId?: string | null
+  styles: Partial<CSSPropertyBag>
+}
+
 // ---------------------------------------------------------------------------
 // Slice interface
 // ---------------------------------------------------------------------------
@@ -39,6 +52,11 @@ export interface ClassSlice {
   previewClassAssignment: ClassPreviewAssignment | null
   setPreviewNodeClass(nodeId: string, classId: string): void
   clearPreviewNodeClass(nodeId?: string, classId?: string): void
+
+  /** Transient style patch previewed on the canvas while hovering a suggestion. */
+  previewClassStyles: ClassStylesPreview | null
+  setPreviewClassStyles(preview: ClassStylesPreview): void
+  clearPreviewClassStyles(classId?: string): void
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
   /**
@@ -106,6 +124,21 @@ function hasStylePatchChanges(
   return false
 }
 
+function shallowEqualStyles(
+  a: Partial<CSSPropertyBag>,
+  b: Partial<CSSPropertyBag>,
+): boolean {
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  if (aKeys.length !== bKeys.length) return false
+  for (const key of aKeys) {
+    if (!Object.is((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) {
+      return false
+    }
+  }
+  return true
+}
+
 function cloneBreakpointStyles(
   breakpointStyles: CSSClass['breakpointStyles'],
 ): CSSClass['breakpointStyles'] {
@@ -144,6 +177,7 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
 
   activeClassId: null,
   previewClassAssignment: null,
+  previewClassStyles: null,
 
   setActiveClass(id) {
     // Guideline #242 no-op guard
@@ -163,6 +197,26 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
     if (nodeId !== undefined && current.nodeId !== nodeId) return
     if (classId !== undefined && current.classId !== classId) return
     set({ previewClassAssignment: null })
+  },
+
+  setPreviewClassStyles(preview) {
+    const current = get().previewClassStyles
+    if (
+      current &&
+      current.classId === preview.classId &&
+      (current.breakpointId ?? null) === (preview.breakpointId ?? null) &&
+      shallowEqualStyles(current.styles, preview.styles)
+    ) {
+      return
+    }
+    set({ previewClassStyles: preview })
+  },
+
+  clearPreviewClassStyles(classId) {
+    const current = get().previewClassStyles
+    if (!current) return
+    if (classId !== undefined && current.classId !== classId) return
+    set({ previewClassStyles: null })
   },
 
   // ── CRUD ───────────────────────────────────────────────────────────────────

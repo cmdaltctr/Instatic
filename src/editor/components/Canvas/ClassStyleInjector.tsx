@@ -24,13 +24,14 @@
 
 import { useEffect } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
-import { generateCanvasClassCSS } from './canvasClassCss'
+import { generateCanvasClassCSS, generatePreviewClassCSS } from './canvasClassCss'
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 const STYLE_TAG_ID = 'mc-classes'
+const PREVIEW_STYLE_TAG_ID = 'mc-classes-preview'
 
 /**
  * Stable empty array used as the ?? fallback for breakpoints selector.
@@ -50,6 +51,7 @@ export function ClassStyleInjector() {
   const frameworkSpacing = useEditorStore((s) => s.site?.settings.framework?.spacing ?? null)
   const frameworkPreferences = useEditorStore((s) => s.site?.settings.framework?.preferences ?? null)
   const fonts = useEditorStore((s) => s.site?.settings.fonts ?? null)
+  const previewClassStyles = useEditorStore((s) => s.previewClassStyles)
 
   useEffect(() => {
     // Get or create the <style> element
@@ -86,10 +88,38 @@ export function ClassStyleInjector() {
     )
   }, [classes, breakpoints, frameworkColors, frameworkTypography, frameworkSpacing, frameworkPreferences, fonts])
 
-  // Cleanup: remove the style element when the component unmounts
+  // Preview overlay — a higher-specificity rule emitted while a user is
+  // hovering a suggestion in a property control (e.g. spacing token
+  // dropdown). Lives in its own <style> tag so it can be toggled cleanly
+  // without re-running the main class-CSS generation.
+  useEffect(() => {
+    let previewEl = document.getElementById(PREVIEW_STYLE_TAG_ID) as HTMLStyleElement | null
+    if (!previewClassStyles) {
+      if (previewEl) previewEl.textContent = ''
+      return
+    }
+    if (!previewEl) {
+      previewEl = document.createElement('style')
+      previewEl.id = PREVIEW_STYLE_TAG_ID
+      previewEl.setAttribute('data-source', 'ClassStyleInjector:preview')
+      document.head.appendChild(previewEl)
+    }
+    const cls = classes?.[previewClassStyles.classId]
+    if (!cls) {
+      previewEl.textContent = ''
+      return
+    }
+    previewEl.textContent = generatePreviewClassCSS(cls, {
+      breakpointId: previewClassStyles.breakpointId ?? null,
+      styles: previewClassStyles.styles,
+    })
+  }, [classes, previewClassStyles])
+
+  // Cleanup: remove the style elements when the component unmounts
   useEffect(() => {
     return () => {
       document.getElementById(STYLE_TAG_ID)?.remove()
+      document.getElementById(PREVIEW_STYLE_TAG_ID)?.remove()
     }
   }, [])
 
