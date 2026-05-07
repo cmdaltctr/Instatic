@@ -165,3 +165,27 @@
     line-height: 1;
     text-transform: uppercase;
 }
+
+/* Suggestions dropdown section headers (Recent / Frequent / All classes).
+   Non-interactive — keyboard nav within ContextMenu skips them naturally.
+   The label sits above its group with breathing room and a subtle uppercase
+   treatment so it reads as a section divider, not a clickable row. */
+.sectionHeader {
+    padding: 8px 10px 4px;
+    color: var(--editor-text-secondary);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Arrow Up / Down keyboard highlight on a suggestion row. The base button
+   already has hover and focus states; this overlays a slightly stronger
+   surface so the user can tell which row Enter would commit. */
+.suggestionHighlighted {
+    background: var(--editor-surface-2);
+    color: var(--editor-text);
+}

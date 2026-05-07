@@ -52,9 +52,23 @@ import {
   isUserVisibleClass,
 } from '@core/page-tree/classUtils'
 import { pillAccent } from '../../ui/pillAccent'
+import {
+  CLASS_USAGE_RECENT_LIMIT,
+  readSiteClassUsage,
+  recordClassUsage,
+  selectRecentAndFrequent,
+} from '../../preferences/classUsage'
+import { rankBySuggestionScore } from './classPickerRanking'
 import type { CSSClass } from '@core/page-tree/schemas'
 import dialogStyles from '../SiteCreateDialog/SiteCreateDialog.module.css'
 import styles from './ClassPicker.module.css'
+
+// When the input is empty and Recent + Frequent (deduped) collectively surface
+// at least this many classes, the dropdown skips the "All classes" section —
+// the user already has plenty of relevant options without scrolling past every
+// utility. Below the threshold we still pad with All so a near-empty history
+// doesn't leave the dropdown sparse.
+const SUFFICIENT_HISTORY_THRESHOLD = CLASS_USAGE_RECENT_LIMIT
 
 interface ClassContextMenuState {
   x: number
@@ -75,6 +89,7 @@ function keyboardMenuPosition(element: HTMLElement) {
     y: rect.top + Math.min(rect.height - 8, 24),
   }
 }
+
 
 // ---------------------------------------------------------------------------
 // ClassPicker
@@ -118,6 +133,11 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [contextMenu, setContextMenu] = useState<ClassContextMenuState | null>(null)
   const [renameTarget, setRenameTarget] = useState<CSSClass | null>(null)
+  // Index of the suggestion currently highlighted via Arrow Up/Down.
+  // -1 means "no explicit selection" — Enter then falls back to the typed
+  // query (find existing or create new). Reset on every query change so the
+  // user's most recent typing always dictates Enter behaviour by default.
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
   // Shared "preview-on-hover" preference — also gates token + variable
   // autocomplete previews in other property controls (e.g. SpacingBoxControl).
   // Renamed from `classHoverPreview`; the toggle now covers every kind of
@@ -141,35 +161,124 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
   const contextClass = contextMenu ? site?.classes[contextMenu.classId] ?? null : null
   const contextClassIndex = contextMenu ? visibleAssignedIds.indexOf(contextMenu.classId) : -1
 
-  const suggestions = allClasses.filter(
-    (c) =>
-      !assignedIds.includes(c.id) &&
-      c.name.toLowerCase().includes(query.toLowerCase()),
-  )
+  const trimmedQueryRaw = query.trim()
+  const trimmedQuery = trimmedQueryRaw.toLowerCase()
+  const isEmptyQuery = trimmedQuery.length === 0
 
-  const canCreateNew =
-    query.trim().length > 0 &&
-    !allClasses.some((c) => c.name === query.trim())
+  // Classes that aren't yet on this node — the universe the dropdown picks
+  // from regardless of whether we're filtering by query or surfacing usage.
+  const candidates = allClasses.filter((c) => !assignedIds.includes(c.id))
+  const candidatesById = new Map(candidates.map((c) => [c.id, c]))
 
-  // Whether the input has actionable content. Mirrors the Enter-key
-  // behaviour below — either a brand-new class name (creates) or at least
-  // one matched suggestion (adds the first one). When false, pressing
-  // Enter or clicking the trailing enter icon is a no-op.
-  const hasSubmittableQuery = canCreateNew || (query.length > 0 && Boolean(suggestions[0]))
+  // When the input is non-empty we filter and rank by relevance:
+  //   4 = exact match               ("text" → "text")
+  //   3 = prefix match               ("text" → "text-bg-body-5")
+  //   2 = word-boundary match        ("body" → "text-bg-body-5")
+  //   1 = anywhere substring         ("bg"   → "text-bg-body-5")
+  // Within a tier, shorter names win (more specific), then alphabetical.
+  // This puts the user's exact intent at the top of the list — typing "text"
+  // surfaces a class literally named "text" before any "text-*" utilities.
+  const filteredSuggestions = isEmptyQuery
+    ? candidates
+    : rankBySuggestionScore(candidates, trimmedQuery)
+
+  // Empty-query layout: surface Recent + Frequent first, then optionally a
+  // catch-all "All classes" section so the dropdown stays useful for fresh
+  // sites with no usage history (or sites where the history is sparse).
+  const usage = isEmptyQuery && site ? readSiteClassUsage(site.id) : {}
+  const { recent: recentIds, frequent: frequentIds } = isEmptyQuery
+    ? selectRecentAndFrequent(usage, candidates.map((c) => c.id))
+    : { recent: [], frequent: [] }
+  const surfacedSet = new Set<string>([...recentIds, ...frequentIds])
+  const surfacedCount = surfacedSet.size
+  const remainingCandidates = candidates.filter((c) => !surfacedSet.has(c.id))
+  // Show the "All" section if we either have no usage data yet, or the
+  // recent+frequent surface is sparse enough that the user might still want
+  // to browse the registry without typing.
+  const shouldShowAllSection =
+    isEmptyQuery && (surfacedCount === 0 || surfacedCount < SUFFICIENT_HISTORY_THRESHOLD)
+
+  const suggestions = isEmptyQuery ? candidates : filteredSuggestions
+
+  // Flat list of class IDs in their final display order (Recent → Frequent →
+  // All when input is empty, ranked filteredSuggestions when typing). Drives
+  // Arrow Up / Down navigation regardless of whether the dropdown is in
+  // sectioned or flat mode. React Compiler handles memoization for us — the
+  // surrounding component is autoMemoized, so an explicit useMemo here would
+  // actually defeat that optimization.
+  const flatNavIds: string[] = isEmptyQuery
+    ? [
+        ...recentIds,
+        ...frequentIds,
+        ...(shouldShowAllSection ? remainingCandidates.map((c) => c.id) : []),
+      ]
+    : filteredSuggestions.map((c) => c.id)
+
+  // Clamp the stored highlight to the live suggestion list rather than
+  // "fixing it up" through a setState-in-effect. If the user typed enough to
+  // shrink the list, the index just snaps back to "no selection" derivedly,
+  // which is what every consumer of the highlight already expects.
+  const effectiveHighlightedIndex =
+    highlightedIndex >= 0 && highlightedIndex < flatNavIds.length ? highlightedIndex : -1
+  const hasArrowSelection = effectiveHighlightedIndex >= 0
+
+  // Exact-name match against ALL user-visible classes (including ones already
+  // assigned to this node — Enter on an already-assigned class is a no-op
+  // rather than creating a duplicate). Drives the Enter-with-typed-input
+  // path: typing a name that exists adds that class; typing something new
+  // creates and adds it.
+  const exactMatchedClass = !isEmptyQuery
+    ? allClasses.find((c) => c.name === trimmedQueryRaw) ?? null
+    : null
+  const exactMatchAlreadyAssigned =
+    exactMatchedClass !== null && assignedIds.includes(exactMatchedClass.id)
+
+  const canCreateNew = !isEmptyQuery && exactMatchedClass === null
+
+  // Whether pressing Enter has a meaningful effect:
+  //   - typing creates a brand-new class, OR
+  //   - typing matches an existing unassigned class by name, OR
+  //   - the user has explicitly highlighted a suggestion via Arrow keys.
+  // An empty input or a query that matches an already-assigned class with
+  // no Arrow-nav highlight is a no-op.
+  const hasSubmittableQuery =
+    hasArrowSelection ||
+    canCreateNew ||
+    (exactMatchedClass !== null && !exactMatchAlreadyAssigned)
+
+  // Tooltip mirrors `submitQuery`'s priority order so the user reads exactly
+  // what Enter would do. Computed inline (not a top-level helper) to keep the
+  // file a single component module — Fast Refresh requires it.
+  const highlightedName = hasArrowSelection
+    ? candidatesById.get(flatNavIds[effectiveHighlightedIndex] ?? '')?.name ?? null
+    : null
+  const submitTooltip: string =
+    hasArrowSelection && highlightedName
+      ? `Add class “${highlightedName}”`
+      : canCreateNew && trimmedQueryRaw
+        ? `Create class “${trimmedQueryRaw}”`
+        : exactMatchedClass && !exactMatchAlreadyAssigned
+          ? `Add class “${exactMatchedClass.name}”`
+          : exactMatchedClass && exactMatchAlreadyAssigned
+            ? `“${exactMatchedClass.name}” is already on this element`
+            : 'Type a class name to add or create'
 
   const openSuggestions = useCallback(() => {
     setShowSuggestions(true)
   }, [])
+
+  const siteId = site?.id ?? null
 
   const handleAddExisting = useCallback(
     (classId: string) => {
       addNodeClass(nodeId, classId)
       setActiveClass(classId)
       clearPreviewNodeClass(nodeId, classId)
+      if (siteId) recordClassUsage(siteId, classId)
       setQuery('')
       setShowSuggestions(false)
     },
-    [nodeId, addNodeClass, setActiveClass, clearPreviewNodeClass],
+    [nodeId, addNodeClass, setActiveClass, clearPreviewNodeClass, siteId],
   )
 
   const handleCreateAndAdd = useCallback(() => {
@@ -180,20 +289,36 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
       addNodeClass(nodeId, newClass.id)
       setActiveClass(newClass.id)
       clearPreviewNodeClass(nodeId)
+      if (siteId) recordClassUsage(siteId, newClass.id)
       setQuery('')
       setShowSuggestions(false)
     } catch {
       // Class with this name already exists
     }
-  }, [query, createClass, addNodeClass, nodeId, setActiveClass, clearPreviewNodeClass])
+  }, [query, createClass, addNodeClass, nodeId, setActiveClass, clearPreviewNodeClass, siteId])
 
   // Shared submit logic for both the Enter key and the trailing enter-icon
-  // button. Either creates a brand-new class with the typed name, or adds
-  // the first matched suggestion if one exists.
-  const submitQuery = useCallback(() => {
+  // button. Resolution priority:
+  //   1. Arrow-key highlight wins — Enter adds the highlighted suggestion.
+  //   2. Otherwise the typed input is the source of truth: an exact-name
+  //      match adds that class; a brand-new name creates and adds it.
+  //   3. Empty input or already-assigned exact match → no-op.
+  // The "Enter adds whatever is in the input" behaviour is what lets a user
+  // type "text" and get the class literally named "text", instead of the
+  // first ranked suggestion (which would be a `text-*` utility).
+  const submitQuery = () => {
+    if (hasArrowSelection) {
+      const id = flatNavIds[effectiveHighlightedIndex]
+      if (id) handleAddExisting(id)
+      return
+    }
+    if (isEmptyQuery) return
+    if (exactMatchedClass) {
+      if (!exactMatchAlreadyAssigned) handleAddExisting(exactMatchedClass.id)
+      return
+    }
     if (canCreateNew) handleCreateAndAdd()
-    else if (suggestions[0]) handleAddExisting(suggestions[0].id)
-  }, [canCreateNew, suggestions, handleCreateAndAdd, handleAddExisting])
+  }
 
   const previewClass = useCallback(
     (classId: string) => {
@@ -216,9 +341,27 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
 
   useEffect(() => () => clearPreviewNodeClass(nodeId), [clearPreviewNodeClass, nodeId])
 
+  // Scroll the highlighted suggestion into view inside the dropdown so Arrow
+  // Down past the visible window keeps the active row on screen. The
+  // ContextMenu manages its own overflow scroller; we don't have to know
+  // which element it is — `scrollIntoView({ block: 'nearest' })` walks up
+  // the ancestor chain and scrolls only the closest scrollable ancestor.
+  // Out-of-range indices fall through `effectiveHighlightedIndex < 0` so we
+  // never query for a stale element.
+  useEffect(() => {
+    if (effectiveHighlightedIndex < 0) return
+    const id = flatNavIds[effectiveHighlightedIndex]
+    if (!id) return
+    const el = document.querySelector<HTMLElement>(
+      `[data-class-suggestion-id="${CSS.escape(id)}"]`,
+    )
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [flatNavIds, effectiveHighlightedIndex])
+
   const closeSuggestions = useCallback(() => {
     clearPreviewNodeClass(nodeId)
     setShowSuggestions(false)
+    setHighlightedIndex(-1)
   }, [clearPreviewNodeClass, nodeId])
 
   const closeContextMenu = useCallback(() => {
@@ -315,6 +458,9 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
+            // Typing always resets the explicit Arrow-key highlight — the
+            // user's most recent intent is the typed string itself.
+            setHighlightedIndex(-1)
             openSuggestions()
           }}
           onFocus={openSuggestions}
@@ -322,8 +468,33 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
             if (e.key === 'Enter') {
               e.preventDefault()
               submitQuery()
+              return
             }
-            if (e.key === 'Escape') closeSuggestions()
+            if (e.key === 'Escape') {
+              closeSuggestions()
+              setHighlightedIndex(-1)
+              return
+            }
+            if (e.key === 'ArrowDown') {
+              if (flatNavIds.length === 0) return
+              e.preventDefault()
+              openSuggestions()
+              setHighlightedIndex((prev) => {
+                const next = prev + 1
+                return next >= flatNavIds.length ? 0 : next
+              })
+              return
+            }
+            if (e.key === 'ArrowUp') {
+              if (flatNavIds.length === 0) return
+              e.preventDefault()
+              openSuggestions()
+              setHighlightedIndex((prev) => {
+                if (prev <= 0) return flatNavIds.length - 1
+                return prev - 1
+              })
+              return
+            }
           }}
           placeholder="Add or create class…"
           aria-label="Add or create a CSS class"
@@ -333,13 +504,7 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
               size="micro"
               iconOnly
               disabled={!hasSubmittableQuery}
-              tooltip={
-                canCreateNew
-                  ? `Create class “${query.trim()}”`
-                  : suggestions[0]
-                    ? `Add class “${suggestions[0].name}”`
-                    : 'Type a class name to add or create'
-              }
+              tooltip={submitTooltip}
               aria-label="Submit class"
               onMouseDown={(e) => {
                 // Keep focus on the input so the suggestions dropdown stays
@@ -358,7 +523,7 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
         {/* Suggestions dropdown — anchored to the input row so it spans both
             the input cell and the trailing-action cell. ContextMenu auto-flips
             between top/bottom based on viewport space. */}
-        {showSuggestions && (query.length > 0 || suggestions.length > 0) && createPortal(
+        {showSuggestions && (suggestions.length > 0 || canCreateNew || !isEmptyQuery) && createPortal(
           <ContextMenu
             anchorRef={inputRowRef}
             side="auto"
@@ -375,35 +540,56 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
             onClose={closeSuggestions}
             triggerRef={inputRef}
           >
-            {suggestions.map((cls) => (
-              <ContextMenuItem
-                key={cls.id}
-                onClick={() => handleAddExisting(cls.id)}
-                onMouseEnter={() => previewClass(cls.id)}
-                onFocus={() => previewClass(cls.id)}
-                onMouseLeave={() => clearPreviewClass(cls.id)}
-                onBlur={() => clearPreviewClass(cls.id)}
-              >
-                <span className={styles.suggestionLabel}>{cls.name}</span>
-                {generatedClassKindLabel(cls) && (
-                  <span className={styles.utilityBadge}>{generatedClassKindLabel(cls)}</span>
-                )}
-              </ContextMenuItem>
-            ))}
-            {canCreateNew && (
+            {isEmptyQuery ? (
+              <ClassSuggestionSections
+                recentIds={recentIds}
+                frequentIds={frequentIds}
+                remainingClasses={shouldShowAllSection ? remainingCandidates : []}
+                showAllHeader={shouldShowAllSection && surfacedCount > 0}
+                resolveClass={(id) => candidatesById.get(id) ?? null}
+                onPick={handleAddExisting}
+                previewClass={previewClass}
+                clearPreviewClass={clearPreviewClass}
+                highlightedClassId={
+                  hasArrowSelection ? flatNavIds[effectiveHighlightedIndex] ?? null : null
+                }
+              />
+            ) : (
               <>
-                {suggestions.length > 0 && <ContextMenuSeparator />}
-                <ContextMenuItem
-                  onClick={handleCreateAndAdd}
-                >
-                  + Create &ldquo;{query.trim()}&rdquo;
-                </ContextMenuItem>
+                {filteredSuggestions.map((cls) => {
+                  const isHighlighted = hasArrowSelection && flatNavIds[effectiveHighlightedIndex] === cls.id
+                  return (
+                    <ContextMenuItem
+                      key={cls.id}
+                      data-class-suggestion-id={cls.id}
+                      className={cn(isHighlighted && styles.suggestionHighlighted)}
+                      onClick={() => handleAddExisting(cls.id)}
+                      onMouseEnter={() => previewClass(cls.id)}
+                      onFocus={() => previewClass(cls.id)}
+                      onMouseLeave={() => clearPreviewClass(cls.id)}
+                      onBlur={() => clearPreviewClass(cls.id)}
+                    >
+                      <span className={styles.suggestionLabel}>{cls.name}</span>
+                      {generatedClassKindLabel(cls) && (
+                        <span className={styles.utilityBadge}>{generatedClassKindLabel(cls)}</span>
+                      )}
+                    </ContextMenuItem>
+                  )
+                })}
+                {canCreateNew && (
+                  <>
+                    {filteredSuggestions.length > 0 && <ContextMenuSeparator />}
+                    <ContextMenuItem onClick={handleCreateAndAdd}>
+                      + Create &ldquo;{query.trim()}&rdquo;
+                    </ContextMenuItem>
+                  </>
+                )}
+                {filteredSuggestions.length === 0 && !canCreateNew && (
+                  <div className={styles.noMatch}>
+                    No classes match &ldquo;{query}&rdquo;
+                  </div>
+                )}
               </>
-            )}
-            {suggestions.length === 0 && !canCreateNew && (
-              <div className={styles.noMatch}>
-                No classes match &ldquo;{query}&rdquo;
-              </div>
             )}
           </ContextMenu>,
           document.body,
@@ -467,6 +653,106 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
     </div>
   )
 })
+
+// ---------------------------------------------------------------------------
+// Empty-query suggestions — Recent + Frequent + (optional) All
+//
+// Rendered as flat `ContextMenuItem`s grouped by section headers. Section
+// headers are non-interactive `<div>`s; ContextMenu's keyboard navigation
+// skips over them naturally because it scans for focusable items.
+// ---------------------------------------------------------------------------
+
+interface ClassSuggestionSectionsProps {
+  recentIds: readonly string[]
+  frequentIds: readonly string[]
+  /** Empty array means "don't render the All section at all". */
+  remainingClasses: readonly CSSClass[]
+  /** True iff the All section header should be shown above `remainingClasses`. */
+  showAllHeader: boolean
+  resolveClass: (classId: string) => CSSClass | null
+  onPick: (classId: string) => void
+  previewClass: (classId: string) => void
+  clearPreviewClass: (classId: string) => void
+  /** ID of the class currently selected via Arrow Up/Down, or `null`. */
+  highlightedClassId: string | null
+}
+
+function ClassSuggestionSections({
+  recentIds,
+  frequentIds,
+  remainingClasses,
+  showAllHeader,
+  resolveClass,
+  onPick,
+  previewClass,
+  clearPreviewClass,
+  highlightedClassId,
+}: ClassSuggestionSectionsProps) {
+  const hasRecent = recentIds.length > 0
+  const hasFrequent = frequentIds.length > 0
+  const hasRemaining = remainingClasses.length > 0
+  const hasAny = hasRecent || hasFrequent || hasRemaining
+
+  const renderItem = (cls: CSSClass) => {
+    const isHighlighted = highlightedClassId === cls.id
+    return (
+      <ContextMenuItem
+        key={cls.id}
+        data-class-suggestion-id={cls.id}
+        className={cn(isHighlighted && styles.suggestionHighlighted)}
+        onClick={() => onPick(cls.id)}
+        onMouseEnter={() => previewClass(cls.id)}
+        onFocus={() => previewClass(cls.id)}
+        onMouseLeave={() => clearPreviewClass(cls.id)}
+        onBlur={() => clearPreviewClass(cls.id)}
+      >
+        <span className={styles.suggestionLabel}>{cls.name}</span>
+        {generatedClassKindLabel(cls) && (
+          <span className={styles.utilityBadge}>{generatedClassKindLabel(cls)}</span>
+        )}
+      </ContextMenuItem>
+    )
+  }
+
+  if (!hasAny) {
+    return (
+      <div className={styles.noMatch}>
+        Type to search or create a class
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {hasRecent && (
+        <>
+          <div className={styles.sectionHeader}>Recent</div>
+          {recentIds.map((id) => {
+            const cls = resolveClass(id)
+            return cls ? renderItem(cls) : null
+          })}
+        </>
+      )}
+      {hasFrequent && (
+        <>
+          {hasRecent && <ContextMenuSeparator />}
+          <div className={styles.sectionHeader}>Frequent</div>
+          {frequentIds.map((id) => {
+            const cls = resolveClass(id)
+            return cls ? renderItem(cls) : null
+          })}
+        </>
+      )}
+      {hasRemaining && (
+        <>
+          {(hasRecent || hasFrequent) && <ContextMenuSeparator />}
+          {showAllHeader && <div className={styles.sectionHeader}>All classes</div>}
+          {remainingClasses.map(renderItem)}
+        </>
+      )}
+    </>
+  )
+}
 
 function ClassPillContextMenu({
   x,
