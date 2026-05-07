@@ -546,7 +546,7 @@ describe('ContentPage', () => {
     )
 
     const postsRegion = await screen.findByRole('region', { name: 'Posts' })
-    expect(within(postsRegion).getByText('Editor Name')).toBeDefined()
+    expect(await within(postsRegion).findByText('Editor Name')).toBeDefined()
     expect(await screen.findByTestId('content-settings-panel')).toBeDefined()
 
     const authorSelect = screen.getByRole('combobox', { name: 'Author' }) as HTMLInputElement
@@ -1667,7 +1667,7 @@ describe('ContentPage', () => {
     expect(src).toContain("'Retry publish'")
     expect(src).toContain("'Published'")
     expect(src).toContain('statusLabel={isCleanPublished ? null : statusText}')
-    expect(src).toContain('publishDisabled={!selectedEntry || isPublishing || isCleanPublished}')
+    expect(src).toContain('publishDisabled={!selectedEntry || !canPublish || isPublishing || isCleanPublished}')
     expect(src).not.toContain("'Live'")
     expect(src).toContain('isCleanPublished ? CheckIcon')
     expect(src).not.toContain("'Publish failed'")

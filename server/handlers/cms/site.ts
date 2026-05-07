@@ -4,13 +4,14 @@
  *   GET /admin/api/cms/site — load the entire draft `SiteDocument` (gated
  *                              by `site.read`). Used by the editor to
  *                              hydrate the in-memory store on boot.
- *   PUT /admin/api/cms/site — replace the draft `SiteDocument` (gated by
- *                              `site.edit`). Validated through `validateSite`
- *                              so a malformed payload can never poison the
- *                              persistence layer.
+ *   PUT /admin/api/cms/site — replace the broad draft `SiteDocument`
+ *                              (gated by both `site.edit` and `pages.edit`).
+ *                              The current persistence shape can update site
+ *                              settings and page trees in one request, so a
+ *                              caller needs both rights.
  */
 import type { DbClient } from '../../db/client'
-import { requireCapability } from '../../auth/authz'
+import { requireAllCapabilities, requireCapability } from '../../auth/authz'
 import { loadDraftSite, saveDraftSite } from '../../repositories/site'
 import { validateSite, SiteValidationError } from '@core/persistence/validate'
 import { badRequest, jsonResponse, methodNotAllowed, readJsonObject } from '../../http'
@@ -19,7 +20,9 @@ export async function handleSiteRoutes(req: Request, db: DbClient): Promise<Resp
   const url = new URL(req.url)
   if (url.pathname !== '/admin/api/cms/site') return null
 
-  const user = await requireCapability(req, db, req.method === 'GET' ? 'site.read' : 'site.edit')
+  const user = req.method === 'GET'
+    ? await requireCapability(req, db, 'site.read')
+    : await requireAllCapabilities(req, db, ['site.edit', 'pages.edit'])
   if (user instanceof Response) return user
 
   if (req.method === 'GET') {

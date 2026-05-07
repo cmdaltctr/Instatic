@@ -29,7 +29,7 @@ function makeFakeDb(): DbClient {
           role_name: 'Owner',
           role_description: '',
           role_is_system: true,
-          role_capabilities_json: ['runtime.manage', 'site.edit'],
+          role_capabilities_json: ['runtime.manage', 'pages.edit'],
         } as Row],
         rowCount: 1,
       }

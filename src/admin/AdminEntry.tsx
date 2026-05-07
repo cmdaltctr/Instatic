@@ -5,9 +5,10 @@ import { DatabaseIcon } from 'pixel-art-icons/icons/database'
 import { LoaderIcon } from 'pixel-art-icons/icons/loader'
 import {
   getCmsSetupStatus,
+  getCurrentCmsUser,
   loginCms,
-  probeCmsSession,
   setupCms,
+  type CmsCurrentUser,
 } from '@core/persistence'
 import { ContentPage } from './content/ContentPage'
 import { PluginPage } from './plugins/PluginPage'
@@ -16,6 +17,10 @@ import { SitePage } from './site/SitePage'
 import { UsersPage } from './users/UsersPage'
 import { AppLoadingScreen } from './AppLoadingScreen'
 import type { AdminWorkspace } from './workspace'
+import { AdminSessionProvider } from './session'
+import { canAccessWorkspace, firstAccessibleWorkspace, workspacePath } from './access'
+import { Navigate } from './lib/router'
+import { useInRouterContext } from './lib/routerHooks'
 import styles from './AdminEntry.module.css'
 
 // Register base modules with the global registry. Kept here (not in main.tsx)
@@ -40,6 +45,7 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<CmsCurrentUser | null>(null)
   const siteNameId = useId()
   const emailId = useId()
   const passwordId = useId()
@@ -57,8 +63,19 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
           return
         }
 
-        const authenticated = await probeCmsSession()
-        if (!cancelled) setPhase(authenticated ? 'editor' : 'login')
+        try {
+          const user = await getCurrentCmsUser()
+          if (!cancelled) {
+            setCurrentUser(user)
+            setPhase('editor')
+          }
+        } catch (_err) {
+          // No active admin session; show the login form.
+          if (!cancelled) {
+            setCurrentUser(null)
+            setPhase('login')
+          }
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'CMS is unavailable')
@@ -83,6 +100,7 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
     try {
       await setupCms({ siteName, email, password })
       await loginCms({ email, password })
+      setCurrentUser(await getCurrentCmsUser())
       setPhase('editor')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed')
@@ -97,6 +115,7 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
     setError(null)
     try {
       await loginCms({ email, password })
+      setCurrentUser(await getCurrentCmsUser())
       setPhase('editor')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -107,11 +126,8 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
 
   if (phase === 'loading') return <AppLoadingScreen />
   if (phase === 'editor') {
-    if (section === 'content') return <ContentPage />
-    if (section === 'plugins') return <PluginsPage />
-    if (section === 'users') return <UsersPage />
-    if (section === 'pluginPage') return <PluginPage />
-    return <SitePage />
+    if (!currentUser) return <AppLoadingScreen />
+    return <AuthenticatedAdmin section={section} currentUser={currentUser} />
   }
 
   const isSetup = phase === 'setup'
@@ -197,5 +213,40 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
         </form>
       </section>
     </main>
+  )
+}
+
+function AuthenticatedAdmin({
+  section,
+  currentUser,
+}: {
+  section: AdminSection
+  currentUser: CmsCurrentUser
+}) {
+  const inRouter = useInRouterContext()
+  const fallbackWorkspace = firstAccessibleWorkspace(currentUser)
+
+  if (!canAccessWorkspace(currentUser, section)) {
+    if (inRouter && fallbackWorkspace) {
+      return <Navigate to={workspacePath(fallbackWorkspace)} replace />
+    }
+    return (
+      <main className={styles.page}>
+        <section className={styles.panel} role="alert">
+          <h1 className={styles.title}>Access unavailable</h1>
+          <p className={styles.error}>Your role does not include access to this admin section.</p>
+        </section>
+      </main>
+    )
+  }
+
+  return (
+    <AdminSessionProvider user={currentUser}>
+      {section === 'content' ? <ContentPage /> :
+        section === 'plugins' ? <PluginsPage /> :
+        section === 'users' ? <UsersPage /> :
+        section === 'pluginPage' ? <PluginPage /> :
+        <SitePage />}
+    </AdminSessionProvider>
   )
 }

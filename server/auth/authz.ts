@@ -36,7 +36,44 @@ export async function requireCapability(
 ): Promise<AuthUser | Response> {
   const user = await requireAuthenticatedUser(req, db)
   if (user instanceof Response) return user
-  if (!roleHasCapability(user.capabilities, capability)) {
+  if (!userHasCapability(user, capability)) {
+    return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+  }
+  return user
+}
+
+export async function requireAllCapabilities(
+  req: Request,
+  db: DbClient,
+  capabilities: readonly CoreCapability[],
+): Promise<AuthUser | Response> {
+  const user = await requireAuthenticatedUser(req, db)
+  if (user instanceof Response) return user
+  if (!capabilities.every((capability) => userHasCapability(user, capability))) {
+    return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+  }
+  return user
+}
+
+export function userHasCapability(user: Pick<AuthUser, 'capabilities'>, capability: CoreCapability): boolean {
+  return roleHasCapability(user.capabilities, capability)
+}
+
+export function userHasAnyCapability(
+  user: Pick<AuthUser, 'capabilities'>,
+  capabilities: readonly CoreCapability[],
+): boolean {
+  return capabilities.some((capability) => userHasCapability(user, capability))
+}
+
+export async function requireAnyCapability(
+  req: Request,
+  db: DbClient,
+  capabilities: readonly CoreCapability[],
+): Promise<AuthUser | Response> {
+  const user = await requireAuthenticatedUser(req, db)
+  if (user instanceof Response) return user
+  if (!userHasAnyCapability(user, capabilities)) {
     return jsonResponse({ error: 'Forbidden' }, { status: 403 })
   }
   return user

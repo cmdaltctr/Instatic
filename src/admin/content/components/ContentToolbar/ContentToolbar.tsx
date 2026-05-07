@@ -20,6 +20,8 @@ interface ContentToolbarProps {
   selectedEntry: ContentEntry | null
   selectedCollection: ContentCollection | null
   publicPath: string
+  canSaveDraft: boolean
+  canPublish: boolean
   onSaveDraft: () => void
   onPublish: () => void
 }
@@ -31,6 +33,8 @@ export function ContentToolbar({
   selectedEntry,
   selectedCollection,
   publicPath,
+  canSaveDraft,
+  canPublish,
   onSaveDraft,
   onPublish,
 }: ContentToolbarProps) {
@@ -77,7 +81,7 @@ export function ContentToolbar({
       id: 'save-draft',
       label: 'Save draft',
       icon: SaveIcon,
-      disabled: !selectedEntry || isSaving || !isDirty,
+      disabled: !selectedEntry || !canSaveDraft || isSaving || !isDirty,
       onSelect: onSaveDraft,
       testId: 'toolbar-content-save-draft-action',
     },
@@ -104,7 +108,7 @@ export function ContentToolbar({
         publishTitle={isCleanPublished ? 'Published' : `Publish ${entryLabel}`}
         publishState={isPublishing ? 'busy' : saveMessage === 'error' ? 'error' : isCleanPublished ? 'success' : 'idle'}
         publishBusy={isPublishing}
-        publishDisabled={!selectedEntry || isPublishing || isCleanPublished}
+        publishDisabled={!selectedEntry || !canPublish || isPublishing || isCleanPublished}
         publishIcon={PublishIcon}
         onPublish={onPublish}
         menuItems={menuItems}

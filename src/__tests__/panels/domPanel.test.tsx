@@ -344,6 +344,13 @@ describe('DomPanel — tree accessibility', () => {
     expect(source).toMatch(/createPortal\(\s*dragOverlay/s)
   })
 
+  it('does not suppress DOM panel drag commits while editing a Visual Component', () => {
+    const source = readFileSync(DOM_PANEL_SOURCE_PATH, 'utf8')
+
+    expect(source).not.toContain("startsWith('vc-virtual:')")
+    expect(source).not.toContain('wire DnD reordering inside VC mode')
+  })
+
   it('selected tree node has aria-selected="true"', () => {
     loadSite(true)
     // Select the root node (root is always visible regardless of expand state).

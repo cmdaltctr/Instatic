@@ -8,7 +8,7 @@
  *                                       reject inside the repository)
  */
 import type { DbClient } from '../../db/client'
-import { requireCapability } from '../../auth/authz'
+import { requireAnyCapability, requireCapability } from '../../auth/authz'
 import { createAuditEvent } from '../../repositories/audit'
 import {
   createCustomRole,
@@ -47,14 +47,15 @@ export async function handleRolesRoutes(req: Request, db: DbClient): Promise<Res
   const url = new URL(req.url)
 
   if (url.pathname === `${CMS_API_PREFIX}/roles`) {
-    const actor = await requireCapability(req, db, 'roles.manage')
-    if (actor instanceof Response) return actor
-
     if (req.method === 'GET') {
+      const actor = await requireAnyCapability(req, db, ['roles.manage', 'users.manage'])
+      if (actor instanceof Response) return actor
       return jsonResponse({ roles: await listRoles(db) })
     }
 
     if (req.method === 'POST') {
+      const actor = await requireCapability(req, db, 'roles.manage')
+      if (actor instanceof Response) return actor
       const body = await readValidatedBody(req, RoleCreateBodySchema)
       if (!body) return badRequest('Invalid role payload')
       try {

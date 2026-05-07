@@ -30,10 +30,10 @@ export const migrations: Migration[] = [
 
       insert into roles (id, slug, name, description, is_system, capabilities_json)
       values
-        ('owner', 'owner', 'Owner', 'Permanent first-site owner with full system access.', true, '["site.read","site.edit","pages.edit","pages.publish","content.edit","content.publish","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'::jsonb),
-        ('admin', 'admin', 'Admin', 'Full admin access.', true, '["site.read","site.edit","pages.edit","pages.publish","content.edit","content.publish","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'::jsonb),
-        ('editor', 'editor', 'Editor', 'Can edit and publish site pages and content.', true, '["site.read","site.edit","pages.edit","pages.publish","content.edit","content.publish","media.manage"]'::jsonb),
-        ('content-manager', 'content-manager', 'Content Manager', 'Can manage content entries and media.', true, '["site.read","content.edit","content.publish","media.manage"]'::jsonb),
+        ('owner', 'owner', 'Owner', 'Permanent first-site owner with full system access.', true, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'::jsonb),
+        ('admin', 'admin', 'Admin', 'Full admin access.', true, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'::jsonb),
+        ('editor', 'editor', 'Editor', 'Can edit and publish assigned site content.', true, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.publish.own","media.manage"]'::jsonb),
+        ('content-manager', 'content-manager', 'Content Manager', 'Can manage all content entries and collections.', true, '["site.read","content.create","content.edit.any","content.publish.any","content.manage","media.manage"]'::jsonb),
         ('viewer', 'viewer', 'Viewer', 'Read-only admin access.', true, '["site.read"]'::jsonb),
         ('subscriber', 'subscriber', 'Subscriber', 'Reserved for future public member accounts.', true, '[]'::jsonb)
       on conflict (id) do update

@@ -25,7 +25,13 @@ import type {
 } from '@core/content/schemas'
 import { updateEntryList } from '../utils/contentEntryUtils'
 
-export function useContentWorkspace() {
+interface UseContentWorkspaceOptions {
+  loadAuthors?: boolean
+}
+
+export function useContentWorkspace({
+  loadAuthors: shouldLoadAuthors = true,
+}: UseContentWorkspaceOptions = {}) {
   const [collections, setCollections] = useState<ContentCollection[]>([])
   const [entries, setEntries] = useState<ContentEntry[]>([])
   const [authors, setAuthors] = useState<ContentUserReference[]>([])
@@ -47,7 +53,12 @@ export function useContentWorkspace() {
   useEffect(() => {
     let cancelled = false
 
-    async function loadAuthors() {
+    async function fetchAuthors() {
+      if (!shouldLoadAuthors) {
+        setAuthors([])
+        setAuthorsLoading(false)
+        return
+      }
       setAuthorsLoading(true)
       try {
         const nextAuthors = await listCmsContentAuthors()
@@ -61,9 +72,9 @@ export function useContentWorkspace() {
       }
     }
 
-    void loadAuthors()
+    void fetchAuthors()
     return () => { cancelled = true }
-  }, [])
+  }, [shouldLoadAuthors])
 
   const updateSelectedEntry = useCallback((entry: ContentEntry) => {
     setSelectedEntry(entry)

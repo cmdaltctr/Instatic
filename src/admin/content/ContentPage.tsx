@@ -1,6 +1,11 @@
 import { useEffect, useId, useState } from 'react'
 import { createHeadingBlock, createParagraphBlock, serializeMarkdownBlocks } from '@core/content/markdown'
-import type { ContentCollection, ContentEntry, UpdateContentCollectionInput } from '@core/content/schemas'
+import type {
+  ContentCollection,
+  ContentEntry,
+  ContentEntryStatus,
+  UpdateContentCollectionInput,
+} from '@core/content/schemas'
 import { useEditorStore } from '@core/editor-store/store'
 import { HeadingIcon } from 'pixel-art-icons/icons/heading'
 import { ImagesIcon } from 'pixel-art-icons/icons/images'
@@ -19,6 +24,35 @@ import { useContentEntryDraft } from './hooks/useContentEntryDraft'
 import { useContentMediaPicker } from './hooks/useContentMediaPicker'
 import { useContentWorkspace } from './hooks/useContentWorkspace'
 import { publicContentPath } from './utils/contentEntryUtils'
+import { CORE_CAPABILITIES } from '@core/cms/capabilities'
+import type { CmsCurrentUser } from '@core/persistence'
+import { useCurrentAdminUser } from '../sessionContext'
+import {
+  canCreateContent,
+  canEditAnyContent,
+  canEditContentEntry,
+  canManageContentCollections,
+  canPublishContentEntry,
+} from '../access'
+
+const UNRESTRICTED_ADMIN_USER: CmsCurrentUser = {
+  id: 'admin-ui-unrestricted',
+  email: 'admin-ui-unrestricted@example.invalid',
+  displayName: 'Admin',
+  status: 'active',
+  role: {
+    id: 'admin-ui-unrestricted',
+    slug: 'admin-ui-unrestricted',
+    name: 'Admin',
+    description: '',
+    isSystem: true,
+    capabilities: [...CORE_CAPABILITIES],
+  },
+  capabilities: [...CORE_CAPABILITIES],
+  lastLoginAt: null,
+  createdAt: '1970-01-01T00:00:00.000Z',
+  updatedAt: '1970-01-01T00:00:00.000Z',
+}
 
 export function ContentPage() {
   const [activeContentPanel, setActiveContentPanel] = useState<ContentPanelId | null>('content')
@@ -28,7 +62,12 @@ export function ContentPage() {
   const seoTitleId = useId()
   const seoDescriptionId = useId()
 
-  const workspace = useContentWorkspace()
+  const currentUser = useCurrentAdminUser()
+  const permissionUser = currentUser ?? UNRESTRICTED_ADMIN_USER
+  const canReassignAuthor = canEditAnyContent(permissionUser)
+  const canCreateEntries = canCreateContent(permissionUser)
+  const canManageCollections = canManageContentCollections(permissionUser)
+  const workspace = useContentWorkspace({ loadAuthors: canReassignAuthor })
   const draft = useContentEntryDraft({
     selectedEntry: workspace.selectedEntry,
     updateSelectedEntry: workspace.updateSelectedEntry,
@@ -43,12 +82,18 @@ export function ContentPage() {
   const publicPath = workspace.selectedCollection && draft.slug
     ? publicContentPath(workspace.selectedCollection.routeBase, draft.slug)
     : ''
+  const canEditSelectedEntry = canEditContentEntry(permissionUser, workspace.selectedEntry)
+  const canPublishSelectedEntry = canPublishContentEntry(permissionUser, workspace.selectedEntry)
 
   useEffect(() => {
     useEditorStore.getState().setPropertiesPanel({ collapsed: false })
   }, [])
 
   async function handleCreateEntry() {
+    if (!canCreateEntries) {
+      workspace.setError('Your role cannot create content entries')
+      return
+    }
     draft.setSaveMessage('saving')
     workspace.setError(null)
     try {
@@ -62,6 +107,10 @@ export function ContentPage() {
   }
 
   async function handleMoveEntryCollection(collectionId: string) {
+    if (!canEditSelectedEntry) {
+      workspace.setError('Your role cannot move this entry')
+      return
+    }
     draft.setSaveMessage('saving')
     workspace.setError(null)
     try {
@@ -77,6 +126,10 @@ export function ContentPage() {
   async function handleUpdateEntryAuthor(authorUserId: string) {
     const entry = workspace.selectedEntry
     if (!entry || entry.authorUserId === authorUserId) return
+    if (!canReassignAuthor) {
+      workspace.setError('Your role cannot reassign authors')
+      return
+    }
     draft.setSaveMessage('saving')
     workspace.setError(null)
     try {
@@ -93,6 +146,10 @@ export function ContentPage() {
     collection: ContentCollection,
     input: UpdateContentCollectionInput,
   ) {
+    if (!canManageCollections) {
+      workspace.setError('Your role cannot manage content collections')
+      return
+    }
     workspace.setError(null)
     try {
       await workspace.updateCollection(collection.id, input)
@@ -103,6 +160,10 @@ export function ContentPage() {
   }
 
   async function handleDeleteCollection(collection: ContentCollection) {
+    if (!canManageCollections) {
+      workspace.setError('Your role cannot manage content collections')
+      return
+    }
     workspace.setError(null)
     try {
       await workspace.deleteCollection(collection.id)
@@ -119,6 +180,10 @@ export function ContentPage() {
     entry: ContentEntry,
     input: Pick<ContentEntry, 'title' | 'slug'>,
   ) {
+    if (!canEditContentEntry(permissionUser, entry)) {
+      workspace.setError('Your role cannot edit this entry')
+      return
+    }
     draft.setSaveMessage('saving')
     workspace.setError(null)
     try {
@@ -144,6 +209,10 @@ export function ContentPage() {
   }
 
   async function handleDeleteEntry(entry: ContentEntry) {
+    if (!canEditContentEntry(permissionUser, entry)) {
+      workspace.setError('Your role cannot delete this entry')
+      return
+    }
     workspace.setError(null)
     try {
       const nextEntry = await workspace.deleteEntry(entry)
@@ -157,6 +226,10 @@ export function ContentPage() {
   }
 
   async function handleDuplicateEntry(entry: ContentEntry) {
+    if (!canCreateEntries) {
+      workspace.setError('Your role cannot create content entries')
+      return
+    }
     draft.setSaveMessage('saving')
     workspace.setError(null)
     try {
@@ -187,6 +260,10 @@ export function ContentPage() {
 
   async function handleMoveEntryToCollection(entry: ContentEntry, collectionId: string) {
     if (entry.collectionId === collectionId) return
+    if (!canEditContentEntry(permissionUser, entry)) {
+      workspace.setError('Your role cannot move this entry')
+      return
+    }
     workspace.setError(null)
     try {
       const updatedEntry = await workspace.moveEntryToCollection(entry, collectionId)
@@ -200,8 +277,26 @@ export function ContentPage() {
   }
 
   async function handlePublishEntry(entry: ContentEntry) {
+    if (!canPublishContentEntry(permissionUser, entry)) {
+      workspace.setError('Your role cannot publish this entry')
+      return
+    }
+
     if (workspace.selectedEntry?.id === entry.id) {
-      await draft.handlePublish()
+      if (canEditContentEntry(permissionUser, entry)) {
+        await draft.handlePublish()
+      } else {
+        draft.setSaveMessage('publishing')
+        workspace.setError(null)
+        try {
+          const published = await workspace.publishEntry(entry)
+          draft.applySelectedEntry(published)
+          draft.setSaveMessage('published')
+        } catch (err) {
+          draft.setSaveMessage('error')
+          workspace.setError(err instanceof Error ? err.message : 'Could not publish entry')
+        }
+      }
       return
     }
 
@@ -214,7 +309,28 @@ export function ContentPage() {
     }
   }
 
+  async function handleStatusChange(status: ContentEntryStatus) {
+    const entry = workspace.selectedEntry
+    if (!entry || status === entry.status) return
+
+    if (status === 'published') {
+      await handlePublishEntry(entry)
+      return
+    }
+
+    if (!canEditContentEntry(permissionUser, entry)) {
+      workspace.setError('Your role cannot edit this entry')
+      return
+    }
+
+    await draft.handleStatusChange(status)
+  }
+
   async function handleConvertEntryToDraft(entry: ContentEntry) {
+    if (!canEditContentEntry(permissionUser, entry)) {
+      workspace.setError('Your role cannot edit this entry')
+      return
+    }
     if (workspace.selectedEntry?.id === entry.id) {
       await draft.handleStatusChange('draft')
       return
@@ -267,8 +383,12 @@ export function ContentPage() {
             selectedEntry={workspace.selectedEntry}
             selectedCollection={workspace.selectedCollection}
             publicPath={publicPath}
+            canSaveDraft={canEditSelectedEntry}
+            canPublish={canPublishSelectedEntry}
             onSaveDraft={() => void draft.handleSaveDraft()}
-            onPublish={() => void draft.handlePublish()}
+            onPublish={() => {
+              if (workspace.selectedEntry) void handlePublishEntry(workspace.selectedEntry)
+            }}
           />
         )}
         contentSidebar={(
@@ -284,6 +404,11 @@ export function ContentPage() {
                 selectedCollection={workspace.selectedCollection}
                 selectedCollectionId={workspace.selectedCollectionId}
                 selectedEntryId={workspace.selectedEntry?.id ?? null}
+                canCreateCollection={canManageCollections}
+                canCreateEntry={canCreateEntries}
+                canManageCollections={canManageCollections}
+                canEditEntry={(entry) => canEditContentEntry(permissionUser, entry)}
+                canPublishEntry={(entry) => canPublishContentEntry(permissionUser, entry)}
                 onSelectCollection={workspace.selectCollection}
                 onSelectEntry={handleSelectEntry}
                 onCreateCollection={() => setCollectionDialogOpen(true)}
@@ -317,6 +442,8 @@ export function ContentPage() {
             titleId={titleId}
             blocks={draft.blocks}
             notchActions={notchActions}
+            canEditEntry={canEditSelectedEntry}
+            canCreateEntry={canCreateEntries}
             onTitleChange={draft.setTitle}
             onBlocksChange={draft.setBlocks}
             onRequestMedia={(blockId) => void mediaPicker.openMediaPicker('media', blockId)}
@@ -348,9 +475,12 @@ export function ContentPage() {
             onSlugChange={draft.setSlug}
             onSeoTitleChange={draft.setSeoTitle}
             onSeoDescriptionChange={draft.setSeoDescription}
-            onStatusChange={(status) => void draft.handleStatusChange(status)}
+            onStatusChange={(status) => void handleStatusChange(status)}
             onChooseFeaturedMedia={() => void mediaPicker.openMediaPicker('featured')}
             onClearFeaturedMedia={() => draft.setFeaturedMediaId(null)}
+            canEditEntry={canEditSelectedEntry}
+            canPublishEntry={canPublishSelectedEntry}
+            canChangeAuthor={canReassignAuthor}
           />
         ) : undefined}
       />
@@ -370,6 +500,11 @@ export function ContentPage() {
         <ContentCollectionCreateDialog
           onCancel={() => setCollectionDialogOpen(false)}
           onCreate={async (input) => {
+            if (!canManageCollections) {
+              workspace.setError('Your role cannot manage content collections')
+              setCollectionDialogOpen(false)
+              return
+            }
             await workspace.createCollection(input)
             setCollectionDialogOpen(false)
           }}

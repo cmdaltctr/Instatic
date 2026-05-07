@@ -45,10 +45,10 @@ export const migrations: Migration[] = [
 
       insert into roles (id, slug, name, description, is_system, capabilities_json)
       values
-        ('owner', 'owner', 'Owner', 'Permanent first-site owner with full system access.', 1, '["site.read","site.edit","pages.edit","pages.publish","content.edit","content.publish","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
-        ('admin', 'admin', 'Admin', 'Full admin access.', 1, '["site.read","site.edit","pages.edit","pages.publish","content.edit","content.publish","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
-        ('editor', 'editor', 'Editor', 'Can edit and publish site pages and content.', 1, '["site.read","site.edit","pages.edit","pages.publish","content.edit","content.publish","media.manage"]'),
-        ('content-manager', 'content-manager', 'Content Manager', 'Can manage content entries and media.', 1, '["site.read","content.edit","content.publish","media.manage"]'),
+        ('owner', 'owner', 'Owner', 'Permanent first-site owner with full system access.', 1, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
+        ('admin', 'admin', 'Admin', 'Full admin access.', 1, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
+        ('editor', 'editor', 'Editor', 'Can edit and publish assigned site content.', 1, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.publish.own","media.manage"]'),
+        ('content-manager', 'content-manager', 'Content Manager', 'Can manage all content entries and collections.', 1, '["site.read","content.create","content.edit.any","content.publish.any","content.manage","media.manage"]'),
         ('viewer', 'viewer', 'Viewer', 'Read-only admin access.', 1, '["site.read"]'),
         ('subscriber', 'subscriber', 'Subscriber', 'Reserved for future public member accounts.', 1, '[]')
       on conflict (id) do update

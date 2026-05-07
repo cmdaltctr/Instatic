@@ -318,7 +318,7 @@ describe('content CMS repository', () => {
               role_name: 'Editor',
               role_description: '',
               role_is_system: true,
-              role_capabilities_json: ['content.edit'],
+              role_capabilities_json: ['content.edit.own'],
             },
           ],
           rowCount: 1,

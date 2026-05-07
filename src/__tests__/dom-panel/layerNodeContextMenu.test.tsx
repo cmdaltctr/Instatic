@@ -13,11 +13,15 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { LayerNodeContextMenu } from '../../editor/components/DomPanel/LayerNodeContextMenu'
 import { useEditorStore } from '@core/editor-store/store'
 import { makeNode, makePage, makeSite } from '../fixtures'
 import type { VisualComponent } from '@core/visualComponents/schemas'
+import {
+  ConfirmDeleteContext,
+  type ConfirmDeleteRequest,
+} from '../../editor/components/shared/ConfirmDeleteDialog/confirmDeleteHook'
 import '../../modules/base/index'
 
 afterEach(cleanup)
@@ -465,5 +469,86 @@ describe('LayerNodeContextMenu — "Insert module here" hidden on non-container 
     expect(
       screen.queryByRole('menuitem', { name: /insert module here/i }),
     ).toBeNull()
+  })
+})
+
+describe('LayerNodeContextMenu — multi-delete confirmation', () => {
+  function setupMultiSelection() {
+    localStorage.clear()
+    const home = makePage({
+      id: 'page-multi',
+      title: 'Home',
+      slug: 'index',
+      rootNodeId: 'root',
+      nodes: {
+        root: makeNode({ id: 'root', moduleId: 'base.body', children: ['a', 'b', 'c'] }),
+        a: makeNode({ id: 'a', moduleId: 'base.text' }),
+        b: makeNode({ id: 'b', moduleId: 'base.text' }),
+        c: makeNode({ id: 'c', moduleId: 'base.text' }),
+      },
+    })
+    useEditorStore.setState({
+      site: makeSite({ pages: [home], files: [], visualComponents: [] }),
+      activePageId: 'page-multi',
+      selectedNodeId: 'b',
+      selectedNodeIds: ['a', 'b'],
+      hoveredNodeId: null,
+      activeDocument: null,
+      _historyPast: [],
+      _historyFuture: [],
+      canUndo: false,
+      canRedo: false,
+      hasUnsavedChanges: false,
+    } as Parameters<typeof useEditorStore.setState>[0])
+  }
+
+  it('routes multi-delete through the shared confirm-delete request before mutating', () => {
+    setupMultiSelection()
+    let pending: ConfirmDeleteRequest | null = null
+    let closed = false
+
+    render(
+      <ConfirmDeleteContext.Provider
+        value={{
+          confirmDelete: (request) => {
+            pending = request
+          },
+        }}
+      >
+        <LayerNodeContextMenu
+          x={100}
+          y={200}
+          nodeId="b"
+          onClose={() => { closed = true }}
+          onDelete={noop}
+          onDuplicate={noop}
+          onRename={noop}
+          onWrapInContainer={noop}
+          onCopy={noop}
+          onCut={noop}
+          onPaste={noop}
+        />
+      </ConfirmDeleteContext.Provider>,
+    )
+
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: /delete/i }))
+    })
+
+    const pageBeforeConfirm = useEditorStore.getState().site?.pages[0]
+    expect(pageBeforeConfirm?.nodes.a).toBeDefined()
+    expect(pageBeforeConfirm?.nodes.b).toBeDefined()
+    expect(closed).toBe(true)
+    expect(pending?.title).toBe('Delete layers?')
+    expect(pending?.description).toContain('2 layers')
+
+    act(() => {
+      pending?.commit()
+    })
+
+    const pageAfterConfirm = useEditorStore.getState().site?.pages[0]
+    expect(pageAfterConfirm?.nodes.a).toBeUndefined()
+    expect(pageAfterConfirm?.nodes.b).toBeUndefined()
+    expect(pageAfterConfirm?.nodes.c).toBeDefined()
   })
 })

@@ -36,6 +36,9 @@ interface ContentSettingsPanelProps {
   mediaError: string | null
   featuredMediaId: string | null
   featuredMediaAsset: CmsMediaAsset | null
+  canEditEntry: boolean
+  canPublishEntry: boolean
+  canChangeAuthor: boolean
   onCollectionChange: (collectionId: string) => void
   onAuthorChange: (authorUserId: string) => void
   onSlugChange: (value: string) => void
@@ -85,6 +88,9 @@ export function ContentSettingsPanel({
   mediaError,
   featuredMediaId,
   featuredMediaAsset,
+  canEditEntry,
+  canPublishEntry,
+  canChangeAuthor,
   onCollectionChange,
   onAuthorChange,
   onSlugChange,
@@ -102,6 +108,14 @@ export function ContentSettingsPanel({
   const authorOptions = selectedAuthor && !authors.some((author) => author.id === selectedAuthor.id)
     ? [selectedAuthor, ...authors]
     : authors
+  const canEditSelectedEntry = Boolean(selectedEntry && canEditEntry)
+  const canChangeStatus = Boolean(selectedEntry && (canEditEntry || canPublishEntry))
+  const statusOptions = [
+    { value: 'draft', label: 'Draft', enabled: canEditEntry },
+    { value: 'published', label: 'Published', enabled: canPublishEntry },
+    { value: 'unpublished', label: 'Unpublished', enabled: canEditEntry },
+  ].filter((option) => option.enabled || option.value === selectedEntry?.status)
+    .map(({ value, label }) => ({ value, label }))
 
   return (
     <aside
@@ -133,7 +147,7 @@ export function ContentSettingsPanel({
               <Select
                 aria-label="Collection"
                 value={selectedEntry?.collectionId ?? selectedCollection?.id ?? ''}
-                disabled={!selectedEntry}
+                disabled={!canEditSelectedEntry}
                 onChange={(event) => onCollectionChange(event.target.value)}
                 options={collections.map((collection) => ({
                   value: collection.id,
@@ -147,7 +161,7 @@ export function ContentSettingsPanel({
                 id={slugId}
                 value={slug}
                 onChange={(event) => onSlugChange(event.target.value)}
-                disabled={!selectedEntry}
+                disabled={!canEditSelectedEntry}
               />
             </label>
             {seoEnabled && (
@@ -158,7 +172,7 @@ export function ContentSettingsPanel({
                     id={seoTitleId}
                     value={seoTitle}
                     onChange={(event) => onSeoTitleChange(event.target.value)}
-                    disabled={!selectedEntry}
+                    disabled={!canEditSelectedEntry}
                   />
                 </label>
                 <label className={styles.field} htmlFor={seoDescriptionId}>
@@ -167,7 +181,7 @@ export function ContentSettingsPanel({
                     id={seoDescriptionId}
                     value={seoDescription}
                     onChange={(event) => onSeoDescriptionChange(event.target.value)}
-                    disabled={!selectedEntry}
+                    disabled={!canEditSelectedEntry}
                     resize="none"
                     rows={4}
                   />
@@ -179,13 +193,14 @@ export function ContentSettingsPanel({
               <Select
                 aria-label="Status"
                 value={selectedEntry?.status ?? 'draft'}
-                disabled={!selectedEntry}
-                onChange={(event) => onStatusChange(event.target.value as ContentEntryStatus)}
-                options={[
-                  { value: 'draft', label: 'Draft' },
-                  { value: 'published', label: 'Published' },
-                  { value: 'unpublished', label: 'Unpublished' },
-                ]}
+                disabled={!canChangeStatus}
+                onChange={(event) => {
+                  const nextStatus = event.target.value as ContentEntryStatus
+                  if (nextStatus === 'published' && !canPublishEntry) return
+                  if (nextStatus !== 'published' && !canEditEntry) return
+                  onStatusChange(nextStatus)
+                }}
+                options={statusOptions}
               />
             </div>
             <div className={styles.metaBlock}>
@@ -196,7 +211,7 @@ export function ContentSettingsPanel({
               <div className={styles.authorBlock} aria-label="Content author">
                 <span>Author</span>
                 <div className={styles.authorRow}>
-                  {authorOptions.length > 0 ? (
+                  {canChangeAuthor && authorOptions.length > 0 ? (
                     <Select
                       aria-label="Author"
                       value={selectedEntry.authorUserId ?? selectedAuthor?.id ?? ''}
@@ -241,7 +256,7 @@ export function ContentSettingsPanel({
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={!selectedEntry || mediaLoading}
+                    disabled={!canEditSelectedEntry || mediaLoading}
                     onClick={onChooseFeaturedMedia}
                   >
                     {mediaLoading ? 'Loading media' : 'Choose featured media'}
@@ -250,7 +265,7 @@ export function ContentSettingsPanel({
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={!selectedEntry}
+                      disabled={!canEditSelectedEntry}
                       onClick={onClearFeaturedMedia}
                     >
                       Clear

@@ -8,7 +8,7 @@
  *
  *   POST /admin/api/cms/runtime/preview — build a single-page preview
  *        document (HTML + assets + diagnostics) for a given draft site
- *        (gated by `site.edit`). Used by the visual builder's preview
+ *        (gated by `pages.edit`). Used by the visual builder's preview
  *        iframe.
  *
  * Both endpoints accept the draft site in the request body rather than
@@ -69,7 +69,7 @@ export async function handleRuntimeRoutes(req: Request, db: DbClient): Promise<R
   }
 
   if (url.pathname === '/admin/api/cms/runtime/preview') {
-    const user = await requireCapability(req, db, 'site.edit')
+    const user = await requireCapability(req, db, 'pages.edit')
     if (user instanceof Response) return user
     if (req.method !== 'POST') return methodNotAllowed()
 

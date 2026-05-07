@@ -310,12 +310,6 @@ function DomPanelInner({ variant = 'floating' }: { variant?: PanelVariant }) {
       const target = dnd.handleDragEnd(event)
       if (!target) return
 
-      // TODO(Phase-N): wire DnD reordering inside VC mode.
-      // moveNode → mutateActiveTree routes to vc.tree (flat map) in VC mode, so
-      // the mutation itself would work — but canvas DnD feedback for VC trees hasn't
-      // been validated yet. Early-return until the regression tests cover it.
-      if (page?.id.startsWith('vc-virtual:')) return
-
       try {
         // Multi-drag: route to `moveNodes` so every dragged id is moved in a
         // single undo step. For single-drag, `target.draggedIds` is `[draggedId]`
@@ -325,7 +319,7 @@ function DomPanelInner({ variant = 'floating' }: { variant?: PanelVariant }) {
         console.warn('[DomPanel] Ignored stale drag/drop target:', err)
       }
     },
-    [dnd, page],
+    [dnd],
   )
 
   // ─── Search: flat filtered list of matching nodes ─────────────────────────

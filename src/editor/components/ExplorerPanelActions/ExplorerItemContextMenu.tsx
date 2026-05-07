@@ -45,6 +45,7 @@ interface ExplorerItemContextMenuProps {
   onClose: () => void
   onRename: () => void
   onDelete: () => void
+  renameDisabled?: boolean
   deleteDisabled?: boolean
   extraItems?: ExplorerContextMenuItem[]
 }
@@ -56,6 +57,7 @@ export function ExplorerItemContextMenu({
   onClose,
   onRename,
   onDelete,
+  renameDisabled = false,
   deleteDisabled = false,
   extraItems = [],
 }: ExplorerItemContextMenuProps) {
@@ -67,7 +69,7 @@ export function ExplorerItemContextMenu({
 
   const items: ExplorerContextMenuItem[] = [
     ...extraItems,
-    { kind: 'action', label: 'Rename', action: onRename, icon: <EditIcon size={13} /> },
+    { kind: 'action', label: 'Rename', action: onRename, icon: <EditIcon size={13} />, disabled: renameDisabled },
     { kind: 'action', label: 'Delete', action: onDelete, icon: <DeleteIcon size={13} />, danger: true, disabled: deleteDisabled },
   ]
 

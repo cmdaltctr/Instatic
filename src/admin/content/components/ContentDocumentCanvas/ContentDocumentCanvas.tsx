@@ -19,6 +19,8 @@ interface ContentDocumentCanvasProps {
   titleId: string
   blocks: ContentBlock[]
   notchActions: CanvasNotchAction[]
+  canEditEntry: boolean
+  canCreateEntry: boolean
   onTitleChange: (value: string) => void
   onBlocksChange: (blocks: ContentBlock[]) => void
   onRequestMedia: (blockId: string) => void
@@ -33,6 +35,8 @@ export function ContentDocumentCanvas({
   titleId,
   blocks,
   notchActions,
+  canEditEntry,
+  canCreateEntry,
   onTitleChange,
   onBlocksChange,
   onRequestMedia,
@@ -40,6 +44,8 @@ export function ContentDocumentCanvas({
 }: ContentDocumentCanvasProps) {
   const titleFieldRef = useRef<HTMLTextAreaElement | null>(null)
   const bodyEnabled = contentCollectionHasField(selectedCollection, 'body')
+  const editorEnabled = Boolean(selectedEntry && canEditEntry)
+  const showInsertNotch = bodyEnabled && (editorEnabled || (!selectedEntry && canCreateEntry))
   const singularLabel = selectedCollection?.singularLabel.toLowerCase() ?? 'entry'
 
   useLayoutEffect(() => {
@@ -51,7 +57,7 @@ export function ContentDocumentCanvas({
       variant="primary"
       size="sm"
       className={styles.notchAddButton}
-      disabled={loading || !selectedEntry}
+      disabled={loading || !editorEnabled}
       onClick={() => onBlocksChange([...blocks, createParagraphBlock()])}
     >
       <FilePlusIcon size={14} aria-hidden="true" />
@@ -66,7 +72,7 @@ export function ContentDocumentCanvas({
       data-testid="content-canvas-root"
       className={cn(canvasStyles.canvas, styles.contentCanvas)}
     >
-      {bodyEnabled && (
+      {showInsertNotch && (
         <CanvasNotch
           actions={notchActions}
           addControl={addControl}
@@ -90,19 +96,25 @@ export function ContentDocumentCanvas({
                 resizeTitleField(event.currentTarget)
                 onTitleChange(event.target.value)
               }}
+              disabled={!editorEnabled}
               className={styles.titleInput}
               fieldSize="md"
               emphasis="strong"
             />
             {bodyEnabled && (
-              <RichMarkdownEditor blocks={blocks} onChange={onBlocksChange} onMediaRequest={onRequestMedia} />
+              <RichMarkdownEditor
+                blocks={blocks}
+                readOnly={!editorEnabled}
+                onChange={onBlocksChange}
+                onMediaRequest={onRequestMedia}
+              />
             )}
           </article>
         ) : (
           <div className={styles.emptyState}>
             <h2>Create the first {singularLabel}</h2>
             <p>Select a collection and create an entry to start writing.</p>
-            <Button variant="primary" size="md" onClick={onCreateEntry} disabled={!selectedCollection}>
+            <Button variant="primary" size="md" onClick={onCreateEntry} disabled={!selectedCollection || !canCreateEntry}>
               <FilePlusIcon size={15} aria-hidden="true" />
               <span>New {selectedCollection?.singularLabel ?? 'Entry'}</span>
             </Button>

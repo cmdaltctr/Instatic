@@ -37,6 +37,8 @@ import {
 import type { CoreCapability } from '@core/cms/capabilities'
 import dialogStyles from '@editor/components/SiteCreateDialog/SiteCreateDialog.module.css'
 import AdminLayout from '../AdminLayout'
+import { hasCapability } from '../access'
+import { useCurrentAdminUser } from '../sessionContext'
 import { SettingsButton } from '../../editor/components/Toolbar/SettingsButton'
 import styles from './UsersPage.module.css'
 
@@ -71,10 +73,26 @@ interface RowActionMenuItem {
   onSelect: () => void
 }
 
+interface UsersPageLoadAccess {
+  canManageUsers: boolean
+  canReadRoleOptions: boolean
+  canReadAudit: boolean
+}
+
 const CAPABILITY_GROUPS: CapabilityGroup[] = [
   { title: 'Site', capabilities: ['site.read', 'site.edit'] },
   { title: 'Pages', capabilities: ['pages.edit', 'pages.publish'] },
-  { title: 'Content', capabilities: ['content.edit', 'content.publish'] },
+  {
+    title: 'Content',
+    capabilities: [
+      'content.create',
+      'content.edit.own',
+      'content.edit.any',
+      'content.publish.own',
+      'content.publish.any',
+      'content.manage',
+    ],
+  },
   { title: 'Media', capabilities: ['media.manage'] },
   { title: 'Runtime', capabilities: ['runtime.manage'] },
   { title: 'Plugins', capabilities: ['plugins.manage'] },
@@ -97,11 +115,11 @@ const emptyRoleForm: RoleFormState = {
   capabilities: [],
 }
 
-async function loadUsersPageData() {
+async function loadUsersPageData(access: UsersPageLoadAccess) {
   const [users, roles, events] = await Promise.all([
-    listCmsUsers(),
-    listCmsRoles(),
-    listCmsAuditEvents(),
+    access.canManageUsers ? listCmsUsers() : Promise.resolve([]),
+    access.canReadRoleOptions ? listCmsRoles() : Promise.resolve([]),
+    access.canReadAudit ? listCmsAuditEvents() : Promise.resolve([]),
   ])
   return { users, roles, events }
 }
@@ -126,6 +144,10 @@ function formatCapabilitySummary(capabilities: string[]): string {
   if (capabilities.length === 0) return 'No admin capabilities'
   const capabilityLabel = capabilities.length === 1 ? 'capability' : 'capabilities'
   return `${capabilities.length} ${capabilityLabel}`
+}
+
+function tabLabel(tab: Tab): string {
+  return tab === 'users' ? 'Users' : tab === 'roles' ? 'Roles' : 'Audit'
 }
 
 function Badge({ label, muted = false }: { label: string; muted?: boolean }) {
@@ -279,6 +301,12 @@ function auditDetails(event: CmsAuditEvent, rolesById: Map<string, CmsRole>): st
 }
 
 export function UsersPage() {
+  const currentUser = useCurrentAdminUser()
+  const unrestricted = !currentUser
+  const canManageUsers = unrestricted || hasCapability(currentUser, 'users.manage')
+  const canManageRoles = unrestricted || hasCapability(currentUser, 'roles.manage')
+  const canReadAudit = unrestricted || hasCapability(currentUser, 'audit.read')
+  const canReadRoleOptions = canManageUsers || canManageRoles
   const [tab, setTab] = useState<Tab>('users')
   const [users, setUsers] = useState<CmsCurrentUser[]>([])
   const [roles, setRoles] = useState<CmsRole[]>([])
@@ -291,6 +319,14 @@ export function UsersPage() {
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const availableTabs = useMemo<Tab[]>(() => {
+    const tabs: Tab[] = []
+    if (canManageUsers) tabs.push('users')
+    if (canManageRoles) tabs.push('roles')
+    if (canReadAudit) tabs.push('audit')
+    return tabs
+  }, [canManageUsers, canManageRoles, canReadAudit])
+  const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0] ?? 'users'
 
   const assignableRoleOptions = useMemo(
     () => roles
@@ -309,6 +345,12 @@ export function UsersPage() {
   const rolesById = useMemo(() => new Map(roles.map((role) => [role.id, role])), [roles])
   const defaultAssignableRoleId = assignableRoleOptions[0]?.value?.toString() ?? 'viewer'
 
+  const loadAccess = useMemo<UsersPageLoadAccess>(() => ({
+    canManageUsers,
+    canReadRoleOptions,
+    canReadAudit,
+  }), [canManageUsers, canReadRoleOptions, canReadAudit])
+
   const applyLoadedData = useCallback((data: Awaited<ReturnType<typeof loadUsersPageData>>) => {
     const assignableRoles = data.roles.filter((role) => role.id !== 'owner')
     setUsers(data.users)
@@ -322,15 +364,15 @@ export function UsersPage() {
   const load = useCallback(async () => {
     setError(null)
     try {
-      applyLoadedData(await loadUsersPageData())
+      applyLoadedData(await loadUsersPageData(loadAccess))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load users')
     }
-  }, [applyLoadedData])
+  }, [applyLoadedData, loadAccess])
 
   useEffect(() => {
     let cancelled = false
-    void loadUsersPageData()
+    void loadUsersPageData(loadAccess)
       .then((data) => {
         if (!cancelled) applyLoadedData(data)
       })
@@ -340,7 +382,7 @@ export function UsersPage() {
     return () => {
       cancelled = true
     }
-  }, [applyLoadedData])
+  }, [applyLoadedData, loadAccess])
 
   function closeUserDialog() {
     setUserDialogMode(null)
@@ -349,6 +391,7 @@ export function UsersPage() {
   }
 
   function openCreateUserDialog() {
+    if (!canManageUsers) return
     setEditingUserId(null)
     setUserForm({ ...emptyUserForm, roleId: defaultAssignableRoleId })
     setUserDialogMode('create')
@@ -356,7 +399,7 @@ export function UsersPage() {
   }
 
   function openEditUserDialog(user: CmsCurrentUser) {
-    if (isOwnerUser(user)) return
+    if (!canManageUsers || isOwnerUser(user)) return
     setEditingUserId(user.id)
     setUserForm({
       email: user.email,
@@ -370,7 +413,7 @@ export function UsersPage() {
   }
 
   function openResetPasswordDialog(user: CmsCurrentUser) {
-    if (isOwnerUser(user)) return
+    if (!canManageUsers || isOwnerUser(user)) return
     setEditingUserId(user.id)
     setUserForm({
       email: user.email,
@@ -385,7 +428,7 @@ export function UsersPage() {
 
   async function handleSaveUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!userDialogMode) return
+    if (!canManageUsers || !userDialogMode) return
     if ((userDialogMode === 'create' || userDialogMode === 'reset' || userForm.password) && userForm.password.length < 12) {
       setError('Password must be at least 12 characters')
       return
@@ -425,7 +468,7 @@ export function UsersPage() {
   }
 
   async function toggleUserStatus(user: CmsCurrentUser) {
-    if (isOwnerUser(user)) return
+    if (!canManageUsers || isOwnerUser(user)) return
     setBusy(true)
     setError(null)
     try {
@@ -442,7 +485,7 @@ export function UsersPage() {
   }
 
   async function removeUser(user: CmsCurrentUser) {
-    if (isOwnerUser(user)) return
+    if (!canManageUsers || isOwnerUser(user)) return
     setBusy(true)
     setError(null)
     try {
@@ -463,6 +506,7 @@ export function UsersPage() {
   }
 
   function openCreateRoleDialog() {
+    if (!canManageRoles) return
     setRoleForm(emptyRoleForm)
     setEditingRoleId(null)
     setRoleDialogMode('create')
@@ -470,6 +514,7 @@ export function UsersPage() {
   }
 
   function openViewRoleDialog(role: CmsRole) {
+    if (!canManageRoles) return
     setEditingRoleId(role.id)
     setRoleForm({
       name: role.name,
@@ -482,7 +527,7 @@ export function UsersPage() {
   }
 
   function openEditRoleDialog(role: CmsRole) {
-    if (role.isSystem) return
+    if (!canManageRoles || role.isSystem) return
     setEditingRoleId(role.id)
     setRoleForm({
       name: role.name,
@@ -496,7 +541,7 @@ export function UsersPage() {
 
   async function handleSaveRole(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!roleDialogMode) return
+    if (!canManageRoles || !roleDialogMode) return
     setBusy(true)
     setError(null)
     try {
@@ -519,7 +564,7 @@ export function UsersPage() {
   }
 
   async function removeRole(role: CmsRole) {
-    if (role.isSystem) return
+    if (!canManageRoles || role.isSystem) return
     setBusy(true)
     setError(null)
     try {
@@ -566,15 +611,15 @@ export function UsersPage() {
                 <p>Manage admin access, custom roles, and security audit events.</p>
               </div>
               <div className={styles.tabs} role="tablist" aria-label="Users sections">
-                {(['users', 'roles', 'audit'] as Tab[]).map((item) => (
+                {availableTabs.map((item) => (
                   <Button
                     key={item}
                     type="button"
-                    variant={tab === item ? 'primary' : 'secondary'}
+                    variant={activeTab === item ? 'primary' : 'secondary'}
                     size="sm"
                     onClick={() => setTab(item)}
                   >
-                    <span>{item === 'users' ? 'Users' : item === 'roles' ? 'Roles' : 'Audit'}</span>
+                    <span>{tabLabel(item)}</span>
                   </Button>
                 ))}
               </div>
@@ -582,17 +627,19 @@ export function UsersPage() {
 
             {error && <p className={styles.error} role="alert">{error}</p>}
 
-            {tab === 'users' && (
+            {activeTab === 'users' && (
               <section className={styles.section} aria-labelledby="all-users-title">
                 <div className={styles.sectionHeader}>
                   <div>
                     <h2 id="all-users-title">All Users</h2>
                     <p>{users.length} account{users.length === 1 ? '' : 's'} with admin access.</p>
                   </div>
-                  <Button type="button" variant="primary" size="sm" onClick={openCreateUserDialog}>
-                    <PlusIcon size={14} aria-hidden="true" />
-                    <span>Create User</span>
-                  </Button>
+                  {canManageUsers && (
+                    <Button type="button" variant="primary" size="sm" onClick={openCreateUserDialog}>
+                      <PlusIcon size={14} aria-hidden="true" />
+                      <span>Create User</span>
+                    </Button>
+                  )}
                 </div>
                 {users.length > 0 ? (
                   <DataTable aria-label="Users" density="compact">
@@ -627,7 +674,7 @@ export function UsersPage() {
                               <span className={styles.secondaryText}>{formatDateTime(user.lastLoginAt)}</span>
                             </DataTableCell>
                             <DataTableCell className={styles.actionsCell}>
-                              {!owner && (
+                              {canManageUsers && !owner && (
                                 <RowActionMenu
                                   triggerLabel={`Actions for ${label}`}
                                   menuLabel={`User actions for ${label}`}
@@ -669,17 +716,19 @@ export function UsersPage() {
               </section>
             )}
 
-            {tab === 'roles' && (
+            {activeTab === 'roles' && (
               <section className={styles.section} aria-labelledby="roles-list-title">
                 <div className={styles.sectionHeader}>
                   <div>
                     <h2 id="roles-list-title">Roles</h2>
                     <p>System roles are fixed. Custom roles can be edited.</p>
                   </div>
-                  <Button type="button" variant="primary" size="sm" onClick={openCreateRoleDialog}>
-                    <PlusIcon size={14} aria-hidden="true" />
-                    <span>Create Role</span>
-                  </Button>
+                  {canManageRoles && (
+                    <Button type="button" variant="primary" size="sm" onClick={openCreateRoleDialog}>
+                      <PlusIcon size={14} aria-hidden="true" />
+                      <span>Create Role</span>
+                    </Button>
+                  )}
                 </div>
                 {roles.length > 0 ? (
                   <DataTable aria-label="Roles" density="compact">
@@ -714,33 +763,35 @@ export function UsersPage() {
                             </div>
                           </DataTableCell>
                           <DataTableCell className={styles.actionsCell}>
-                            <RowActionMenu
-                              triggerLabel={`Actions for ${role.name}`}
-                              menuLabel={`Role actions for ${role.name}`}
-                              disabled={busy}
-                              items={[
-                                {
-                                  label: 'View',
-                                  icon: <EyeIcon size={12} aria-hidden="true" />,
-                                  onSelect: () => openViewRoleDialog(role),
-                                },
-                                ...(!role.isSystem
-                                  ? [
-                                      {
-                                        label: 'Edit',
-                                        icon: <EditIcon size={12} aria-hidden="true" />,
-                                        onSelect: () => openEditRoleDialog(role),
-                                      },
-                                      {
-                                        label: 'Delete',
-                                        icon: <DeleteIcon size={12} aria-hidden="true" />,
-                                        danger: true,
-                                        onSelect: () => void removeRole(role),
-                                      },
-                                    ] satisfies RowActionMenuItem[]
-                                  : []),
-                              ]}
-                            />
+                            {canManageRoles && (
+                              <RowActionMenu
+                                triggerLabel={`Actions for ${role.name}`}
+                                menuLabel={`Role actions for ${role.name}`}
+                                disabled={busy}
+                                items={[
+                                  {
+                                    label: 'View',
+                                    icon: <EyeIcon size={12} aria-hidden="true" />,
+                                    onSelect: () => openViewRoleDialog(role),
+                                  },
+                                  ...(!role.isSystem
+                                    ? [
+                                        {
+                                          label: 'Edit',
+                                          icon: <EditIcon size={12} aria-hidden="true" />,
+                                          onSelect: () => openEditRoleDialog(role),
+                                        },
+                                        {
+                                          label: 'Delete',
+                                          icon: <DeleteIcon size={12} aria-hidden="true" />,
+                                          danger: true,
+                                          onSelect: () => void removeRole(role),
+                                        },
+                                      ] satisfies RowActionMenuItem[]
+                                    : []),
+                                ]}
+                              />
+                            )}
                           </DataTableCell>
                         </DataTableRow>
                       ))}
@@ -752,7 +803,7 @@ export function UsersPage() {
               </section>
             )}
 
-            {tab === 'audit' && (
+            {activeTab === 'audit' && (
               <section className={styles.section} aria-labelledby="audit-events-title">
                 <div className={styles.sectionHeader}>
                   <div>
@@ -800,7 +851,7 @@ export function UsersPage() {
             )}
           </section>
 
-          {userDialogMode && (
+          {canManageUsers && userDialogMode && (
             <UserDialog
               mode={userDialogMode}
               form={userForm}
@@ -814,7 +865,7 @@ export function UsersPage() {
             />
           )}
 
-          {roleDialogMode && (
+          {canManageRoles && roleDialogMode && (
             <RoleDialog
               mode={roleDialogMode}
               form={roleForm}

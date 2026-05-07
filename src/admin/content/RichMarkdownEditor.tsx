@@ -61,11 +61,12 @@ const DROP_SETTLE_DURATION_MS = 180
 
 interface RichMarkdownEditorProps {
   blocks: ContentBlock[]
+  readOnly?: boolean
   onChange: (blocks: ContentBlock[]) => void
   onMediaRequest?: (blockId: string) => void
 }
 
-export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMarkdownEditorProps) {
+export function RichMarkdownEditor({ blocks, readOnly = false, onChange, onMediaRequest }: RichMarkdownEditorProps) {
   const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<BlockDragState | null>(null)
   const [dropAnimation, setDropAnimation] = useState<DropAnimationState | null>(null)
@@ -118,12 +119,14 @@ export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMar
   }, [])
 
   function updateBlock(index: number, patch: ContentBlock) {
+    if (readOnly) return
     const next = [...blocks]
     next[index] = autoformatMarkdownShortcut(patch)
     onChange(next)
   }
 
   function insertParagraphAfter(index: number) {
+    if (readOnly) return
     const next = [...blocks]
     const paragraph = createParagraphBlock()
     next.splice(index + 1, 0, paragraph)
@@ -138,6 +141,7 @@ export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMar
   }
 
   function changeBlockType(index: number, nextType: BlockTypeMenuValue) {
+    if (readOnly) return
     const current = blocks[index]
     if (!current || blockMatchesTypeMenuValue(current, nextType)) return
 
@@ -168,6 +172,7 @@ export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMar
   }
 
   function reorderBlock(fromIndex: number, targetIndex: number) {
+    if (readOnly) return
     if (fromIndex === targetIndex) return
     const next = [...blocks]
     const [moved] = next.splice(fromIndex, 1)
@@ -177,6 +182,7 @@ export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMar
   }
 
   function openTypeMenu(event: MouseEvent<HTMLButtonElement>, index: number, blockId: string) {
+    if (readOnly) return
     const rect = event.currentTarget.getBoundingClientRect()
     setTypeMenu({
       blockId,
@@ -188,6 +194,7 @@ export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMar
   }
 
   function startBlockDrag(event: PointerEvent<HTMLButtonElement>, blockId: string) {
+    if (readOnly) return
     if (event.button !== 0) return
     const originIndex = blocks.findIndex((block) => block.id === blockId)
     if (originIndex < 0) return
@@ -298,6 +305,7 @@ export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMar
               mediaType={block.mediaType}
               src={block.src}
               label={block.alt || block.src || 'Media block'}
+              readOnly={readOnly}
               onChoose={() => onMediaRequest?.(block.id)}
             />
           )
@@ -313,6 +321,7 @@ export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMar
               onInputText={(blockIndex, text) => updateBlock(blockIndex, { ...block, text })}
               onTextKeyDown={handleTextKeyDown}
               onEditableRef={registerEditableBlock}
+              readOnly={readOnly}
             />
           )
         } else {
@@ -326,6 +335,7 @@ export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMar
               onInputText={(blockIndex, text) => updateBlock(blockIndex, { ...block, text })}
               onTextKeyDown={handleTextKeyDown}
               onEditableRef={registerEditableBlock}
+              readOnly={readOnly}
             />
           )
         }
@@ -342,6 +352,7 @@ export function RichMarkdownEditor({ blocks, onChange, onMediaRequest }: RichMar
             onFrameRef={registerBlockFrame}
             onTypeMenuOpen={openTypeMenu}
             onDragPointerDown={startBlockDrag}
+            readOnly={readOnly}
           >
             {content}
           </BlockFrame>
@@ -385,10 +396,11 @@ interface MediaBlockProps {
   mediaType: ContentMediaType | null
   src: string
   label: string
+  readOnly: boolean
   onChoose: () => void
 }
 
-function MediaBlock({ mediaType, src, label, onChoose }: MediaBlockProps) {
+function MediaBlock({ mediaType, src, label, readOnly, onChoose }: MediaBlockProps) {
   return (
     <figure className={styles.mediaBlock}>
       {src ? (
@@ -401,6 +413,7 @@ function MediaBlock({ mediaType, src, label, onChoose }: MediaBlockProps) {
         <button
           type="button"
           className={styles.mediaPlaceholder}
+          disabled={readOnly}
           onClick={onChoose}
         >
           <span>No media selected</span>
@@ -412,6 +425,7 @@ function MediaBlock({ mediaType, src, label, onChoose }: MediaBlockProps) {
         <button
           type="button"
           className={styles.mediaReplaceButton}
+          disabled={readOnly}
           onClick={onChoose}
         >
           Replace media
@@ -432,6 +446,7 @@ interface BlockFrameProps {
   onFrameRef: (blockId: string, node: HTMLElement | null) => void
   onTypeMenuOpen: (event: MouseEvent<HTMLButtonElement>, index: number, blockId: string) => void
   onDragPointerDown: (event: PointerEvent<HTMLButtonElement>, blockId: string) => void
+  readOnly: boolean
 }
 
 function BlockFrame({
@@ -445,6 +460,7 @@ function BlockFrame({
   onFrameRef,
   onTypeMenuOpen,
   onDragPointerDown,
+  readOnly,
 }: BlockFrameProps) {
   const currentType = getBlockTypeOption(block)
   const setFrameRef = useCallback((node: HTMLElement | null) => {
@@ -469,6 +485,7 @@ function BlockFrame({
           aria-label={`Drag block ${index + 1}`}
           tooltip="Drag block"
           className={styles.dragHandle}
+          disabled={readOnly}
           onPointerDown={(event) => onDragPointerDown(event, block.id)}
         >
           <DragAndDropIcon size={13} aria-hidden="true" />
@@ -479,6 +496,7 @@ function BlockFrame({
           aria-label={`Change block ${index + 1} type, current ${currentType.label}`}
           tooltip="Change block type"
           className={styles.blockTypeButton}
+          disabled={readOnly}
           onClick={(event) => onTypeMenuOpen(event, index, block.id)}
         >
           <span aria-hidden="true" className={styles.blockTypeIcon}>{currentType.icon}</span>
@@ -613,6 +631,7 @@ interface EditableTextBlockProps {
   onInputText: (index: number, text: string) => void
   onTextKeyDown: (event: KeyboardEvent<HTMLElement>, index: number) => void
   onEditableRef: (blockId: string, node: HTMLElement | null) => void
+  readOnly: boolean
 }
 
 function EditableTextBlock({
@@ -624,6 +643,7 @@ function EditableTextBlock({
   onInputText,
   onTextKeyDown,
   onEditableRef,
+  readOnly,
 }: EditableTextBlockProps) {
   const editableRef = useRef<HTMLElement | null>(null)
   const setEditableRef = useCallback((node: HTMLElement | null) => {
@@ -649,17 +669,22 @@ function EditableTextBlock({
     <Tag
       ref={setEditableRef as never}
       className={className}
-      contentEditable
+      contentEditable={!readOnly}
       suppressContentEditableWarning
       dir="ltr"
       spellCheck
       data-testid={`content-block-${index}`}
       data-placeholder={placeholder}
       data-heading-level={block.type === 'heading' ? block.level : undefined}
+      aria-readonly={readOnly ? 'true' : undefined}
       onInput={(event: FormEvent<HTMLElement>) => {
+        if (readOnly) return
         onInputText(index, event.currentTarget.textContent ?? '')
       }}
-      onKeyDown={(event: KeyboardEvent<HTMLElement>) => onTextKeyDown(event, index)}
+      onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
+        if (readOnly) return
+        onTextKeyDown(event, index)
+      }}
     />
   )
 }

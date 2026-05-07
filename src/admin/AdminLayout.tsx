@@ -56,6 +56,9 @@ import { Link } from './lib/router'
 import { useInRouterContext, useLocation, useNavigate } from './lib/routerHooks'
 import toolbarStyles from '@editor/components/Toolbar/Toolbar.module.css'
 import type { AdminWorkspace } from './workspace'
+import { useCurrentAdminUser } from './sessionContext'
+import { canAccessWorkspace, hasAllCapabilities, hasCapability } from './access'
+import type { CmsCurrentUser } from '@core/persistence'
 
 export type { AdminWorkspace }
 
@@ -79,8 +82,11 @@ export default function AdminLayout({
   const site = useEditorStore((s) => s.site)
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
   const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
+  const currentUser = useCurrentAdminUser()
   const contentRightSidebarExpanded = workspace === 'content' && Boolean(contentRightPanel)
   const hasRightSidebar = contentRightSidebarExpanded || (workspace === 'site' && rightSidebarExpanded)
+  const canSaveDraftSite = !currentUser || hasAllCapabilities(currentUser, ['site.edit', 'pages.edit'])
+  const canPublishPages = !currentUser || hasCapability(currentUser, 'pages.publish')
 
   // J12 — wire persistence: load, auto-save, toolbar Save, Cmd+S.
   const persistence = usePersistence('default', cmsAdapter, { markNewSiteUnsaved: true })
@@ -154,13 +160,14 @@ export default function AdminLayout({
     <div className={styles.shell} data-editor-density={density}>
       {/* ── Top toolbar (z-60, Guideline #374) ───────────────────────────── */}
       <Toolbar
-        onSave={persistence.saveSite}
+        onSave={canSaveDraftSite ? persistence.saveSite : undefined}
         saveStatus={persistence.saveStatus}
-        publishEnabled={workspace === 'site'}
+        publishEnabled={workspace === 'site' && canPublishPages}
         section={workspace}
         adminNavigationSlot={(
           <AdminSectionNavigation
             section={workspace}
+            currentUser={currentUser}
           />
         )}
         rightSlot={toolbarRightSlot}
@@ -227,19 +234,30 @@ export default function AdminLayout({
 
 interface AdminSectionNavigationProps {
   section: AdminWorkspace
+  currentUser?: CmsCurrentUser | null
   onWorkspaceNavigateStart?: () => void
 }
 
 export function AdminSectionNavigation({
   section,
+  currentUser,
   onWorkspaceNavigateStart,
 }: AdminSectionNavigationProps) {
   const [pluginPages, setPluginPages] = useState<PluginAdminPageRoute[]>([])
+  const sessionUser = useCurrentAdminUser()
+  const effectiveUser = currentUser ?? sessionUser ?? null
+  const unrestricted = !effectiveUser
+  const canAccess = (workspace: AdminWorkspace) => unrestricted || canAccessWorkspace(effectiveUser, workspace)
+  const canAccessPlugins = canAccess('plugins')
 
   useEffect(() => {
     let cancelled = false
 
     async function loadPluginPages() {
+      if (!canAccessPlugins) {
+        setPluginPages([])
+        return
+      }
       try {
         const payload = await listCmsPlugins()
         if (!cancelled) {
@@ -266,31 +284,39 @@ export function AdminSectionNavigation({
       cancelled = true
       window.removeEventListener(CMS_PLUGINS_CHANGED_EVENT, refreshPluginPages)
     }
-  }, [])
+  }, [canAccessPlugins])
 
   return (
     <>
-      {section === 'site' ? (
-        <span className={toolbarStyles.activeSection}>Site</span>
-      ) : (
-        <AdminRouteLink to="/admin/site" onNavigateStart={onWorkspaceNavigateStart}>Site</AdminRouteLink>
+      {canAccess('site') && (
+        section === 'site' ? (
+          <span className={toolbarStyles.activeSection}>Site</span>
+        ) : (
+          <AdminRouteLink to="/admin/site" onNavigateStart={onWorkspaceNavigateStart}>Site</AdminRouteLink>
+        )
       )}
-      {section === 'content' ? (
-        <span className={toolbarStyles.activeSection}>Content</span>
-      ) : (
-        <AdminRouteLink to="/admin/content" onNavigateStart={onWorkspaceNavigateStart}>Content</AdminRouteLink>
+      {canAccess('content') && (
+        section === 'content' ? (
+          <span className={toolbarStyles.activeSection}>Content</span>
+        ) : (
+          <AdminRouteLink to="/admin/content" onNavigateStart={onWorkspaceNavigateStart}>Content</AdminRouteLink>
+        )
       )}
-      {section === 'plugins' ? (
-        <span className={toolbarStyles.activeSection}>Plugins</span>
-      ) : (
-        <AdminRouteLink to="/admin/plugins" onNavigateStart={onWorkspaceNavigateStart}>Plugins</AdminRouteLink>
+      {canAccess('plugins') && (
+        section === 'plugins' ? (
+          <span className={toolbarStyles.activeSection}>Plugins</span>
+        ) : (
+          <AdminRouteLink to="/admin/plugins" onNavigateStart={onWorkspaceNavigateStart}>Plugins</AdminRouteLink>
+        )
       )}
-      {section === 'users' ? (
-        <span className={toolbarStyles.activeSection}>Users</span>
-      ) : (
-        <AdminRouteLink to="/admin/users" onNavigateStart={onWorkspaceNavigateStart}>Users</AdminRouteLink>
+      {canAccess('users') && (
+        section === 'users' ? (
+          <span className={toolbarStyles.activeSection}>Users</span>
+        ) : (
+          <AdminRouteLink to="/admin/users" onNavigateStart={onWorkspaceNavigateStart}>Users</AdminRouteLink>
+        )
       )}
-      {pluginPages.map((page) => (
+      {canAccessPlugins && pluginPages.map((page) => (
         <AdminRouteLink
           key={`${page.pluginId}:${page.id}`}
           to={page.route}

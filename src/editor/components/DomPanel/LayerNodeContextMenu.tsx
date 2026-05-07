@@ -42,6 +42,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { registry } from '@core/module-engine/registry'
 import { useInsertModule } from '../../hooks/useInsertModule'
 import { ModulePicker } from '../ModulePicker'
+import { useConfirmDelete } from '../shared/ConfirmDeleteDialog'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
 import { EditIcon } from 'pixel-art-icons/icons/edit'
 import { CopyIcon } from 'pixel-art-icons/icons/copy'
@@ -105,6 +106,7 @@ export function LayerNodeContextMenu({
   const copyNodesAction = useEditorStore((s) => s.copyNodes)
   const cutNodesAction = useEditorStore((s) => s.cutNodes)
   const deleteNodesAction = useEditorStore((s) => s.deleteNodes)
+  const confirmDelete = useConfirmDelete()
 
   // Reactive boolean for the conditional Paste item — re-renders whenever
   // the clipboard entry transitions between null and non-null.
@@ -197,12 +199,7 @@ export function LayerNodeContextMenu({
   // Multi-aware action dispatchers. For single-select they delegate to the
   // pre-existing single-node handlers (which carry their own UX: rename
   // dialog, confirm-delete dialog, etc.); for multi-select they call the
-  // *Nodes batch actions directly. The multi delete path dispatches without
-  // the central confirm dialog because wiring it from here would require
-  // duplicating the dialog plumbing for the multi-case — the user can still
-  // undo with Ctrl/Cmd+Z. (TODO: route through `useConfirmDelete` once the
-  // dialog supports a "Delete N layers?" message; tracked in the multi-select
-  // task notes.)
+  // *Nodes batch actions directly.
   const dispatchDuplicate = useCallback(() => {
     if (isMulti) {
       duplicateNodesAction(targetIds)
@@ -232,12 +229,18 @@ export function LayerNodeContextMenu({
 
   const dispatchDelete = useCallback(() => {
     if (isMulti) {
-      deleteNodesAction(targetIds)
+      const idsToDelete = [...targetIds]
+      confirmDelete({
+        title: 'Delete layers?',
+        description: `${idsToDelete.length} layers (and their children) will be removed. This can be undone with Ctrl/Cmd+Z.`,
+        confirmLabel: 'Delete',
+        commit: () => deleteNodesAction(idsToDelete),
+      })
       onClose()
     } else {
       onDelete()
     }
-  }, [isMulti, targetIds, deleteNodesAction, onDelete, onClose])
+  }, [isMulti, targetIds, confirmDelete, deleteNodesAction, onDelete, onClose])
 
   const dispatchWrapInContainer = useCallback(() => {
     if (isMulti) {

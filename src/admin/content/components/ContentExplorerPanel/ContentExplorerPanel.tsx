@@ -42,6 +42,11 @@ interface ContentExplorerPanelProps {
   selectedCollection: ContentCollection | null
   selectedCollectionId: string | null
   selectedEntryId: string | null
+  canCreateCollection: boolean
+  canCreateEntry: boolean
+  canManageCollections: boolean
+  canEditEntry: (entry: ContentEntry) => boolean
+  canPublishEntry: (entry: ContentEntry) => boolean
   onSelectCollection: (collectionId: string) => void
   onSelectEntry: (entry: ContentEntry) => void
   onCreateCollection: () => void
@@ -79,6 +84,11 @@ export function ContentExplorerPanel({
   selectedCollection,
   selectedCollectionId,
   selectedEntryId,
+  canCreateCollection,
+  canCreateEntry,
+  canManageCollections,
+  canEditEntry,
+  canPublishEntry,
   onSelectCollection,
   onSelectEntry,
   onCreateCollection,
@@ -130,6 +140,7 @@ export function ContentExplorerPanel({
 
   function moveSubmenuItem(target: ContentExplorerContextTarget): ExplorerContextMenuItem | null {
     if (target.kind !== 'entry') return null
+    if (!canEditEntry(target.entry)) return null
     const others = collections.filter((collection) => collection.id !== target.entry.collectionId)
     if (others.length === 0) return null
     return {
@@ -151,6 +162,7 @@ export function ContentExplorerPanel({
 
   function extraMenuItems(target: ContentExplorerContextTarget): ExplorerContextMenuItem[] {
     if (target.kind === 'collection') {
+      if (!canManageCollections) return []
       return [{
         label: 'Collection settings',
         icon: <Settings2Icon size={13} />,
@@ -163,7 +175,7 @@ export function ContentExplorerPanel({
 
     const items: ExplorerContextMenuItem[] = []
 
-    if (target.entry.status !== 'published') {
+    if (target.entry.status !== 'published' && canPublishEntry(target.entry)) {
       items.push({
         label: 'Publish',
         icon: <UploadIcon size={13} />,
@@ -192,24 +204,28 @@ export function ContentExplorerPanel({
           setContextMenu(null)
         },
       })
+      if (canEditEntry(target.entry)) {
+        items.push({
+          label: 'Convert to draft',
+          icon: <FileTextIcon size={13} />,
+          action: () => {
+            void onConvertEntryToDraft(target.entry)
+            setContextMenu(null)
+          },
+        })
+      }
+    }
+
+    if (canCreateEntry) {
       items.push({
-        label: 'Convert to draft',
-        icon: <FileTextIcon size={13} />,
+        label: 'Duplicate',
+        icon: <CopyIcon size={13} />,
         action: () => {
-          void onConvertEntryToDraft(target.entry)
+          void onDuplicateEntry(target.entry)
           setContextMenu(null)
         },
       })
     }
-
-    items.push({
-      label: 'Duplicate',
-      icon: <CopyIcon size={13} />,
-      action: () => {
-        void onDuplicateEntry(target.entry)
-        setContextMenu(null)
-      },
-    })
 
     const moveItem = moveSubmenuItem(target)
     if (moveItem) items.push(moveItem)
@@ -269,16 +285,18 @@ export function ContentExplorerPanel({
             <div className={explorerStyles.sectionHeader}>
               <h2 className={explorerStyles.sectionTitle}>Collections</h2>
               <span className={explorerStyles.sectionCount}>{collections.length}</span>
-              <Button
-                variant="ghost"
-                size="xs"
-                iconOnly
-                onClick={onCreateCollection}
-                aria-label="New collection"
-                tooltip="New collection"
-              >
-                <BookPlusIcon size={13} aria-hidden="true" />
-              </Button>
+              {canCreateCollection && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  iconOnly
+                  onClick={onCreateCollection}
+                  aria-label="New collection"
+                  tooltip="New collection"
+                >
+                  <BookPlusIcon size={13} aria-hidden="true" />
+                </Button>
+              )}
             </div>
             <div className={explorerStyles.rows}>
               {collections.map((collection) => (
@@ -312,7 +330,7 @@ export function ContentExplorerPanel({
                 size="xs"
                 iconOnly
                 onClick={onCreateEntry}
-                disabled={!selectedCollectionId}
+                disabled={!selectedCollectionId || !canCreateEntry}
                 aria-label={newEntryLabel}
                 tooltip={newEntryLabel}
               >
@@ -358,7 +376,12 @@ export function ContentExplorerPanel({
           x={contextMenu.x}
           y={contextMenu.y}
           ariaLabel="Content item options"
-          deleteDisabled={contextMenu.target.kind === 'collection' && contextMenu.target.collection.id === 'posts'}
+          renameDisabled={contextMenu.target.kind === 'collection'
+            ? !canManageCollections
+            : !canEditEntry(contextMenu.target.entry)}
+          deleteDisabled={contextMenu.target.kind === 'collection'
+            ? contextMenu.target.collection.id === 'posts' || !canManageCollections
+            : !canEditEntry(contextMenu.target.entry)}
           extraItems={extraMenuItems(contextMenu.target)}
           onClose={() => setContextMenu(null)}
           onRename={() => {

@@ -31,9 +31,10 @@ describe('admin CMS route wiring', () => {
     const admin = readFileSync(join(root, 'src/admin/AdminEntry.tsx'), 'utf8')
 
     expect(admin).toContain('getCmsSetupStatus')
-    expect(admin).toContain('probeCmsSession')
+    expect(admin).toContain('getCurrentCmsUser')
     expect(admin).toContain('setupCms')
     expect(admin).toContain('loginCms')
+    expect(admin).toContain('AdminSessionProvider')
     expect(admin).toContain('<SitePage />')
     expect(admin).toContain('<ContentPage />')
   })

@@ -498,7 +498,66 @@ export async function softDeleteContentCollection(
 export async function listContentEntries(
   db: DbClient,
   collectionId: string,
+  visibility: { ownerUserId?: string | null } = {},
 ): Promise<ContentEntry[]> {
+  if (visibility.ownerUserId) {
+    const { rows } = await db<ContentEntryRow>`
+      select content_entries.id,
+             content_entries.collection_id,
+             content_entries.title,
+             content_entries.slug,
+             content_entries.status,
+             content_entries.body_markdown,
+             content_entries.featured_media_id,
+             content_entries.seo_title,
+             content_entries.seo_description,
+             content_entries.author_user_id,
+             content_entries.created_by_user_id,
+             content_entries.updated_by_user_id,
+             content_entries.published_by_user_id,
+             author_users.email as author_email,
+             author_users.display_name as author_display_name,
+             author_roles.slug as author_role_slug,
+             author_roles.name as author_role_name,
+             creator_users.email as created_by_email,
+             creator_users.display_name as created_by_display_name,
+             creator_roles.slug as created_by_role_slug,
+             creator_roles.name as created_by_role_name,
+             updater_users.email as updated_by_email,
+             updater_users.display_name as updated_by_display_name,
+             updater_roles.slug as updated_by_role_slug,
+             updater_roles.name as updated_by_role_name,
+             publisher_users.email as published_by_email,
+             publisher_users.display_name as published_by_display_name,
+             publisher_roles.slug as published_by_role_slug,
+             publisher_roles.name as published_by_role_name,
+             content_entries.created_at,
+             content_entries.updated_at,
+             content_entries.published_at,
+             content_entries.deleted_at
+      from content_entries
+      left join users author_users on author_users.id = content_entries.author_user_id
+      left join roles author_roles on author_roles.id = author_users.role_id
+      left join users creator_users on creator_users.id = content_entries.created_by_user_id
+      left join roles creator_roles on creator_roles.id = creator_users.role_id
+      left join users updater_users on updater_users.id = content_entries.updated_by_user_id
+      left join roles updater_roles on updater_roles.id = updater_users.role_id
+      left join users publisher_users on publisher_users.id = content_entries.published_by_user_id
+      left join roles publisher_roles on publisher_roles.id = publisher_users.role_id
+      where content_entries.collection_id = ${collectionId}
+        and content_entries.deleted_at is null
+        and (
+          content_entries.author_user_id = ${visibility.ownerUserId}
+          or (
+            content_entries.author_user_id is null
+            and content_entries.created_by_user_id = ${visibility.ownerUserId}
+          )
+        )
+      order by content_entries.updated_at desc, content_entries.created_at desc
+    `
+    return rows.map(mapEntry)
+  }
+
   const { rows } = await db<ContentEntryRow>`
     select content_entries.id,
            content_entries.collection_id,

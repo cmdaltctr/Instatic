@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from '../../admin/lib/router'
 import { UsersPage } from '../../admin/users/UsersPage'
+import { AdminSessionProvider } from '../../admin/session'
 import { useEditorStore } from '@core/editor-store/store'
+import type { CmsCurrentUser } from '@core/persistence'
 import { makeSite } from '../fixtures'
 
 const originalFetch = globalThis.fetch
@@ -108,6 +110,27 @@ function json(body: unknown, status = 200) {
   })
 }
 
+function currentUser(capabilities: string[]): CmsCurrentUser {
+  return {
+    id: 'current-user',
+    email: 'current@example.com',
+    displayName: 'Current User',
+    status: 'active',
+    role: {
+      id: 'custom',
+      slug: 'custom',
+      name: 'Custom',
+      description: '',
+      isSystem: false,
+      capabilities,
+    },
+    capabilities,
+    lastLoginAt: null,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
 function setupEditorState() {
   const site = makeSite({ name: 'Users Test Site' })
   useEditorStore.setState({
@@ -158,6 +181,94 @@ afterEach(() => {
 })
 
 describe('UsersPage', () => {
+  it('limits a user manager to user management affordances and supporting role options', async () => {
+    const calls: string[] = []
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push(`${init?.method ?? 'GET'} ${url}`)
+      if (url === '/admin/api/cms/users' && init?.method === 'GET') return json({ users })
+      if (url === '/admin/api/cms/roles' && init?.method === 'GET') return json({ roles })
+      if (url === '/admin/api/cms/audit' && init?.method === 'GET') return json({ events: auditEvents })
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <AdminSessionProvider user={currentUser(['users.manage'])}>
+          <UsersPage />
+        </AdminSessionProvider>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('table', { name: 'Users' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Users' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Roles' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Audit' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Create User' })).toBeDefined()
+    expect(calls).toContain('GET /admin/api/cms/users')
+    expect(calls).toContain('GET /admin/api/cms/roles')
+    expect(calls).not.toContain('GET /admin/api/cms/audit')
+  })
+
+  it('limits a role manager to role management affordances without fetching users or audit events', async () => {
+    const calls: string[] = []
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push(`${init?.method ?? 'GET'} ${url}`)
+      if (url === '/admin/api/cms/users' && init?.method === 'GET') return json({ users })
+      if (url === '/admin/api/cms/roles' && init?.method === 'GET') return json({ roles })
+      if (url === '/admin/api/cms/audit' && init?.method === 'GET') return json({ events: auditEvents })
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <AdminSessionProvider user={currentUser(['roles.manage'])}>
+          <UsersPage />
+        </AdminSessionProvider>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('table', { name: 'Roles' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Users' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Roles' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Audit' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Create Role' })).toBeDefined()
+    expect(calls).not.toContain('GET /admin/api/cms/users')
+    expect(calls).toContain('GET /admin/api/cms/roles')
+    expect(calls).not.toContain('GET /admin/api/cms/audit')
+  })
+
+  it('limits an audit reader to audit affordances without fetching user or role management data', async () => {
+    const calls: string[] = []
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push(`${init?.method ?? 'GET'} ${url}`)
+      if (url === '/admin/api/cms/users' && init?.method === 'GET') return json({ users })
+      if (url === '/admin/api/cms/roles' && init?.method === 'GET') return json({ roles })
+      if (url === '/admin/api/cms/audit' && init?.method === 'GET') return json({ events: auditEvents })
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <AdminSessionProvider user={currentUser(['audit.read'])}>
+          <UsersPage />
+        </AdminSessionProvider>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('table', { name: 'Audit events' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Users' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Roles' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Audit' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: /create user/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /create role/i })).toBeNull()
+    expect(calls).not.toContain('GET /admin/api/cms/users')
+    expect(calls).not.toContain('GET /admin/api/cms/roles')
+    expect(calls).toContain('GET /admin/api/cms/audit')
+  })
+
   it('locks the owner row and exposes edit/reset actions for regular users', async () => {
     render(
       <MemoryRouter>
