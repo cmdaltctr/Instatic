@@ -142,7 +142,7 @@
 .stepperControl {
     display: grid;
     grid-template-columns: 26px 32px 26px;
-    align-items: center;
+    align-items: stretch;
     overflow: hidden;
     border: 1px solid var(--input-border);
     border-radius: var(--input-radius);
@@ -150,6 +150,8 @@
 }
 
 .stepperControl button {
+    height: 100%;
+    min-height: 0;
     border-radius: 0;
 }
 
