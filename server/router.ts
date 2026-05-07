@@ -10,7 +10,7 @@ import { getLatestPublishedSiteSnapshot, getPublishedPageBySlug } from './cms/pu
 import { renderPublishedContentTemplate, renderPublishedSnapshot } from './cms/publicRenderer'
 import { getSetupStatus } from './cms/repositories'
 import { getPublishedRuntimeAsset } from './cms/runtimeAssetRepository'
-import { handleLoopRequest, isLoopRuntimeAssetPath, serveLoopRuntimeAsset } from './cms/loopHandler'
+import { handleLoopRequest, isLoopRuntimeAssetPath, serveLoopRuntimeAsset } from './cms/handlers/loop'
 import { jsonResponse } from './http'
 import { serveAdminApp, serveStaticFile } from './static'
 import { registry } from '@core/module-engine/registry'
@@ -75,7 +75,7 @@ export async function handleServerRequest(
     return jsonResponse({ status: 'ok', ts: Date.now() })
   }
 
-  if (url.pathname.startsWith('/api/cms/')) {
+  if (url.pathname.startsWith('/admin/api/cms/')) {
     return handleCmsRequest(req, runtime.db, { uploadsDir: runtime.uploadsDir })
   }
 

@@ -20,14 +20,14 @@
  * bodies; the runtime's "Try again" UX surfaces network failures.
  */
 
-import type { DbClient } from './db/client'
+import type { DbClient } from '../db/client'
 import { registry } from '@core/module-engine/registry'
 import { loopSourceRegistry } from '@core/loops/registry'
 import { renderNode, type RenderContext, type ResolvedLoopRenderData } from '@core/publisher/render'
-import { jsonResponse } from '../http'
-import { getLatestPublishedSiteSnapshot, getPublishedPageBySlug } from './publishRepository'
-import { collectLoopNodes, readLoopProps } from './loopPrefetch'
-import { LOOP_RUNTIME_JS } from './loopRuntime'
+import { jsonResponse } from '../../http'
+import { getLatestPublishedSiteSnapshot, getPublishedPageBySlug } from '../publishRepository'
+import { collectLoopNodes, readLoopProps } from '../loopPrefetch'
+import { LOOP_RUNTIME_JS } from '../loopRuntime'
 
 const LOOP_RUNTIME_PATH = '/_pb/assets/loop-runtime.js'
 
