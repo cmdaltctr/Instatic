@@ -32,8 +32,8 @@ import { ContextMenu, ContextMenuItem } from '@ui/components/ContextMenu'
 import { Input } from '@ui/components/Input'
 import { SegmentedControl } from '@ui/components/SegmentedControl'
 import { ChevronDownIcon } from 'pixel-art-icons/icons/chevron-down'
-import { LayoutIcon } from 'pixel-art-icons/icons/layout'
-import { Grid2x22Icon } from 'pixel-art-icons/icons/grid-2x2-2'
+import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
+import { Grid2x22SolidIcon } from 'pixel-art-icons/icons/grid-2x2-2-solid'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { ArrowRightIcon } from 'pixel-art-icons/icons/arrow-right'
 import { ArrowLeftIcon } from 'pixel-art-icons/icons/arrow-left'
@@ -42,16 +42,16 @@ import { ArrowUpIcon } from 'pixel-art-icons/icons/arrow-up'
 import { ArrowsHorizontalIcon } from 'pixel-art-icons/icons/arrows-horizontal'
 import { ArrowsVerticalIcon } from 'pixel-art-icons/icons/arrows-vertical'
 import { TextWrapIcon } from 'pixel-art-icons/icons/text-wrap'
-import { AlignStartHorizontalIcon } from 'pixel-art-icons/icons/align-start-horizontal'
-import { AlignCenterHorizontalIcon } from 'pixel-art-icons/icons/align-center-horizontal'
-import { AlignEndHorizontalIcon } from 'pixel-art-icons/icons/align-end-horizontal'
-import { AlignStartVerticalIcon } from 'pixel-art-icons/icons/align-start-vertical'
-import { AlignCenterVerticalIcon } from 'pixel-art-icons/icons/align-center-vertical'
-import { AlignEndVerticalIcon } from 'pixel-art-icons/icons/align-end-vertical'
-import { AlignHorizontalSpaceBetweenIcon } from 'pixel-art-icons/icons/align-horizontal-space-between'
-import { AlignHorizontalSpaceAroundIcon } from 'pixel-art-icons/icons/align-horizontal-space-around'
-import { AlignVerticalSpaceBetweenIcon } from 'pixel-art-icons/icons/align-vertical-space-between'
-import { AlignVerticalSpaceAroundIcon } from 'pixel-art-icons/icons/align-vertical-space-around'
+import { AlignStartHorizontalSolidIcon } from 'pixel-art-icons/icons/align-start-horizontal-solid'
+import { AlignCenterHorizontalSolidIcon } from 'pixel-art-icons/icons/align-center-horizontal-solid'
+import { AlignEndHorizontalSolidIcon } from 'pixel-art-icons/icons/align-end-horizontal-solid'
+import { AlignStartVerticalSolidIcon } from 'pixel-art-icons/icons/align-start-vertical-solid'
+import { AlignCenterVerticalSolidIcon } from 'pixel-art-icons/icons/align-center-vertical-solid'
+import { AlignEndVerticalSolidIcon } from 'pixel-art-icons/icons/align-end-vertical-solid'
+import { AlignHorizontalSpaceBetweenSolidIcon } from 'pixel-art-icons/icons/align-horizontal-space-between-solid'
+import { AlignHorizontalSpaceAroundSolidIcon } from 'pixel-art-icons/icons/align-horizontal-space-around-solid'
+import { AlignVerticalSpaceBetweenSolidIcon } from 'pixel-art-icons/icons/align-vertical-space-between-solid'
+import { AlignVerticalSpaceAroundSolidIcon } from 'pixel-art-icons/icons/align-vertical-space-around-solid'
 import { UnderlineIcon } from 'pixel-art-icons/icons/underline'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { TokenAwareInput } from '@site/property-controls/TokenAwareInput'
@@ -395,14 +395,14 @@ function DisplaySwitcher({ value, onChange, onClear }: DisplaySwitcherProps) {
           {
             value: 'flex',
             label: 'Flex',
-            icon: <LayoutIcon size={14} />,
+            icon: <LayoutSolidIcon size={14} />,
             ariaLabel: 'Flex layout',
             tooltip: 'display: flex',
           },
           {
             value: 'grid',
             label: 'Grid',
-            icon: <Grid2x22Icon size={14} />,
+            icon: <Grid2x22SolidIcon size={14} />,
             ariaLabel: 'Grid layout',
             tooltip: 'display: grid',
           },
@@ -619,19 +619,19 @@ function GapInput({ value, isSet, onChange }: GapInputProps) {
 const CROSS_HORIZONTAL_OPTIONS = [
   {
     value: 'flex-start',
-    icon: <AlignStartHorizontalIcon size={14} />,
+    icon: <AlignStartHorizontalSolidIcon size={14} />,
     ariaLabel: 'Align start',
     tooltip: 'align-items: flex-start',
   },
   {
     value: 'center',
-    icon: <AlignCenterHorizontalIcon size={14} />,
+    icon: <AlignCenterHorizontalSolidIcon size={14} />,
     ariaLabel: 'Align center',
     tooltip: 'align-items: center',
   },
   {
     value: 'flex-end',
-    icon: <AlignEndHorizontalIcon size={14} />,
+    icon: <AlignEndHorizontalSolidIcon size={14} />,
     ariaLabel: 'Align end',
     tooltip: 'align-items: flex-end',
   },
@@ -653,19 +653,19 @@ const CROSS_HORIZONTAL_OPTIONS = [
 const CROSS_VERTICAL_OPTIONS = [
   {
     value: 'flex-start',
-    icon: <AlignStartVerticalIcon size={14} />,
+    icon: <AlignStartVerticalSolidIcon size={14} />,
     ariaLabel: 'Align start',
     tooltip: 'align-items: flex-start',
   },
   {
     value: 'center',
-    icon: <AlignCenterVerticalIcon size={14} />,
+    icon: <AlignCenterVerticalSolidIcon size={14} />,
     ariaLabel: 'Align center',
     tooltip: 'align-items: center',
   },
   {
     value: 'flex-end',
-    icon: <AlignEndVerticalIcon size={14} />,
+    icon: <AlignEndVerticalSolidIcon size={14} />,
     ariaLabel: 'Align end',
     tooltip: 'align-items: flex-end',
   },
@@ -697,31 +697,31 @@ const CROSS_VERTICAL_OPTIONS = [
 const MAIN_HORIZONTAL_OPTIONS = [
   {
     value: 'flex-start',
-    icon: <AlignStartVerticalIcon size={14} />,
+    icon: <AlignStartVerticalSolidIcon size={14} />,
     ariaLabel: 'Justify start',
     tooltip: 'justify-content: flex-start',
   },
   {
     value: 'center',
-    icon: <AlignCenterVerticalIcon size={14} />,
+    icon: <AlignCenterVerticalSolidIcon size={14} />,
     ariaLabel: 'Justify center',
     tooltip: 'justify-content: center',
   },
   {
     value: 'flex-end',
-    icon: <AlignEndVerticalIcon size={14} />,
+    icon: <AlignEndVerticalSolidIcon size={14} />,
     ariaLabel: 'Justify end',
     tooltip: 'justify-content: flex-end',
   },
   {
     value: 'space-between',
-    icon: <AlignHorizontalSpaceBetweenIcon size={14} />,
+    icon: <AlignHorizontalSpaceBetweenSolidIcon size={14} />,
     ariaLabel: 'Space between',
     tooltip: 'justify-content: space-between',
   },
   {
     value: 'space-around',
-    icon: <AlignHorizontalSpaceAroundIcon size={14} />,
+    icon: <AlignHorizontalSpaceAroundSolidIcon size={14} />,
     ariaLabel: 'Space around',
     tooltip: 'justify-content: space-around',
   },
@@ -731,31 +731,31 @@ const MAIN_HORIZONTAL_OPTIONS = [
 const MAIN_VERTICAL_OPTIONS = [
   {
     value: 'flex-start',
-    icon: <AlignStartHorizontalIcon size={14} />,
+    icon: <AlignStartHorizontalSolidIcon size={14} />,
     ariaLabel: 'Justify start',
     tooltip: 'justify-content: flex-start',
   },
   {
     value: 'center',
-    icon: <AlignCenterHorizontalIcon size={14} />,
+    icon: <AlignCenterHorizontalSolidIcon size={14} />,
     ariaLabel: 'Justify center',
     tooltip: 'justify-content: center',
   },
   {
     value: 'flex-end',
-    icon: <AlignEndHorizontalIcon size={14} />,
+    icon: <AlignEndHorizontalSolidIcon size={14} />,
     ariaLabel: 'Justify end',
     tooltip: 'justify-content: flex-end',
   },
   {
     value: 'space-between',
-    icon: <AlignVerticalSpaceBetweenIcon size={14} />,
+    icon: <AlignVerticalSpaceBetweenSolidIcon size={14} />,
     ariaLabel: 'Space between',
     tooltip: 'justify-content: space-between',
   },
   {
     value: 'space-around',
-    icon: <AlignVerticalSpaceAroundIcon size={14} />,
+    icon: <AlignVerticalSpaceAroundSolidIcon size={14} />,
     ariaLabel: 'Space around',
     tooltip: 'justify-content: space-around',
   },

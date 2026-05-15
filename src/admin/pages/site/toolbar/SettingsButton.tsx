@@ -2,7 +2,7 @@
  * SettingsButton — opens the Settings modal.
  */
 import { useEditorStore } from '@site/store/store'
-import { SettingsCogIcon } from 'pixel-art-icons/icons/settings-cog'
+import { SettingsCogSolidIcon } from 'pixel-art-icons/icons/settings-cog-solid'
 import { Button } from '@ui/components/Button'
 
 export function SettingsButton() {
@@ -18,7 +18,7 @@ export function SettingsButton() {
       onClick={() => openSettings('pages')}
       data-testid="toolbar-settings-btn"
     >
-      <SettingsCogIcon size={16} aria-hidden="true" />
+      <SettingsCogSolidIcon size={16} aria-hidden="true" />
     </Button>
   )
 }

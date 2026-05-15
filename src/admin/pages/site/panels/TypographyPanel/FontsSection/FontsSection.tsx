@@ -19,7 +19,7 @@ import { useEditorStore } from '@site/store/store'
 import type { FontEntry } from '@core/fonts/schemas'
 import { compareVariants } from '@core/fonts/variants'
 import { deleteCmsFontFamily } from '@core/persistence/cmsFonts'
-import { DeleteIcon } from 'pixel-art-icons/icons/delete'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import { AddGoogleFontDialog } from './AddGoogleFontDialog'
 import styles from './FontsSection.module.css'
 
@@ -155,7 +155,7 @@ function FontRow({ entry, onRemove }: FontRowProps) {
           tooltip={`Remove ${entry.family}`}
           onClick={onRemove}
         >
-          <DeleteIcon size={12} aria-hidden="true" />
+          <TrashSolidIcon size={12} aria-hidden="true" />
         </Button>
       </div>
     </li>

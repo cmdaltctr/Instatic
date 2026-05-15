@@ -19,7 +19,7 @@ import { BoldIcon } from 'pixel-art-icons/icons/bold'
 import { ItalicIcon } from 'pixel-art-icons/icons/italic'
 import { UnderlineIcon } from 'pixel-art-icons/icons/underline'
 import { LinkIcon } from 'pixel-art-icons/icons/link'
-import { EraserIcon } from 'pixel-art-icons/icons/eraser'
+import { EraserSolidIcon } from 'pixel-art-icons/icons/eraser-solid'
 import { sanitizeRichtext } from '@core/sanitize'
 import styles from './RichTextEditor.module.css'
 
@@ -339,7 +339,7 @@ export function RichTextEditor({
           disabled={disabled}
           onMouseDown={handleClearFormat}
         >
-          <EraserIcon size={14} />
+          <EraserSolidIcon size={14} />
         </Button>
       </div>
 

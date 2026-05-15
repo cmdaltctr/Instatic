@@ -15,7 +15,7 @@ import { Input } from '@ui/components/Input'
 import { SearchBar } from '@ui/components/SearchBar'
 import { SegmentedControl } from '@ui/components/SegmentedControl'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
-import { VideoIcon } from 'pixel-art-icons/icons/video'
+import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import styles from './controls.module.css'
 
 type MediaKind = 'image' | 'video'
@@ -305,7 +305,7 @@ export function MediaLibraryControl({
                           {mediaKind === 'image' ? (
                             <img src={asset.previewPath} alt="" />
                           ) : (
-                            <VideoIcon size={16} />
+                            <VideoSolidIcon size={16} />
                           )}
                         </span>
                         <span className={styles.mediaAssetText}>
@@ -341,7 +341,7 @@ export function MediaLibraryControl({
             )}
             {showUrlPreview && mediaKind === 'video' && (
               <div className={styles.videoPreview} aria-hidden="true">
-                <VideoIcon size={16} />
+                <VideoSolidIcon size={16} />
                 <span>{currentValue}</span>
               </div>
             )}

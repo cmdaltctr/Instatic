@@ -9,12 +9,12 @@ import { Panel, useAutoFocusPanel } from '@admin/shared/Panel'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import type { IconComponent } from 'pixel-art-icons/types'
-import { FilePlusIcon } from 'pixel-art-icons/icons/file-plus'
-import { FileTextIcon } from 'pixel-art-icons/icons/file-text'
+import { FilePlusSolidIcon } from 'pixel-art-icons/icons/file-plus-solid'
+import { FileTextSolidIcon } from 'pixel-art-icons/icons/file-text-solid'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
-import { PaintBucketIcon } from 'pixel-art-icons/icons/paint-bucket'
+import { PaintBucketSolidIcon } from 'pixel-art-icons/icons/paint-bucket-solid'
 import { CodeIcon } from 'pixel-art-icons/icons/code'
-import { ExternalLinkIcon } from 'pixel-art-icons/icons/external-link'
+import { ExternalLinkSolidIcon } from 'pixel-art-icons/icons/external-link-solid'
 import { cn } from '@ui/cn'
 import {
   SiteCreateDialog,
@@ -216,7 +216,7 @@ export function SiteExplorerPanel({
       return [
         {
           label: 'Template settings',
-          icon: <FileTextIcon size={13} />,
+          icon: <FileTextSolidIcon size={13} />,
           action: () => {
             setTemplateSettingsTarget(page)
             setContextMenu(null)
@@ -224,7 +224,7 @@ export function SiteExplorerPanel({
         },
         {
           label: 'Convert to page',
-          icon: <FileTextIcon size={13} />,
+          icon: <FileTextSolidIcon size={13} />,
           action: () => {
             convertTemplateToPage(page.id)
             setContextMenu(null)
@@ -235,7 +235,7 @@ export function SiteExplorerPanel({
 
     return [{
       label: 'Use as template',
-      icon: <FileTextIcon size={13} />,
+      icon: <FileTextSolidIcon size={13} />,
       action: () => {
         setTemplateSettingsTarget(page)
         setContextMenu(null)
@@ -250,7 +250,7 @@ export function SiteExplorerPanel({
     return [
       {
         label: 'Open in new tab',
-        icon: <ExternalLinkIcon size={13} />,
+        icon: <ExternalLinkSolidIcon size={13} />,
         action: () => {
           window.open(pagePublicPath(page.slug), '_blank', 'noopener,noreferrer')
           setContextMenu(null)
@@ -278,13 +278,13 @@ export function SiteExplorerPanel({
                 title="Pages"
                 count={normalPages.length}
                 actionLabel="New page"
-                actionIcon={FilePlusIcon}
+                actionIcon={FilePlusSolidIcon}
                 onAction={() => setCreateKind('page')}
               >
                 {normalPages.map((page) => (
                   <ExplorerRow
                     key={page.id}
-                    icon={FileTextIcon}
+                    icon={FileTextSolidIcon}
                     label={page.title}
                     meta={page.slug === 'index' ? '/' : `/${page.slug}`}
                     active={page.id === activePageId && activeDocument?.kind !== 'visualComponent'}
@@ -310,13 +310,13 @@ export function SiteExplorerPanel({
                 title="Templates"
                 count={templatePages.length}
                 actionLabel="New template"
-                actionIcon={FilePlusIcon}
+                actionIcon={FilePlusSolidIcon}
                 onAction={handleCreateTemplate}
               >
                 {templatePages.map((page) => (
                   <ExplorerRow
                     key={page.id}
-                    icon={FileTextIcon}
+                    icon={FileTextSolidIcon}
                     label={page.title}
                     meta={page.template?.collectionId ?? ''}
                     active={page.id === activePageId && activeDocument?.kind !== 'visualComponent'}
@@ -369,12 +369,12 @@ export function SiteExplorerPanel({
                 title="Styles"
                 count={fileBuckets.styles.length}
                 actionLabel="New stylesheet"
-                actionIcon={PaintBucketIcon}
+                actionIcon={PaintBucketSolidIcon}
                 onAction={() => setCreateKind('style')}
               >
                 <FileRows
                   files={fileBuckets.styles}
-                  icon={PaintBucketIcon}
+                  icon={PaintBucketSolidIcon}
                   onOpen={openInEditor}
                   onContextMenu={(file, event) => openContextMenu({
                     kind: 'file',

@@ -15,7 +15,7 @@
 import { registry } from '@core/module-engine/registry'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
 import type { IconProps } from 'pixel-art-icons/types'
-import { SquareIcon } from 'pixel-art-icons/icons/square'
+import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 
 export interface ModuleIconProps extends IconProps {
   /** Module id to resolve from the registry. Ignored when `module` is set. */
@@ -31,6 +31,6 @@ export function ModuleIcon({
 }: ModuleIconProps) {
   const definition =
     explicitModule ?? (moduleId ? registry.get(moduleId) ?? null : null)
-  const ResolvedIcon = definition?.icon ?? SquareIcon
+  const ResolvedIcon = definition?.icon ?? SquareSolidIcon
   return <ResolvedIcon {...iconProps} />
 }

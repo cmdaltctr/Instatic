@@ -5,7 +5,7 @@ import type { UpdateFrameworkColorTokenPatch } from '@site/store/slices/site/typ
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { FilterBar, type FilterBarItem } from '@ui/components/FilterBar'
-import { FilePlusIcon } from 'pixel-art-icons/icons/file-plus'
+import { FilePlusSolidIcon } from 'pixel-art-icons/icons/file-plus-solid'
 import { Panel } from '@admin/shared/Panel'
 import { useFrameworkChangeConfirm } from '@admin/shared/dialogs/FrameworkChangeConfirmDialog'
 import { applyColorTokenPatchPreview } from '@site/store/slices/site/framework/colors'
@@ -172,7 +172,7 @@ export function ColorsPanel() {
             tooltip="Create color"
             onClick={() => setCreateDialogOpen(true)}
           >
-            <FilePlusIcon size={13} aria-hidden="true" />
+            <FilePlusSolidIcon size={13} aria-hidden="true" />
           </Button>
         }
       >

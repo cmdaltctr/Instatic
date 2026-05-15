@@ -27,7 +27,7 @@ describe('CanvasNotch', () => {
     expect(src).toContain('ModuleIcon')
     expect(src).not.toContain('pixel-art-icons/icons/checkbox-sharp')
     expect(src).not.toContain('pixel-art-icons/icons/text-start-t')
-    expect(src).not.toContain('pixel-art-icons/icons/image')
+    expect(src).not.toContain('pixel-art-icons/icons/image-solid')
 
     // Approved quick-insert module IDs (Container / Text / Image).
     expect(src).toMatch(quotedModule('base.container'))
@@ -76,13 +76,15 @@ describe('CanvasNotch', () => {
   it('moves the Add picker trigger to an icon-only chip (no "Add" label text)', () => {
     const picker = readFileSync(MODULE_PICKER, 'utf-8')
 
-    // The trigger is icon-only — only the PlusIcon is rendered, no text node.
+    // The trigger is icon-only — only the AppGridPlusGlyphIcon is rendered
+    // (the same icon used by the "Insert module here" right-click submenu, so
+    // the two affordances read as the same action).
     expect(picker).toContain('iconOnly')
-    expect(picker).toContain('<PlusIcon size={13} />')
+    expect(picker).toContain('<AppGridPlusGlyphIcon size={13} />')
     // The literal "Add" text inside the trigger button is gone. The aria-label
     // and tooltip describe the action for screen readers — "Add module" is
     // accurate now that page/component creation lives elsewhere (Site Explorer).
     expect(picker).toMatch(/aria-label="Add(?: module)?"/)
-    expect(picker).not.toMatch(/<PlusIcon[^>]*\/>\s*Add\s*<\/Button>/)
+    expect(picker).not.toMatch(/<AppGridPlusGlyphIcon[^>]*\/>\s*Add\s*<\/Button>/)
   })
 })

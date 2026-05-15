@@ -6,7 +6,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { SquareIcon } from 'pixel-art-icons/icons/square'
+import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import { ContainerEditor } from './ContainerEditor'
 
 type ContainerTag = 'div' | 'section' | 'article' | 'main' | 'header' | 'footer'
@@ -29,7 +29,7 @@ export const ContainerModule: ModuleDefinition<ContainerProps> = {
   description: 'A semantic container.',
   category: 'Layout',
   version: '2.0.0',
-  icon: SquareIcon,
+  icon: SquareSolidIcon,
   trusted: true,
   canHaveChildren: true,
 

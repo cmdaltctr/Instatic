@@ -1,7 +1,7 @@
 import { useRef, type CSSProperties, type ReactNode } from 'react'
 import { Button } from '@ui/components/Button'
-import { BookOpenIcon } from 'pixel-art-icons/icons/book-open'
-import { ImagesIcon } from 'pixel-art-icons/icons/images'
+import { BookOpenSolidIcon } from 'pixel-art-icons/icons/book-open-solid'
+import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
 import type { IconComponent } from 'pixel-art-icons/types'
 import { useEditorStore } from '@site/store/store'
 import leftSidebarStyles from '../../../site/sidebars/LeftSidebar/LeftSidebar.module.css'
@@ -49,7 +49,7 @@ export function ContentSidebar({
           <ContentRailButton
             id="content"
             label="Content"
-            icon={BookOpenIcon}
+            icon={BookOpenSolidIcon}
             iconName="book-open"
             accent="mint"
             active={activePanel === 'content'}
@@ -58,7 +58,7 @@ export function ContentSidebar({
           <ContentRailButton
             id="media"
             label="Media"
-            icon={ImagesIcon}
+            icon={ImagesSolidIcon}
             iconName="images"
             accent="sky"
             active={activePanel === 'media'}

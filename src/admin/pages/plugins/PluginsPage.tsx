@@ -4,7 +4,7 @@ import { Link } from "@admin/lib/routing";
 import { Button } from "@ui/components/Button";
 import { PowerIcon } from "pixel-art-icons/icons/power";
 import { PowerOffIcon } from "pixel-art-icons/icons/power-off";
-import { DeleteIcon } from "pixel-art-icons/icons/delete";
+import { TrashSolidIcon } from "pixel-art-icons/icons/trash-solid";
 import { UploadIcon } from "pixel-art-icons/icons/upload";
 import {
   getEditorActivationErrors,
@@ -501,7 +501,7 @@ export function PluginsPage() {
                             onClick={() => setPendingRemove(plugin)}
                             aria-label={`Remove ${plugin.name}`}
                           >
-                            <DeleteIcon size={14} aria-hidden="true" />
+                            <TrashSolidIcon size={14} aria-hidden="true" />
                             <span>Remove</span>
                           </Button>
                         </div>

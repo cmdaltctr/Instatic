@@ -4,7 +4,7 @@
  */
 import type { Page, PageNode, SiteDocument, Breakpoint } from '@core/page-tree/schemas'
 import type { ModuleDefinition, IModuleRegistry, AnyModuleDefinition } from '@core/module-engine/types'
-import { SquareIcon } from 'pixel-art-icons/icons/square'
+import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import { DEFAULT_SITE_SETTINGS } from '@core/page-tree/schemas'
 
 // Re-exported because legacy publisher tests still reference it.
@@ -28,7 +28,7 @@ export function makeModule(
     name: id,
     category: 'test',
     version: '1.0.0',
-    icon: SquareIcon,
+    icon: SquareSolidIcon,
     trusted: true,
     canHaveChildren: false,
     schema: {},

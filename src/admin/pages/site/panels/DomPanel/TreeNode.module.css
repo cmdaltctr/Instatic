@@ -10,40 +10,40 @@
    Stays at its intrinsic width so the pill is never truncated; the label
    and class chip beside it do the truncating when space is tight. */
 .tagPill {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 6px;
-  --pill-bg: transparent;
-  --pill-color: var(--editor-text-muted);
-  background: linear-gradient(0deg, var(--pill-bg), transparent);
-  color: var(--pill-color);
-  font-family: monospace;
-  font-size: 10px;
-  font-weight: 620;
-  letter-spacing: 0.01em;
-  line-height: 1.4;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 6px;
+    --pill-bg: transparent;
+    --pill-color: var(--editor-text-muted);
+    background: linear-gradient(0deg, var(--pill-bg), transparent);
+    color: var(--pill-color);
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: 620;
+    letter-spacing: 0.01em;
+    line-height: 1.4;
 }
 
 .tagPill[data-accent="mint"] {
-  --pill-color: var(--rail-tint-mint);
-  --pill-bg: rgba(142, 230, 200, 0.14);
+    --pill-color: var(--rail-tint-mint);
+    --pill-bg: rgba(142, 230, 200, 0.14);
 }
 
 .tagPill[data-accent="lilac"] {
-  --pill-color: var(--rail-tint-lilac);
-  --pill-bg: rgba(200, 182, 255, 0.14);
+    --pill-color: var(--rail-tint-lilac);
+    --pill-bg: rgba(200, 182, 255, 0.14);
 }
 
 .tagPill[data-accent="sky"] {
-  --pill-color: var(--rail-tint-sky);
-  --pill-bg: rgba(155, 220, 255, 0.13);
+    --pill-color: var(--rail-tint-sky);
+    --pill-bg: rgba(155, 220, 255, 0.13);
 }
 
 .tagPill[data-accent="peach"] {
-  --pill-color: var(--rail-tint-peach);
-  --pill-bg: rgba(255, 199, 168, 0.13);
+    --pill-color: var(--rail-tint-peach);
+    --pill-bg: rgba(255, 199, 168, 0.13);
 }
 
 /* Class selector chip — chained-dot CSS selector style (".foo.bar") after the
@@ -51,93 +51,88 @@
    info (tag + display name) stays readable. The chip is allowed to shrink
    below its content width via `min-width: 0`. */
 .classChip {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--editor-text-muted);
-  font-family: monospace;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--editor-text-muted);
+    font-family: monospace;
 }
 
 /* ── Rename input ────────────────────────────────────────────────────────── */
 .renameInput {
-  flex: 1;
+    flex: 1;
 }
 
 /* ── Status indicators (locked, hidden) ──────────────────────────────────── */
 .indicator {
-  font-size: 10px;
-  color: var(--editor-text-subtle);
-  line-height: 1;
+    font-size: 10px;
+    color: var(--editor-text-subtle);
+    line-height: 1;
 }
 
 /* ── Slot-instance row — dimmer chrome to distinguish structural nodes ───── */
 /* slot-instance rows are structural VC placeholders; subtle tinting signals  */
 /* they are managed (not freely editable) without hiding them entirely.       */
 .slotInstanceRow {
-  opacity: 0.85;
-  background: var(--editor-surface-2);
+    opacity: 0.85;
+    background: var(--editor-surface-2);
 }
 
 /* ── Open container group highlight ─────────────────────────────────────── */
 .openContainerGroup {
-  margin: 2px 0;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.075);
+    border-radius: 8px;
+    background: var(--editor-surface);
 }
 
 .openContainerGroup > [role="treeitem"] {
-  border-radius: 8px;
-}
-
-.openContainerGroup > [role="group"] {
-  padding-bottom: 6px;
+    border-radius: 8px;
 }
 
 /* ── Drag/drop state ─────────────────────────────────────────────────────── */
 .dragSource {
-  opacity: 0.46;
+    opacity: 0.46;
 }
 
 .dropBefore,
 .dropAfter,
 .dropInside,
 .dropInvalid {
-  position: relative;
+    position: relative;
 }
 
 .dropBefore::before,
 .dropAfter::after {
-  content: "";
-  position: absolute;
-  left: max(6px, var(--tree-row-pl));
-  right: 8px;
-  z-index: 2;
-  height: 2px;
-  border-radius: 999px;
-  background: rgba(94, 234, 212, 0.92);
-  pointer-events: none;
-  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.18);
+    content: "";
+    position: absolute;
+    left: max(6px, var(--tree-row-pl));
+    right: 8px;
+    z-index: 2;
+    height: 2px;
+    border-radius: 999px;
+    background: rgba(94, 234, 212, 0.92);
+    pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.18);
 }
 
 .dropBefore::before {
-  top: 0;
+    top: 0;
 }
 
 .dropAfter::after {
-  bottom: 0;
+    bottom: 0;
 }
 
 .dropInside {
-  background: rgba(94, 234, 212, 0.08);
-  outline: 1px solid rgba(94, 234, 212, 0.65);
-  outline-offset: -2px;
+    background: rgba(94, 234, 212, 0.08);
+    outline: 1px solid rgba(94, 234, 212, 0.65);
+    outline-offset: -2px;
 }
 
 .dropInvalid {
-  cursor: not-allowed;
-  background: rgba(239, 68, 68, 0.06);
-  outline: 1px solid rgba(239, 68, 68, 0.28);
-  outline-offset: -2px;
+    cursor: not-allowed;
+    background: rgba(239, 68, 68, 0.06);
+    outline: 1px solid rgba(239, 68, 68, 0.28);
+    outline-offset: -2px;
 }

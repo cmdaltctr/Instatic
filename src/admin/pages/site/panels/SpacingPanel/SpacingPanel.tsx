@@ -34,9 +34,9 @@ import type {
   FrameworkSpacingGroup,
 } from '@core/framework/schemas'
 import { cn } from "@ui/cn";
-import { MonitorIcon } from "pixel-art-icons/icons/monitor";
-import { RulerDimensionIcon } from "pixel-art-icons/icons/ruler-dimension";
-import { SmartphoneIcon } from "pixel-art-icons/icons/smartphone";
+import { MonitorSolidIcon } from "pixel-art-icons/icons/monitor-solid";
+import { RulerDimensionSolidIcon } from "pixel-art-icons/icons/ruler-dimension-solid";
+import { SmartphoneSolidIcon } from "pixel-art-icons/icons/smartphone-solid";
 import {
   FrameworkScalePanel,
   type ScaleAdapter,
@@ -155,7 +155,7 @@ function SpacingBarChart({ points }: { points: ChartPoint[] }) {
         data-side="desktop"
         aria-label="Desktop"
       >
-        <MonitorIcon size={14} aria-hidden="true" />
+        <MonitorSolidIcon size={14} aria-hidden="true" />
       </div>
       <div
         className={styles.barChartRow}
@@ -216,7 +216,7 @@ function SpacingBarChart({ points }: { points: ChartPoint[] }) {
         data-side="mobile"
         aria-label="Mobile"
       >
-        <SmartphoneIcon size={14} aria-hidden="true" />
+        <SmartphoneSolidIcon size={14} aria-hidden="true" />
       </div>
       <div
         className={styles.barChartRow}
@@ -336,7 +336,7 @@ export function SpacingPanel() {
       Boolean(state.site?.settings.framework?.spacing?.isDisabled),
     ratioOptions: SPACING_RATIO_OPTIONS,
     classGeneratorProperties: SPACING_CSS_PROPERTIES,
-    scalesSectionIcon: RulerDimensionIcon,
+    scalesSectionIcon: RulerDimensionSolidIcon,
     baseSizeLabel: "Size",
     readBaseSize: (group, side) => Number(group[side].size),
     patchBaseSize: (side, value) => ({

@@ -57,7 +57,7 @@ If ports are busy, inspect them and avoid killing processes you did not start un
 3. Reset only disposable data for the run.
 4. Start or identify the local app URL, usually `http://localhost:5173/admin`.
 5. Use the browser as a user. Prefer visible labels and accessible names over test IDs or internal selectors.
-6. After each navigation or UI state change, capture a fresh snapshot or screenshot.
+6. Capture screenshots at the required proof points in `docs/e2e/protocol.md`, plus any time a visual issue or confusing state appears.
 7. Log every scenario result in `docs/e2e/runs/YYYY-MM-DD-<scope>.md`.
 8. File issues inside the run log before investigating implementation details.
 9. Summarize blockers, top issues, and recommended next fixes.

@@ -1,9 +1,9 @@
 import { CheckIcon } from 'pixel-art-icons/icons/check'
-import { CircleAlertIcon } from 'pixel-art-icons/icons/circle-alert'
-import { ExternalLinkIcon } from 'pixel-art-icons/icons/external-link'
+import { CircleAlertSolidIcon } from 'pixel-art-icons/icons/circle-alert-solid'
+import { ExternalLinkSolidIcon } from 'pixel-art-icons/icons/external-link-solid'
 import { LoaderIcon } from 'pixel-art-icons/icons/loader'
-import { SaveIcon } from 'pixel-art-icons/icons/save'
-import { SendIcon } from 'pixel-art-icons/icons/send'
+import { SaveSolidIcon } from 'pixel-art-icons/icons/save-solid'
+import { SendSolidIcon } from 'pixel-art-icons/icons/send-solid'
 import type { IconComponent } from 'pixel-art-icons/types'
 import type { ContentCollection, ContentEntry } from '@core/content/schemas'
 import {
@@ -110,8 +110,8 @@ function derivePublishIcon(args: {
   // `isCleanPublished ? CheckIcon` proof-of-shape.
   return saveMessage === 'publishing' ? LoaderIcon
     : isCleanPublished ? CheckIcon
-    : saveMessage === 'error' ? CircleAlertIcon
-    : SendIcon
+    : saveMessage === 'error' ? CircleAlertSolidIcon
+    : SendSolidIcon
 }
 
 function derivePublishState(args: {
@@ -174,7 +174,7 @@ export function ContentToolbar({
     {
       id: 'save-draft',
       label: 'Save draft',
-      icon: SaveIcon,
+      icon: SaveSolidIcon,
       disabled: !selectedEntry || !canSaveDraft || isSaving || !isDirty,
       onSelect: onSaveDraft,
       testId: 'toolbar-content-save-draft-action',
@@ -182,7 +182,7 @@ export function ContentToolbar({
     {
       id: 'open-live',
       label: `Open live ${entryLabel}`,
-      icon: ExternalLinkIcon,
+      icon: ExternalLinkSolidIcon,
       disabled: !publicPath,
       onSelect: () => {
         if (!publicPath) return

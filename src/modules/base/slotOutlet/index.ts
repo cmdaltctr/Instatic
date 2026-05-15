@@ -12,7 +12,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { TargetIcon } from 'pixel-art-icons/icons/target'
+import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import { SlotOutletEditor } from './SlotOutletEditor'
 
 interface SlotOutletProps extends Record<string, unknown> {
@@ -25,7 +25,7 @@ export const SlotOutletModule: ModuleDefinition<SlotOutletProps> = {
   description: 'A slot placeholder for component content',
   category: 'Components',
   version: '1.0.0',
-  icon: TargetIcon,
+  icon: TargetSolidIcon,
   trusted: true,
   canHaveChildren: false,
 

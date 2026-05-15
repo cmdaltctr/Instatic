@@ -1,5 +1,5 @@
 import { Button } from '@ui/components/Button'
-import { EditIcon } from 'pixel-art-icons/icons/edit'
+import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
 import styles from './RatioModeToggle.module.css'
 
 /**
@@ -27,7 +27,7 @@ export function RatioModeToggle({
       pressed={isCustom}
       onClick={onToggle}
     >
-      <EditIcon size={11} aria-hidden="true" />
+      <EditSolidIcon size={11} aria-hidden="true" />
     </Button>
   )
 }

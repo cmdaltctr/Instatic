@@ -3,7 +3,7 @@ import { useEditorStore } from '@site/store/store'
 import { buildPageContext } from '@site/agent/agentSlice'
 import { registry } from '@core/module-engine/registry'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
-import { SquareIcon } from 'pixel-art-icons/icons/square'
+import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import '@modules/base'
 
 const DYNAMIC_MODULE_ID = 'custom.dynamicHero'
@@ -14,7 +14,7 @@ const dynamicModule: AnyModuleDefinition = {
   description: 'Runtime registered hero module',
   category: 'Marketing',
   version: '1.0.0',
-  icon: SquareIcon,
+  icon: SquareSolidIcon,
   trusted: true,
   canHaveChildren: true,
   schema: {

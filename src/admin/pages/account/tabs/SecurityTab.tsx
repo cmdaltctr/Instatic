@@ -10,7 +10,7 @@ import {
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { Input } from '@ui/components/Input'
-import { CopyIcon } from 'pixel-art-icons/icons/copy'
+import { CopySolidIcon } from 'pixel-art-icons/icons/copy-solid'
 import { useAdminSessionSetter } from '@admin/sessionContext'
 import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
 import styles from '../AccountPage.module.css'
@@ -520,7 +520,7 @@ export function SecurityTab({ user }: SecurityTabProps) {
                     onClick={() => void handleCopySecret()}
                     data-testid="security-mfa-copy-secret"
                   >
-                    <CopyIcon size={12} aria-hidden="true" />
+                    <CopySolidIcon size={12} aria-hidden="true" />
                     <span>{secretCopied ? 'Copied' : 'Copy key'}</span>
                   </Button>
                 </div>

@@ -15,9 +15,9 @@
 
 import { useCallback } from 'react'
 import { useEditorStore } from '@site/store/store'
-import { WarningDiamondIcon } from 'pixel-art-icons/icons/warning-diamond'
+import { WarningDiamondSolidIcon } from 'pixel-art-icons/icons/warning-diamond-solid'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
-import { ExternalLinkIcon } from 'pixel-art-icons/icons/external-link'
+import { ExternalLinkSolidIcon } from 'pixel-art-icons/icons/external-link-solid'
 import { Button } from '@ui/components/Button'
 import { ParamRow } from './ParamRow'
 import styles from './ComponentRefView.module.css'
@@ -62,7 +62,7 @@ export function ComponentRefView({ nodeId, componentId, propOverrides }: Compone
   if (!vc) {
     return (
       <div className={styles.unknownVC}>
-        <WarningDiamondIcon size={14} color="currentColor" aria-hidden="true" />
+        <WarningDiamondSolidIcon size={14} color="currentColor" aria-hidden="true" />
         <p>Unknown component: {componentId}</p>
       </div>
     )
@@ -82,7 +82,7 @@ export function ComponentRefView({ nodeId, componentId, propOverrides }: Compone
           onClick={handleOpenInCanvas}
           tooltip="Open component in canvas"
         >
-          <ExternalLinkIcon size={10} color="currentColor" aria-hidden="true" />
+          <ExternalLinkSolidIcon size={10} color="currentColor" aria-hidden="true" />
           Open in canvas
         </Button>
       </div>

@@ -21,7 +21,7 @@ import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { SearchBar } from '@ui/components/SearchBar'
 import { Switch } from '@ui/components/Switch'
-import { PackageIcon } from 'pixel-art-icons/icons/package'
+import { PackageSolidIcon } from 'pixel-art-icons/icons/package-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { isSafePackageName } from '@core/site-dependencies/packageNames'
@@ -381,7 +381,7 @@ export function DepsSection() {
         <div className={styles.addRow}>
           <div className={styles.addInputArea}>
             <div className={styles.addInputWrapper}>
-              <PackageIcon size={11} color="var(--editor-text-subtle)" aria-hidden="true" />
+              <PackageSolidIcon size={11} color="var(--editor-text-subtle)" aria-hidden="true" />
               <Input
                 data-testid="add-dep-input"
                 type="text"
@@ -513,7 +513,7 @@ function DepRow({
       className={styles.depRow}
     >
       <span className={styles.depRowIcon} aria-hidden="true">
-        <PackageIcon size={11} />
+        <PackageSolidIcon size={11} />
       </span>
       <span
         className={styles.depName}

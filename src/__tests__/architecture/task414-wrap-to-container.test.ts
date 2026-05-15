@@ -20,7 +20,7 @@ import type { ComponentType } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { registry } from '@core/module-engine/registry'
 import type { AnyModuleDefinition, ModuleComponentProps } from '@core/module-engine/types'
-import { SquareIcon } from 'pixel-art-icons/icons/square'
+import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -38,7 +38,7 @@ const testContainerModule: AnyModuleDefinition = {
   description: 'Container module used for Task #414 regression tests',
   category: 'Layout',
   version: '1.0.0',
-  icon: SquareIcon,
+  icon: SquareSolidIcon,
   trusted: true,
   canHaveChildren: true,
   schema: {

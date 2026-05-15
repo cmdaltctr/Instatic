@@ -14,9 +14,9 @@ import { createPortal, flushSync } from 'react-dom'
 import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem } from '@ui/components/ContextMenu'
 import { ChevronDownIcon } from 'pixel-art-icons/icons/chevron-down'
-import { DragAndDropIcon } from 'pixel-art-icons/icons/drag-and-drop'
+import { DragAndDropSolidIcon } from 'pixel-art-icons/icons/drag-and-drop-solid'
 import { HeadingIcon } from 'pixel-art-icons/icons/heading'
-import { ImagesIcon } from 'pixel-art-icons/icons/images'
+import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
 import { TextStartTIcon } from 'pixel-art-icons/icons/text-start-t'
 import { autoformatMarkdownShortcut, createMediaBlock, createParagraphBlock } from '@core/content/markdown'
 import type { ContentBlock, ContentMediaType } from '@core/content/schemas'
@@ -516,7 +516,7 @@ function BlockFrame({
           disabled={readOnly}
           onPointerDown={(event) => onDragPointerDown(event, block.id)}
         >
-          <DragAndDropIcon size={13} aria-hidden="true" />
+          <DragAndDropSolidIcon size={13} aria-hidden="true" />
         </Button>
         <Button
           variant="secondary"
@@ -543,7 +543,7 @@ const BLOCK_TYPE_OPTIONS: Array<{ value: BlockTypeMenuValue; label: string; icon
   { value: 'heading-2', label: 'Heading 2', icon: <HeadingIcon size={14} /> },
   { value: 'heading-3', label: 'Heading 3', icon: <HeadingIcon size={14} /> },
   { value: 'heading-4', label: 'Heading 4', icon: <HeadingIcon size={14} /> },
-  { value: 'media', label: 'Media', icon: <ImagesIcon size={14} /> },
+  { value: 'media', label: 'Media', icon: <ImagesSolidIcon size={14} /> },
 ]
 
 function getBlockTypeOption(block: ContentBlock) {

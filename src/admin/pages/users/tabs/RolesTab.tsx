@@ -20,7 +20,7 @@ import {
   DataTableHeader,
   DataTableRow,
 } from '@ui/components/DataTable'
-import { DeleteSolidIcon } from 'pixel-art-icons/icons/delete-solid'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
 import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
@@ -226,7 +226,7 @@ export function RolesTab({ data, canManageRoles }: RolesTabProps) {
                               },
                               {
                                 label: 'Delete',
-                                icon: <DeleteSolidIcon size={12} aria-hidden="true" />,
+                                icon: <TrashSolidIcon size={12} aria-hidden="true" />,
                                 danger: true,
                                 onSelect: () => void remove(role),
                               },

@@ -21,7 +21,7 @@ import {
   DataTableHeader,
   DataTableRow,
 } from '@ui/components/DataTable'
-import { DeleteSolidIcon } from 'pixel-art-icons/icons/delete-solid'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { SaveSolidIcon } from 'pixel-art-icons/icons/save-solid'
@@ -264,7 +264,7 @@ export function UsersTab({ data, canManageUsers }: UsersTabProps) {
                           },
                           {
                             label: 'Delete',
-                            icon: <DeleteSolidIcon size={12} aria-hidden="true" />,
+                            icon: <TrashSolidIcon size={12} aria-hidden="true" />,
                             danger: true,
                             onSelect: () => void remove(user),
                           },

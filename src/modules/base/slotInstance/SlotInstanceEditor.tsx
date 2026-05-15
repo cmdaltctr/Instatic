@@ -10,7 +10,7 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
-import { TargetIcon } from 'pixel-art-icons/icons/target'
+import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import styles from './SlotInstance.module.css'
 
 interface SlotInstanceProps extends Record<string, unknown> {
@@ -27,7 +27,7 @@ export const SlotInstanceEditor: React.FC<ModuleComponentProps<SlotInstanceProps
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <TargetIcon size={11} color="currentColor" aria-hidden="true" />
+        <TargetSolidIcon size={11} color="currentColor" aria-hidden="true" />
         <span className={styles.label}>Slot: {slotName}</span>
       </div>
       <div className={styles.content}>{children}</div>

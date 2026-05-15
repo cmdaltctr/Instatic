@@ -4,11 +4,11 @@ import { pagePublicPath } from '@core/page-tree/slugs'
 import { getCmsPublishStatus, publishCmsDraft } from '@core/persistence'
 import { LoaderIcon } from 'pixel-art-icons/icons/loader'
 import { CheckIcon } from 'pixel-art-icons/icons/check'
-import { CircleAlertIcon } from 'pixel-art-icons/icons/circle-alert'
-import { CloudUploadIcon } from 'pixel-art-icons/icons/cloud-upload'
-import { ExternalLinkIcon } from 'pixel-art-icons/icons/external-link'
-import { EyeIcon } from 'pixel-art-icons/icons/eye'
-import { SaveIcon } from 'pixel-art-icons/icons/save'
+import { CircleAlertSolidIcon } from 'pixel-art-icons/icons/circle-alert-solid'
+import { CloudUploadSolidIcon } from 'pixel-art-icons/icons/cloud-upload-solid'
+import { ExternalLinkSolidIcon } from 'pixel-art-icons/icons/external-link-solid'
+import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
+import { SaveSolidIcon } from 'pixel-art-icons/icons/save-solid'
 import type { PersistenceSaveStatus } from '@site/hooks/usePersistence'
 import { PublishActionGroup, type PublishActionMenuItem } from './PublishActionGroup'
 
@@ -158,14 +158,14 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
   const PublishIcon =
     isPublishing ? LoaderIcon :
     state === 'published' ? CheckIcon :
-    state === 'error' ? CircleAlertIcon :
-    CloudUploadIcon
+    state === 'error' ? CircleAlertSolidIcon :
+    CloudUploadSolidIcon
 
   const menuItems: PublishActionMenuItem[] = [
     {
       id: 'save-draft',
       label: 'Save draft',
-      icon: SaveIcon,
+      icon: SaveSolidIcon,
       disabled: !onSave || isSaving || isStatusSaving,
       onSelect: handleManualSave,
       testId: 'toolbar-save-draft-action',
@@ -173,7 +173,7 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
     {
       id: 'preview',
       label: 'Preview page',
-      icon: EyeIcon,
+      icon: EyeSolidIcon,
       disabled: !site,
       onSelect: () => openPreview(),
       testId: 'toolbar-preview-action',
@@ -181,7 +181,7 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
     {
       id: 'open-live',
       label: 'Open live page',
-      icon: ExternalLinkIcon,
+      icon: ExternalLinkSolidIcon,
       disabled: !activePage,
       onSelect: () => {
         if (!activePage) return

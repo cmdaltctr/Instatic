@@ -48,13 +48,13 @@ import {
   TreeMeta,
 } from '@site/ui/Tree'
 import { pillAccent } from '@ui/pillAccent'
-import { CopyIcon } from 'pixel-art-icons/icons/copy'
-import { Copy2Icon } from 'pixel-art-icons/icons/copy-2'
-import { EraserIcon } from 'pixel-art-icons/icons/eraser'
-import { FilesStack2Icon } from 'pixel-art-icons/icons/files-stack-2'
-import { CheckboxIcon } from 'pixel-art-icons/icons/checkbox'
-import { BoxStackIcon } from 'pixel-art-icons/icons/box-stack'
-import { DeleteIcon } from 'pixel-art-icons/icons/delete'
+import { CopySolidIcon } from 'pixel-art-icons/icons/copy-solid'
+import { Copy2SolidIcon } from 'pixel-art-icons/icons/copy-2-solid'
+import { EraserSolidIcon } from 'pixel-art-icons/icons/eraser-solid'
+import { FilesStack2SolidIcon } from 'pixel-art-icons/icons/files-stack-2-solid'
+import { CheckboxSolidIcon } from 'pixel-art-icons/icons/checkbox-solid'
+import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import {
   ContextMenu,
@@ -170,7 +170,7 @@ export function MultiSelectionInspector({
             onClick={handlers.duplicate}
             tooltip="Duplicate selected layers"
           >
-            <CopyIcon size={13} aria-hidden="true" />
+            <CopySolidIcon size={13} aria-hidden="true" />
             Duplicate
           </Button>
           <Button
@@ -182,7 +182,7 @@ export function MultiSelectionInspector({
             aria-expanded={wrapMenu !== null}
             tooltip="Wrap selected layers"
           >
-            <CheckboxIcon size={13} aria-hidden="true" />
+            <CheckboxSolidIcon size={13} aria-hidden="true" />
             Wrap…
           </Button>
           <Button
@@ -191,17 +191,17 @@ export function MultiSelectionInspector({
             onClick={handleDelete}
             tooltip="Delete selected layers"
           >
-            <DeleteIcon size={13} aria-hidden="true" />
+            <TrashSolidIcon size={13} aria-hidden="true" />
             Delete
           </Button>
         </div>
         <div className={styles.actionRow}>
           <Button variant="ghost" size="sm" onClick={handlers.copy} tooltip="Copy">
-            <Copy2Icon size={13} aria-hidden="true" />
+            <Copy2SolidIcon size={13} aria-hidden="true" />
             Copy
           </Button>
           <Button variant="ghost" size="sm" onClick={handlers.cut} tooltip="Cut">
-            <EraserIcon size={13} aria-hidden="true" />
+            <EraserSolidIcon size={13} aria-hidden="true" />
             Cut
           </Button>
           <Button
@@ -211,7 +211,7 @@ export function MultiSelectionInspector({
             disabled={!canPaste}
             tooltip="Paste at anchor"
           >
-            <FilesStack2Icon size={13} aria-hidden="true" />
+            <FilesStack2SolidIcon size={13} aria-hidden="true" />
             Paste
           </Button>
         </div>
@@ -302,13 +302,13 @@ function WrapMenu({ x, y, onClose, onWrapContainer, onWrapLoop }: WrapMenuProps)
     <ContextMenu x={x} y={y} ariaLabel="Wrap selection in" onClose={onClose}>
       <ContextMenuItem ref={firstRef} onClick={onWrapContainer}>
         <span aria-hidden="true">
-          <CheckboxIcon size={13} />
+          <CheckboxSolidIcon size={13} />
         </span>
         Container
       </ContextMenuItem>
       <ContextMenuItem onClick={onWrapLoop}>
         <span aria-hidden="true">
-          <BoxStackIcon size={13} />
+          <BoxStackSolidIcon size={13} />
         </span>
         Loop
       </ContextMenuItem>

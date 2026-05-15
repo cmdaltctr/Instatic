@@ -15,9 +15,9 @@ import { useEditorStore } from '@site/store/store'
 import { Button } from '@ui/components/Button'
 import { Separator } from '@ui/components/Separator'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
-import { SettingsCogIcon } from 'pixel-art-icons/icons/settings-cog'
-import { FileTextIcon } from 'pixel-art-icons/icons/file-text'
-import { SmartphoneIcon } from 'pixel-art-icons/icons/smartphone'
+import { SettingsCogSolidIcon } from 'pixel-art-icons/icons/settings-cog-solid'
+import { FileTextSolidIcon } from 'pixel-art-icons/icons/file-text-solid'
+import { SmartphoneSolidIcon } from 'pixel-art-icons/icons/smartphone-solid'
 import { CommandIcon } from 'pixel-art-icons/icons/command'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
 import { SlidersHorizontalIcon } from 'pixel-art-icons/icons/sliders-horizontal'
@@ -32,9 +32,9 @@ import s from './SettingsModal.module.css'
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { id: 'general',     label: 'General',     icon: SettingsCogIcon       },
-  { id: 'pages',       label: 'Pages',       icon: FileTextIcon          },
-  { id: 'breakpoints', label: 'Breakpoints', icon: SmartphoneIcon        },
+  { id: 'general',     label: 'General',     icon: SettingsCogSolidIcon       },
+  { id: 'pages',       label: 'Pages',       icon: FileTextSolidIcon          },
+  { id: 'breakpoints', label: 'Breakpoints', icon: SmartphoneSolidIcon        },
   { id: 'shortcuts',   label: 'Shortcuts',   icon: CommandIcon           },
   { id: 'publishing',  label: 'Publishing',  icon: UploadIcon            },
   { id: 'preferences', label: 'Preferences', icon: SlidersHorizontalIcon },

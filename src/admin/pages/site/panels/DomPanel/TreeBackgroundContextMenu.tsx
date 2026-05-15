@@ -31,7 +31,7 @@ import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { useInsertModule } from '@site/hooks/useInsertModule'
 import { ModulePicker } from '@site/module-picker'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
-import { FilesStack2Icon } from 'pixel-art-icons/icons/files-stack-2'
+import { FilesStack2SolidIcon } from 'pixel-art-icons/icons/files-stack-2-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
 
 interface TreeBackgroundContextMenuProps {
@@ -101,7 +101,7 @@ export function TreeBackgroundContextMenu({
       {canPaste && (
         <>
           <ContextMenuItem ref={firstItemRef} onClick={handlePaste}>
-            <span aria-hidden="true"><FilesStack2Icon size={13} /></span>
+            <span aria-hidden="true"><FilesStack2SolidIcon size={13} /></span>
             Paste
           </ContextMenuItem>
           <ContextMenuSeparator />

@@ -20,6 +20,18 @@ Copy this structure into `docs/e2e/runs/YYYY-MM-DD-<scope>.md` for each run.
 - Browser:
 - Viewports:
 
+## Screenshot Trail
+
+| Moment | Screenshot | Notes |
+|---|---|---|
+| Start state |  |  |
+| Post-setup/login |  |  |
+| Editor baseline |  |  |
+| Main edit result |  |  |
+| Reload/persistence |  |  |
+| Publish feedback |  |  |
+| Public page |  |  |
+
 ## Summary
 
 - Scenarios run:

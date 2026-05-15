@@ -7,7 +7,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { ArticleIcon } from 'pixel-art-icons/icons/article'
+import { ArticleSolidIcon } from 'pixel-art-icons/icons/article-solid'
 import { ContentEditor } from './ContentEditor'
 
 interface ContentProps extends Record<string, unknown> {
@@ -20,7 +20,7 @@ export const ContentModule: ModuleDefinition<ContentProps> = {
   description: 'Renders the current CMS entry body.',
   category: 'CMS',
   version: '1.0.0',
-  icon: ArticleIcon,
+  icon: ArticleSolidIcon,
   trusted: true,
   canHaveChildren: false,
 

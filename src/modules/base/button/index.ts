@@ -7,7 +7,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { CursorClickIcon } from 'pixel-art-icons/icons/cursor-click'
+import { CursorClickSolidIcon } from 'pixel-art-icons/icons/cursor-click-solid'
 import { safeUrl } from '@modules/base/utils/escape'
 import { ButtonEditor } from './ButtonEditor'
 
@@ -24,7 +24,7 @@ export const ButtonModule: ModuleDefinition<ButtonProps> = {
   description: 'A button or call-to-action link.',
   category: 'Interactive',
   version: '2.0.0',
-  icon: CursorClickIcon,
+  icon: CursorClickSolidIcon,
   trusted: true,
   canHaveChildren: false,
 

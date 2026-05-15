@@ -82,6 +82,25 @@ Before destructive reset, confirm the target is disposable:
 9. **Summarize**
    End with scenario totals, top issues by severity, blockers, product questions, and recommended next pass.
 
+## Screenshot Proof Trail
+
+Capture screenshots during autonomous runs so the user can audit what happened without watching every click.
+
+Minimum screenshot points for the Core Owner Lifecycle:
+
+| Moment | Purpose |
+|---|---|
+| First loaded admin/setup screen | Proves the run started from the expected state. |
+| Completed setup or logged-in landing state | Proves authentication/setup succeeded. |
+| Editor before the main edit | Establishes baseline UI state. |
+| Editor after each major user-visible edit | Proves the intended change appeared in the UI. |
+| Save/reload result | Proves persistence from the user's perspective. |
+| Publish feedback | Proves the publish flow completed or failed visibly. |
+| Public page after publish | Proves visitor-facing output. |
+| Any bug, friction, visual issue, or confusing state | Provides evidence for the finding. |
+
+Store screenshot paths or inline image references in the run log. Prefer screenshots for visual/layout claims and browser snapshots for control discovery or text/state claims.
+
 ## Result Values
 
 | Result | Meaning |

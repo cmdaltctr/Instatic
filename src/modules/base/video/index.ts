@@ -8,7 +8,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { VideoIcon } from 'pixel-art-icons/icons/video'
+import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import { safeUrl } from '@modules/base/utils/escape'
 import { VideoEditor } from './VideoEditor'
 
@@ -34,7 +34,7 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
   description: 'Embed a CMS media video or YouTube video.',
   category: 'Media',
   version: '2.0.0',
-  icon: VideoIcon,
+  icon: VideoSolidIcon,
   trusted: true,
   canHaveChildren: false,
 

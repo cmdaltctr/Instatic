@@ -26,8 +26,8 @@ import {
   ContextMenuSeparator,
 } from '@ui/components/ContextMenu'
 import { Copy2SharpIcon } from 'pixel-art-icons/icons/copy-2-sharp'
-import { DeleteIcon } from 'pixel-art-icons/icons/delete'
-import { FilePlusIcon } from 'pixel-art-icons/icons/file-plus'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
+import { FilePlusSolidIcon } from 'pixel-art-icons/icons/file-plus-solid'
 import { ReloadIcon } from 'pixel-art-icons/icons/reload'
 import { useEditorStore } from '@site/store/store'
 import { resolveFrameworkPreferences } from '@core/framework/preferences'
@@ -115,7 +115,7 @@ export function FrameworkScalePanel<G extends GroupShape, C extends GeneratorSha
             onClick={handleAddGroup}
             disabled={isDisabled}
           >
-            <FilePlusIcon size={13} aria-hidden="true" />
+            <FilePlusSolidIcon size={13} aria-hidden="true" />
           </Button>
         }
       >
@@ -159,7 +159,7 @@ export function FrameworkScalePanel<G extends GroupShape, C extends GeneratorSha
             onClick={() => handleDelete(contextMenu.groupId)}
           >
             <span aria-hidden="true">
-              <DeleteIcon size={13} />
+              <TrashSolidIcon size={13} />
             </span>
             Remove
           </ContextMenuItem>

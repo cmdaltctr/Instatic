@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, type KeyboardEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { Textarea } from '@ui/components/Input'
 import { cn } from '@ui/cn'
-import { FilePlusIcon } from 'pixel-art-icons/icons/file-plus'
+import { FilePlusSolidIcon } from 'pixel-art-icons/icons/file-plus-solid'
 import { createParagraphBlock } from '@core/content/markdown'
 import { contentCollectionHasField } from '@core/content/fields'
 import type { ContentBlock, ContentCollection, ContentEntry } from '@core/content/schemas'
@@ -93,7 +93,7 @@ export function ContentDocumentCanvas({
       disabled={loading || !editorEnabled}
       onClick={() => onBlocksChange([...blocks, createParagraphBlock()])}
     >
-      <FilePlusIcon size={14} aria-hidden="true" />
+      <FilePlusSolidIcon size={14} aria-hidden="true" />
       <span>Add</span>
     </Button>
   ) : null
@@ -150,7 +150,7 @@ export function ContentDocumentCanvas({
             <h2>Create the first {singularLabel}</h2>
             <p>Select a collection and create an entry to start writing.</p>
             <Button variant="primary" size="md" onClick={onCreateEntry} disabled={!selectedCollection || !canCreateEntry}>
-              <FilePlusIcon size={15} aria-hidden="true" />
+              <FilePlusSolidIcon size={15} aria-hidden="true" />
               <span>New {selectedCollection?.singularLabel ?? 'Entry'}</span>
             </Button>
           </div>

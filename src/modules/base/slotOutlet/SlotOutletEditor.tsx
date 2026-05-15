@@ -13,7 +13,7 @@
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
 import { useEditorStore } from '@site/store/store'
-import { TargetIcon } from 'pixel-art-icons/icons/target'
+import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import styles from './SlotOutlet.module.css'
 
 interface SlotOutletProps extends Record<string, unknown> {
@@ -29,7 +29,7 @@ export const SlotOutletEditor: React.FC<ModuleComponentProps<SlotOutletProps>> =
 
   return (
     <div className={styles.placeholder}>
-      <TargetIcon size={12} color="currentColor" aria-hidden="true" />
+      <TargetSolidIcon size={12} color="currentColor" aria-hidden="true" />
       <span className={styles.label}>Slot: {slotName}</span>
     </div>
   )

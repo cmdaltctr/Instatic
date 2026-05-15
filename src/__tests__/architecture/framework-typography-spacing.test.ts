@@ -119,7 +119,7 @@ describe('architecture — panel rail', () => {
 
   it('rail wires both new panels via the catalog icon imports', () => {
     expect(railSource).toContain("from 'pixel-art-icons/icons/text-start-t'")
-    expect(railSource).toContain("from 'pixel-art-icons/icons/ruler-dimension'")
+    expect(railSource).toContain("from 'pixel-art-icons/icons/ruler-dimension-solid'")
   })
 
   it('rail exposes typography + spacing entries with stable ids', () => {

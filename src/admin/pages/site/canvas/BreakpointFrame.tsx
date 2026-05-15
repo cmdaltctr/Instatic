@@ -18,7 +18,7 @@ import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { NodeRenderer } from './NodeRenderer'
 import { BreakpointSelectionOverlay } from './BreakpointSelectionOverlay'
 import { CanvasBreakpointContext, CanvasTemplateContext } from './CanvasContexts'
-import { PlusBoxIcon } from 'pixel-art-icons/icons/plus-box'
+import { PlusBoxSolidIcon } from 'pixel-art-icons/icons/plus-box-solid'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { cn } from '@ui/cn'
@@ -120,7 +120,7 @@ function EmptyCanvasState() {
     <EmptyState
       variant="centered"
       className={styles.emptyState}
-      icon={<PlusBoxIcon size={40} color="var(--editor-text-subtle)" />}
+      icon={<PlusBoxSolidIcon size={40} color="var(--editor-text-subtle)" />}
       title="Empty page"
       description="Add your first element using the toolbar."
     />

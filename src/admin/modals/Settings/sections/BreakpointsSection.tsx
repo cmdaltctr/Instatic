@@ -6,11 +6,11 @@
  */
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useEditorStore } from '@site/store/store'
-import { SmartphoneIcon } from 'pixel-art-icons/icons/smartphone'
-import { TabletIcon } from 'pixel-art-icons/icons/tablet'
-import { MonitorIcon } from 'pixel-art-icons/icons/monitor'
-import { LaptopIcon } from 'pixel-art-icons/icons/laptop'
-import { TvIcon } from 'pixel-art-icons/icons/tv'
+import { SmartphoneSolidIcon } from 'pixel-art-icons/icons/smartphone-solid'
+import { TabletSolidIcon } from 'pixel-art-icons/icons/tablet-solid'
+import { MonitorSolidIcon } from 'pixel-art-icons/icons/monitor-solid'
+import { LaptopSolidIcon } from 'pixel-art-icons/icons/laptop-solid'
+import { TvSolidIcon } from 'pixel-art-icons/icons/tv-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
@@ -19,11 +19,11 @@ import type { Breakpoint } from '@core/page-tree/schemas'
 import s from '../SettingsModal.module.css'
 
 const ICON_OPTIONS = [
-  { value: 'smartphone', label: 'Smartphone', icon: <SmartphoneIcon size={13} /> },
-  { value: 'tablet', label: 'Tablet', icon: <TabletIcon size={13} /> },
-  { value: 'monitor', label: 'Monitor', icon: <MonitorIcon size={13} /> },
-  { value: 'laptop', label: 'Laptop', icon: <LaptopIcon size={13} /> },
-  { value: 'tv', label: 'TV', icon: <TvIcon size={13} /> },
+  { value: 'smartphone', label: 'Smartphone', icon: <SmartphoneSolidIcon size={13} /> },
+  { value: 'tablet', label: 'Tablet', icon: <TabletSolidIcon size={13} /> },
+  { value: 'monitor', label: 'Monitor', icon: <MonitorSolidIcon size={13} /> },
+  { value: 'laptop', label: 'Laptop', icon: <LaptopSolidIcon size={13} /> },
+  { value: 'tv', label: 'TV', icon: <TvSolidIcon size={13} /> },
 ]
 
 export function BreakpointsSection() {
@@ -252,15 +252,15 @@ export function BreakpointsSection() {
 function BreakpointIcon({ name, color }: { name: string; color: string }) {
   switch (name) {
     case 'smartphone':
-      return <SmartphoneIcon size={14} color={color} />
+      return <SmartphoneSolidIcon size={14} color={color} />
     case 'tablet':
-      return <TabletIcon size={14} color={color} />
+      return <TabletSolidIcon size={14} color={color} />
     case 'laptop':
-      return <LaptopIcon size={14} color={color} />
+      return <LaptopSolidIcon size={14} color={color} />
     case 'tv':
-      return <TvIcon size={14} color={color} />
+      return <TvSolidIcon size={14} color={color} />
     case 'monitor':
     default:
-      return <MonitorIcon size={14} color={color} />
+      return <MonitorSolidIcon size={14} color={color} />
   }
 }

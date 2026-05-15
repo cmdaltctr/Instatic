@@ -21,7 +21,7 @@ import { useEditorStore, selectActivePage } from '@site/store/store'
 import { publishPage } from '@core/publisher/render'
 import { registry } from '@core/module-engine/registry'
 import { useTemplatePreviewContext } from '@site/hooks/useTemplatePreviewContext'
-import { EyeIcon } from 'pixel-art-icons/icons/eye'
+import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { Button } from '@ui/components/Button'
 import styles from './PreviewOverlay.module.css'
@@ -86,7 +86,7 @@ export function PreviewOverlay() {
         <div className={styles.card}>
           {/* ── Header bar ──────────────────────────────────────────────── */}
           <div className={styles.header}>
-            <EyeIcon size={14} color="var(--editor-text-secondary)" className={styles.headerIcon} />
+            <EyeSolidIcon size={14} color="var(--editor-text-secondary)" className={styles.headerIcon} />
             <span className={styles.headerTitle}>
               Preview — {activePage.title}
             </span>

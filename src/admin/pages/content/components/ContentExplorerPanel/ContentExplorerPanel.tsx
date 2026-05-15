@@ -2,15 +2,15 @@ import { useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { cn } from '@ui/cn'
-import { BookOpenIcon } from 'pixel-art-icons/icons/book-open'
-import { BookPlusIcon } from 'pixel-art-icons/icons/book-plus'
-import { CopyIcon } from 'pixel-art-icons/icons/copy'
-import { Copy2Icon } from 'pixel-art-icons/icons/copy-2'
-import { ExternalLinkIcon } from 'pixel-art-icons/icons/external-link'
-import { FilePlusIcon } from 'pixel-art-icons/icons/file-plus'
-import { FileTextIcon } from 'pixel-art-icons/icons/file-text'
+import { BookOpenSolidIcon } from 'pixel-art-icons/icons/book-open-solid'
+import { BookPlusSolidIcon } from 'pixel-art-icons/icons/book-plus-solid'
+import { CopySolidIcon } from 'pixel-art-icons/icons/copy-solid'
+import { Copy2SolidIcon } from 'pixel-art-icons/icons/copy-2-solid'
+import { ExternalLinkSolidIcon } from 'pixel-art-icons/icons/external-link-solid'
+import { FilePlusSolidIcon } from 'pixel-art-icons/icons/file-plus-solid'
+import { FileTextSolidIcon } from 'pixel-art-icons/icons/file-text-solid'
 import { MoveIcon } from 'pixel-art-icons/icons/move'
-import { Settings2Icon } from 'pixel-art-icons/icons/settings-2'
+import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
 import type { ContentCollection, ContentEntry, UpdateContentCollectionInput } from '@core/content/schemas'
 import { ExplorerItemContextMenu, type ExplorerContextMenuItem } from '@site/explorer-actions'
@@ -151,7 +151,7 @@ export function ContentExplorerPanel({
       items: others.map((collection) => ({
         kind: 'action',
         label: collection.name,
-        icon: <BookOpenIcon size={13} />,
+        icon: <BookOpenSolidIcon size={13} />,
         action: () => {
           void onMoveEntryToCollection(target.entry, collection.id)
           setContextMenu(null)
@@ -165,7 +165,7 @@ export function ContentExplorerPanel({
       if (!canManageCollections) return []
       return [{
         label: 'Collection settings',
-        icon: <Settings2Icon size={13} />,
+        icon: <Settings2SolidIcon size={13} />,
         action: () => {
           setSettingsTarget(target.collection)
           setContextMenu(null)
@@ -187,7 +187,7 @@ export function ContentExplorerPanel({
     } else {
       items.push({
         label: 'Open in new tab',
-        icon: <ExternalLinkIcon size={13} />,
+        icon: <ExternalLinkSolidIcon size={13} />,
         action: () => {
           const collection = collectionForEntry(target.entry)
           if (collection) {
@@ -198,7 +198,7 @@ export function ContentExplorerPanel({
       })
       items.push({
         label: 'Copy URL',
-        icon: <Copy2Icon size={13} />,
+        icon: <Copy2SolidIcon size={13} />,
         action: () => {
           void copyEntryUrl(target.entry)
           setContextMenu(null)
@@ -207,7 +207,7 @@ export function ContentExplorerPanel({
       if (canEditEntry(target.entry)) {
         items.push({
           label: 'Convert to draft',
-          icon: <FileTextIcon size={13} />,
+          icon: <FileTextSolidIcon size={13} />,
           action: () => {
             void onConvertEntryToDraft(target.entry)
             setContextMenu(null)
@@ -219,7 +219,7 @@ export function ContentExplorerPanel({
     if (canCreateEntry) {
       items.push({
         label: 'Duplicate',
-        icon: <CopyIcon size={13} />,
+        icon: <CopySolidIcon size={13} />,
         action: () => {
           void onDuplicateEntry(target.entry)
           setContextMenu(null)
@@ -286,7 +286,7 @@ export function ContentExplorerPanel({
                   aria-label="New collection"
                   tooltip="New collection"
                 >
-                  <BookPlusIcon size={13} aria-hidden="true" />
+                  <BookPlusSolidIcon size={13} aria-hidden="true" />
                 </Button>
               )}
             </div>
@@ -303,7 +303,7 @@ export function ContentExplorerPanel({
                   onContextMenu={(event) => openContextMenu({ kind: 'collection', collection }, event)}
                   onKeyDown={(event) => openKeyboardContextMenu({ kind: 'collection', collection }, event)}
                 >
-                  <BookOpenIcon size={14} aria-hidden="true" />
+                  <BookOpenSolidIcon size={14} aria-hidden="true" />
                   <span className={explorerStyles.rowLabel}>{collection.name}</span>
                   <span className={explorerStyles.rowMeta}>
                     {collection.id === selectedCollectionId ? entries.length : ''}
@@ -326,7 +326,7 @@ export function ContentExplorerPanel({
                 aria-label={newEntryLabel}
                 tooltip={newEntryLabel}
               >
-                <FilePlusIcon size={13} aria-hidden="true" />
+                <FilePlusSolidIcon size={13} aria-hidden="true" />
               </Button>
             </div>
 
@@ -349,7 +349,7 @@ export function ContentExplorerPanel({
                     onContextMenu={(event) => openContextMenu({ kind: 'entry', entry }, event)}
                     onKeyDown={(event) => openKeyboardContextMenu({ kind: 'entry', entry }, event)}
                   >
-                    <FileTextIcon size={14} aria-hidden="true" />
+                    <FileTextSolidIcon size={14} aria-hidden="true" />
                     <span className={styles.entryTitleStack}>
                       <span className={styles.entryTitle}>{entry.title}</span>
                       <span className={styles.entryAuthor} aria-hidden="true">{entryAuthorLabel(entry)}</span>

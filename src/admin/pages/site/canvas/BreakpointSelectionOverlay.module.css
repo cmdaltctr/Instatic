@@ -12,27 +12,27 @@
  */
 
 .overlayLayer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  /* Stack above any module content. The previous in-wrapper ring used the
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    /* Stack above any module content. The previous in-wrapper ring used the
    * maximum 32-bit z-index for the same reason — modules are arbitrary HTML
    * and can produce their own stacking contexts. */
-  z-index: 2147483647;
+    z-index: 2147483647;
 }
 
 .ringLayer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
 }
 
 .ring {
-  position: absolute;
-  box-sizing: border-box;
-  pointer-events: none;
-  border-radius: 1px;
-  /* No transition: the RAF loop in BreakpointSelectionOverlay.tsx repositions
+    position: absolute;
+    box-sizing: border-box;
+    pointer-events: none;
+    border-radius: 1px;
+    /* No transition: the RAF loop in BreakpointSelectionOverlay.tsx repositions
    * the ring every animation frame from a fresh getBoundingClientRect(), so
    * real-time movement (resize while typing, drag, scroll) is already smooth.
    * A CSS transition on transform/width/height would (a) animate the ring in
@@ -41,72 +41,72 @@
 }
 
 .selection {
-  box-shadow: var(--canvas-selection-ring);
+    box-shadow: var(--canvas-selection-ring);
 }
 
 .hover {
-  box-shadow: var(--canvas-hover-ring);
+    box-shadow: var(--canvas-hover-ring);
 }
 
 .selectionToolbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--panel-border);
-  border-radius: var(--editor-radius);
-  background: var(--panel-bg);
-  box-shadow: var(--panel-shadow);
-  color: var(--editor-text);
-  pointer-events: auto;
-  transform: translate(var(--canvas-toolbar-x), var(--canvas-toolbar-y));
-  z-index: 2147483647;
+    position: fixed;
+    top: 0;
+    left: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    padding: 3px;
+    border-radius: 12px;
+    background: var(--editor-bg);
+    box-shadow: var(--panel-shadow);
+    color: var(--editor-text);
+    pointer-events: auto;
+    transform: translate(var(--canvas-toolbar-x), var(--canvas-toolbar-y));
+    z-index: 2147483647;
 }
 
 .selectionToolbarButton {
-  color: var(--editor-text);
+    border-radius: 9px;
+    aspect-ratio: 1;
 }
 
 .selectionToolbarButton svg {
-  display: block;
-  color: currentColor;
+    display: block;
+    color: currentColor;
 }
 
 .dragToolbarButton {
-  cursor: grab;
+    cursor: grab;
 }
 
 .dragToolbarButton:active {
-  cursor: grabbing;
+    cursor: grabbing;
 }
 
 .dropIndicator,
 .invalidDropIndicator {
-  position: absolute;
-  box-sizing: border-box;
-  pointer-events: none;
-  transform: translate(var(--canvas-drop-x), var(--canvas-drop-y));
-  width: var(--canvas-drop-w);
-  height: var(--canvas-drop-h);
+    position: absolute;
+    box-sizing: border-box;
+    pointer-events: none;
+    transform: translate(var(--canvas-drop-x), var(--canvas-drop-y));
+    width: var(--canvas-drop-w);
+    height: var(--canvas-drop-h);
 }
 
 .dropIndicator[data-position="before"],
 .dropIndicator[data-position="after"] {
-  border-radius: 999px;
-  background: var(--editor-text);
-  box-shadow: var(--canvas-selection-ring);
+    border-radius: 999px;
+    background: var(--editor-text);
+    box-shadow: var(--canvas-selection-ring);
 }
 
 .dropIndicator[data-position="inside"] {
-  border-radius: 2px;
-  box-shadow: var(--canvas-selection-ring);
+    border-radius: 2px;
+    box-shadow: var(--canvas-selection-ring);
 }
 
 .invalidDropIndicator {
-  border-radius: 2px;
-  box-shadow: inset 0 0 0 1px var(--editor-danger);
-  background: var(--editor-danger-bg);
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px var(--editor-danger);
+    background: var(--editor-danger-bg);
 }

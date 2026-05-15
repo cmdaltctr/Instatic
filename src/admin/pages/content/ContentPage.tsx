@@ -8,7 +8,7 @@ import type {
 } from '@core/content/schemas'
 import { useEditorStore } from '@site/store/store'
 import { HeadingIcon } from 'pixel-art-icons/icons/heading'
-import { ImagesIcon } from 'pixel-art-icons/icons/images'
+import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
 import { TextPlusIcon } from 'pixel-art-icons/icons/text-plus'
 import { AdminCanvasLayout } from '@admin/layouts'
 import { MediaExplorerPanel } from '@site/panels/MediaExplorerPanel'
@@ -383,7 +383,7 @@ export function ContentPage() {
     {
       id: 'media',
       label: 'Media',
-      icon: ImagesIcon,
+      icon: ImagesSolidIcon,
       onClick: () => void mediaPicker.openMediaPicker('media'),
     },
   ]

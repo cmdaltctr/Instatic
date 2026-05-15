@@ -18,7 +18,7 @@ import { resolveProps } from '@core/page-tree/selectors'
 import { registry } from '@core/module-engine/registry'
 import { resolveDynamicProps, type TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import type { PageNode } from '@core/page-tree/schemas'
-import { WarningDiamondIcon } from 'pixel-art-icons/icons/warning-diamond'
+import { WarningDiamondSolidIcon } from 'pixel-art-icons/icons/warning-diamond-solid'
 import { ErrorBoundary } from '@ui/components/ErrorBoundary'
 import { ModuleSandboxFrame } from './ModuleSandboxFrame'
 import { CanvasBreakpointContext, CanvasSelectionContext, CanvasTemplateContext } from './CanvasContexts'
@@ -153,7 +153,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
         className={styles.unknownModule}
         title={`Unknown module: ${node.moduleId}`}
       >
-        <WarningDiamondIcon size={14} /> Unknown module: {node.moduleId}
+        <WarningDiamondSolidIcon size={14} /> Unknown module: {node.moduleId}
       </div>
     )
   }

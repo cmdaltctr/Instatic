@@ -3,7 +3,7 @@ import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
 import { Switch } from '@ui/components/Switch'
-import { DeleteIcon } from 'pixel-art-icons/icons/delete'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import type { GeneratorShape, GroupShape, ScaleAdapter } from './adapter'
 import styles from './ClassGenerator.module.css'
 
@@ -64,7 +64,7 @@ export function ClassGeneratorRow<C extends GeneratorShape>({
         aria-label="Delete class"
         onClick={() => onDelete(generator.id)}
       >
-        <DeleteIcon size={12} />
+        <TrashSolidIcon size={12} />
       </Button>
     </div>
   )

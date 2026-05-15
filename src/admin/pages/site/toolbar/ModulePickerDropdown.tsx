@@ -20,7 +20,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { resolveInsertLocation } from '@site/store/insertLocation'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
-import { PlusIcon } from 'pixel-art-icons/icons/plus'
+import { AppGridPlusGlyphIcon } from 'pixel-art-icons/icons/app-grid-plus-glyph'
 import { Button } from '@ui/components/Button'
 import { ModulePickerMenu } from '@site/module-picker'
 import { useInsertModule } from '@site/hooks/useInsertModule'
@@ -94,7 +94,7 @@ export function ModulePickerDropdown({
         onClick={handleOpen}
         data-testid={triggerTestId}
       >
-        <PlusIcon size={13} />
+        <AppGridPlusGlyphIcon size={13} />
       </Button>
 
       {open && (

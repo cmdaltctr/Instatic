@@ -24,8 +24,8 @@ import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
-import { CircleAlertIcon } from 'pixel-art-icons/icons/circle-alert'
-import { WarningDiamondIcon } from 'pixel-art-icons/icons/warning-diamond'
+import { CircleAlertSolidIcon } from 'pixel-art-icons/icons/circle-alert-solid'
+import { WarningDiamondSolidIcon } from 'pixel-art-icons/icons/warning-diamond-solid'
 import {
   dismissToast,
   subscribeToasts,
@@ -62,10 +62,10 @@ function ariaRoleForKind(kind: ToastKind): 'alert' | 'status' {
 }
 
 function ToastIcon({ kind }: { kind: ToastKind }) {
-  if (kind === 'error') return <CircleAlertIcon size={14} aria-hidden="true" />
-  if (kind === 'warning') return <WarningDiamondIcon size={14} aria-hidden="true" />
+  if (kind === 'error') return <CircleAlertSolidIcon size={14} aria-hidden="true" />
+  if (kind === 'warning') return <WarningDiamondSolidIcon size={14} aria-hidden="true" />
   // success / info share the circle-alert glyph at lower visual weight
-  return <CircleAlertIcon size={14} aria-hidden="true" />
+  return <CircleAlertSolidIcon size={14} aria-hidden="true" />
 }
 
 export function ToastProvider() {

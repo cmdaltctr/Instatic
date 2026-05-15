@@ -2,8 +2,8 @@ import { Button } from '@ui/components/Button'
 import { Input, Textarea } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
 import { cn } from '@ui/cn'
-import { Settings2Icon } from 'pixel-art-icons/icons/settings-2'
-import { VideoIcon } from 'pixel-art-icons/icons/video'
+import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
+import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import type { CmsMediaAsset } from '@core/persistence'
 import { useEditorStore } from '@site/store/store'
 import { contentCollectionHasField } from '@core/content/fields'
@@ -130,7 +130,7 @@ export function ContentSettingsPanel({
         title="Settings"
         titleContent={(
           <span className={propertiesStyles.headerNodeTitle}>
-            <Settings2Icon size={13} aria-hidden="true" />
+            <Settings2SolidIcon size={13} aria-hidden="true" />
             <span className={propertiesStyles.headerNodeLabel}>Settings</span>
           </span>
         )}
@@ -240,7 +240,7 @@ export function ContentSettingsPanel({
                       {featuredMediaAsset.mimeType.startsWith('image/') ? (
                         <img src={featuredMediaAsset.publicPath} alt="" />
                       ) : (
-                        <VideoIcon size={16} />
+                        <VideoSolidIcon size={16} />
                       )}
                     </span>
                     <span className={styles.featuredMediaText}>

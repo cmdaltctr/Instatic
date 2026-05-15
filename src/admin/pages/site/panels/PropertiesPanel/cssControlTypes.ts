@@ -10,15 +10,15 @@
 
 import type { CSSPropertyBag } from '@core/page-tree/schemas'
 import type { IconComponent } from 'pixel-art-icons/types'
-import { LayoutIcon } from 'pixel-art-icons/icons/layout'
+import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
 import { MoveIcon } from 'pixel-art-icons/icons/move'
-import { ProportionsIcon } from 'pixel-art-icons/icons/proportions'
-import { RulerDimensionIcon } from 'pixel-art-icons/icons/ruler-dimension'
+import { ProportionsSolidIcon } from 'pixel-art-icons/icons/proportions-solid'
+import { RulerDimensionSolidIcon } from 'pixel-art-icons/icons/ruler-dimension-solid'
 import { TextStartTIcon } from 'pixel-art-icons/icons/text-start-t'
-import { PaintBucketIcon } from 'pixel-art-icons/icons/paint-bucket'
-import { BoxIcon } from 'pixel-art-icons/icons/box'
-import { SparklesIcon } from 'pixel-art-icons/icons/sparkles'
-import { PointerIcon } from 'pixel-art-icons/icons/pointer'
+import { PaintBucketSolidIcon } from 'pixel-art-icons/icons/paint-bucket-solid'
+import { BoxSolidIcon } from 'pixel-art-icons/icons/box-solid'
+import { SparklesSolidIcon } from 'pixel-art-icons/icons/sparkles-solid'
+import { PointerSolidIcon } from 'pixel-art-icons/icons/pointer-solid'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -292,7 +292,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'layout',
     title: 'Layout',
-    icon: LayoutIcon,
+    icon: LayoutSolidIcon,
     defaultOpen: true,
     properties: [
       'display',
@@ -332,7 +332,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'size',
     title: 'Size',
-    icon: ProportionsIcon,
+    icon: ProportionsSolidIcon,
     defaultOpen: true,
     properties: [
       'width',
@@ -348,7 +348,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'spacing',
     title: 'Spacing',
-    icon: RulerDimensionIcon,
+    icon: RulerDimensionSolidIcon,
     defaultOpen: true,
     properties: [
       'paddingTop',
@@ -382,7 +382,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'background',
     title: 'Background',
-    icon: PaintBucketIcon,
+    icon: PaintBucketSolidIcon,
     properties: [
       'backgroundColor',
       'background',
@@ -397,7 +397,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'border',
     title: 'Border',
-    icon: BoxIcon,
+    icon: BoxSolidIcon,
     properties: [
       'border',
       'borderTop',
@@ -416,7 +416,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'effects',
     title: 'Effects',
-    icon: SparklesIcon,
+    icon: SparklesSolidIcon,
     properties: [
       'opacity',
       'boxShadow',
@@ -431,7 +431,7 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
   {
     id: 'interaction',
     title: 'Interaction',
-    icon: PointerIcon,
+    icon: PointerSolidIcon,
     properties: [
       'cursor',
       'pointerEvents',

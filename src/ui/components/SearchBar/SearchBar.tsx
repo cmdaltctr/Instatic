@@ -2,7 +2,7 @@ import { forwardRef, type InputHTMLAttributes } from "react";
 import { Button } from "@ui/components/Button";
 import { Input } from "@ui/components/Input";
 import { CloseIcon } from "pixel-art-icons/icons/close";
-import { SearchIcon } from "pixel-art-icons/icons/search";
+import { SearchSolidIcon } from "pixel-art-icons/icons/search-solid";
 import { cn } from "@ui/cn";
 import styles from "./SearchBar.module.css";
 
@@ -35,7 +35,7 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
 
     return (
       <div className={cn(styles.searchBar, className)}>
-        <SearchIcon
+        <SearchSolidIcon
           size={11}
           color="var(--editor-text-subtle)"
           aria-hidden="true"

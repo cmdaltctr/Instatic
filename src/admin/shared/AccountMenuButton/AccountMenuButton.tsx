@@ -31,9 +31,9 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from '@ui/components/ContextMenu'
-import { SettingsCogIcon } from 'pixel-art-icons/icons/settings-cog'
+import { SettingsCogSolidIcon } from 'pixel-art-icons/icons/settings-cog-solid'
 import { PowerOffIcon } from 'pixel-art-icons/icons/power-off'
-import { MonitorIcon } from 'pixel-art-icons/icons/monitor'
+import { MonitorSolidIcon } from 'pixel-art-icons/icons/monitor-solid'
 import { useAuthenticatedAdminUser } from '@admin/sessionContext'
 import { useAdminNavigate } from '@admin/lib/useAdminNavigate'
 import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
@@ -148,7 +148,7 @@ export function AccountMenuButton(): ReactNode {
             }}
             data-testid="account-menu-go-to-account"
           >
-            <SettingsCogIcon size={12} aria-hidden="true" />
+            <SettingsCogSolidIcon size={12} aria-hidden="true" />
             <span>Account &amp; security</span>
           </ContextMenuItem>
           <ContextMenuItem
@@ -164,7 +164,7 @@ export function AccountMenuButton(): ReactNode {
             disabled={busy !== null}
             data-testid="account-menu-sign-out-all"
           >
-            <MonitorIcon size={12} aria-hidden="true" />
+            <MonitorSolidIcon size={12} aria-hidden="true" />
             <span>{busy === 'logout-all' ? 'Signing out other devices…' : 'Sign out all devices'}</span>
           </ContextMenuItem>
           {status && (

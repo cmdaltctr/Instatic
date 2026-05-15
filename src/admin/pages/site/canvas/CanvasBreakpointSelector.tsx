@@ -1,11 +1,11 @@
 import { useCallback, type ChangeEvent, type SyntheticEvent } from "react";
 import type { Breakpoint } from '@core/page-tree/schemas'
 import { Select } from "@ui/components/Select";
-import { SmartphoneIcon } from "pixel-art-icons/icons/smartphone";
-import { TabletIcon } from "pixel-art-icons/icons/tablet";
-import { MonitorIcon } from "pixel-art-icons/icons/monitor";
-import { LaptopIcon } from "pixel-art-icons/icons/laptop";
-import { TvIcon } from "pixel-art-icons/icons/tv";
+import { SmartphoneSolidIcon } from "pixel-art-icons/icons/smartphone-solid";
+import { TabletSolidIcon } from "pixel-art-icons/icons/tablet-solid";
+import { MonitorSolidIcon } from "pixel-art-icons/icons/monitor-solid";
+import { LaptopSolidIcon } from "pixel-art-icons/icons/laptop-solid";
+import { TvSolidIcon } from "pixel-art-icons/icons/tv-solid";
 import styles from "./CanvasBreakpointSelector.module.css";
 
 interface CanvasBreakpointSelectorProps {
@@ -75,15 +75,15 @@ export function CanvasBreakpointSelector({
 function BreakpointIcon({ name }: { name: string }) {
   switch (name) {
     case "smartphone":
-      return <SmartphoneIcon size={11} aria-hidden="true" />;
+      return <SmartphoneSolidIcon size={11} aria-hidden="true" />;
     case "tablet":
-      return <TabletIcon size={11} aria-hidden="true" />;
+      return <TabletSolidIcon size={11} aria-hidden="true" />;
     case "laptop":
-      return <LaptopIcon size={11} aria-hidden="true" />;
+      return <LaptopSolidIcon size={11} aria-hidden="true" />;
     case "tv":
-      return <TvIcon size={11} aria-hidden="true" />;
+      return <TvSolidIcon size={11} aria-hidden="true" />;
     case "monitor":
     default:
-      return <MonitorIcon size={11} aria-hidden="true" />;
+      return <MonitorSolidIcon size={11} aria-hidden="true" />;
   }
 }

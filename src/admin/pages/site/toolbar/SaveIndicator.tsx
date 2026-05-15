@@ -13,9 +13,9 @@ import { useEditorStore } from '@site/store/store'
 import { useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
-import { CircleAlertIcon } from 'pixel-art-icons/icons/circle-alert'
+import { CircleAlertSolidIcon } from 'pixel-art-icons/icons/circle-alert-solid'
 import { LoaderIcon } from 'pixel-art-icons/icons/loader'
-import { SaveIcon } from 'pixel-art-icons/icons/save'
+import { SaveSolidIcon } from 'pixel-art-icons/icons/save-solid'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import type { PersistenceSaveStatus } from '@site/hooks/usePersistence'
 import styles from './Toolbar.module.css'
@@ -56,7 +56,7 @@ export function SaveIndicator({ onSave, saveStatus }: SaveIndicatorProps) {
           disabled={!onSave || isSaving || isStatusSaving}
           data-testid="save-indicator"
         >
-          <CircleAlertIcon size={14} aria-hidden="true" />
+          <CircleAlertSolidIcon size={14} aria-hidden="true" />
           <span>Save failed</span>
         </Button>
         <div role="alert" className={styles.statusToast}>
@@ -85,7 +85,7 @@ export function SaveIndicator({ onSave, saveStatus }: SaveIndicatorProps) {
         {isSaving || isStatusSaving ? (
           <LoaderIcon size={14} aria-hidden="true" />
         ) : (
-          <SaveIcon size={14} aria-hidden="true" />
+          <SaveSolidIcon size={14} aria-hidden="true" />
         )}
         <span>{label}</span>
       </Button>

@@ -11,7 +11,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { FileTextIcon } from 'pixel-art-icons/icons/file-text'
+import { FileTextSolidIcon } from 'pixel-art-icons/icons/file-text-solid'
 import { BodyEditor } from './BodyEditor'
 
 type BodyProps = Record<string, unknown>
@@ -23,7 +23,7 @@ export const BodyModule: ModuleDefinition<BodyProps> = {
   version: '2.0.0',
   trusted: true,
   canHaveChildren: true,
-  icon: FileTextIcon,
+  icon: FileTextSolidIcon,
 
   schema: {},
   defaults: {},

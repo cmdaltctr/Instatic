@@ -18,7 +18,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { TargetIcon } from 'pixel-art-icons/icons/target'
+import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import { SlotInstanceEditor } from './SlotInstanceEditor'
 
 interface SlotInstanceProps extends Record<string, unknown> {
@@ -31,7 +31,7 @@ const SlotInstanceModule: ModuleDefinition<SlotInstanceProps> = {
   description: 'A materialized slot for component content',
   category: 'Components',
   version: '1.0.0',
-  icon: TargetIcon,
+  icon: TargetSolidIcon,
   trusted: true,
   canHaveChildren: true,
 

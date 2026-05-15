@@ -4,8 +4,8 @@ import {
   ContextMenuItem,
   ContextMenuSubmenu,
 } from '@ui/components/ContextMenu'
-import { DeleteIcon } from 'pixel-art-icons/icons/delete'
-import { EditIcon } from 'pixel-art-icons/icons/edit'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
+import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
 
 export interface ExplorerContextMenuAction {
   kind?: 'action'
@@ -69,8 +69,8 @@ export function ExplorerItemContextMenu({
 
   const items: ExplorerContextMenuItem[] = [
     ...extraItems,
-    { kind: 'action', label: 'Rename', action: onRename, icon: <EditIcon size={13} />, disabled: renameDisabled },
-    { kind: 'action', label: 'Delete', action: onDelete, icon: <DeleteIcon size={13} />, danger: true, disabled: deleteDisabled },
+    { kind: 'action', label: 'Rename', action: onRename, icon: <EditSolidIcon size={13} />, disabled: renameDisabled },
+    { kind: 'action', label: 'Delete', action: onDelete, icon: <TrashSolidIcon size={13} />, danger: true, disabled: deleteDisabled },
   ]
 
   let firstActionAssigned = false

@@ -6,7 +6,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { ImageIcon } from 'pixel-art-icons/icons/image'
+import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
 import { safeUrl } from '@modules/base/utils/escape'
 import { ImageEditor } from './ImageEditor'
 
@@ -22,7 +22,7 @@ export const ImageModule: ModuleDefinition<ImageProps> = {
   description: 'A responsive image.',
   category: 'Media',
   version: '2.0.0',
-  icon: ImageIcon,
+  icon: ImageSolidIcon,
   trusted: true,
   canHaveChildren: false,
 

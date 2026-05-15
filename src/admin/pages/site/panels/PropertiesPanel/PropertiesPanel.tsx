@@ -66,9 +66,9 @@ import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { Input } from '@ui/components/Input'
-import { OpenIcon } from 'pixel-art-icons/icons/open'
-import { DockIcon } from 'pixel-art-icons/icons/dock'
-import { EditIcon } from 'pixel-art-icons/icons/edit'
+import { OpenSolidIcon } from 'pixel-art-icons/icons/open-solid'
+import { DockSolidIcon } from 'pixel-art-icons/icons/dock-solid'
+import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
 import { cn } from '@ui/cn'
 import styles from './PropertiesPanel.module.css'
 
@@ -330,9 +330,9 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
           tooltip={modeButtonTitle}
         >
           {variant === 'docked' ? (
-            <OpenIcon size={12} aria-hidden="true" />
+            <OpenSolidIcon size={12} aria-hidden="true" />
           ) : (
-            <DockIcon size={12} aria-hidden="true" />
+            <DockSolidIcon size={12} aria-hidden="true" />
           )}
         </Button>
       </PanelHeader>
@@ -571,7 +571,7 @@ function NodeHeader({ nodeId, label, moduleName, onRename }: NodeHeaderProps) {
         aria-label={`Rename ${displayName}`}
         tooltip="Rename element"
       >
-        <EditIcon size={12} aria-hidden="true" />
+        <EditSolidIcon size={12} aria-hidden="true" />
       </Button>
     </div>
   )
@@ -658,7 +658,7 @@ function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
         aria-label={`Rename selector ${selectorLabel}`}
         tooltip="Rename selector"
       >
-        <EditIcon size={12} aria-hidden="true" />
+        <EditSolidIcon size={12} aria-hidden="true" />
       </Button>
     </div>
   )

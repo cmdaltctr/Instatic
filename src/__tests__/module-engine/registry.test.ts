@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test'
 import { ModuleDefinition } from '@core/module-engine/types'
-import { SquareIcon } from 'pixel-art-icons/icons/square'
+import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 
 // We import the class directly for test isolation (not the global singleton)
 import { registry as globalRegistry } from '@core/module-engine/registry'
@@ -12,7 +12,7 @@ function makeModule(id: string): ModuleDefinition {
     name: 'Test Module',
     category: 'Test',
     version: '1.0.0',
-    icon: SquareIcon,
+    icon: SquareSolidIcon,
     trusted: true,
     canHaveChildren: false,
     schema: {},

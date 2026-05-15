@@ -26,12 +26,12 @@ import { useRef, useEffect, useCallback, memo, useMemo } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { renderMarkdownToHtml } from '@site/agent/markdown'
 import type { AgentMessage, AgentToolCall } from '@site/agent/types'
-import { DeleteIcon } from 'pixel-art-icons/icons/delete'
-import { SquareIcon } from 'pixel-art-icons/icons/square'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
+import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import { LoaderIcon } from 'pixel-art-icons/icons/loader'
 import { CheckIcon } from 'pixel-art-icons/icons/check'
-import { CircleAlertIcon } from 'pixel-art-icons/icons/circle-alert'
-import { AiBoxIcon } from 'pixel-art-icons/icons/ai-box'
+import { CircleAlertSolidIcon } from 'pixel-art-icons/icons/circle-alert-solid'
+import { AiBoxSolidIcon } from 'pixel-art-icons/icons/ai-box-solid'
 import { PanelHeader } from '@admin/shared/PanelHeader'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
@@ -168,7 +168,7 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
             tooltip="Clear conversation"
             aria-label="Clear conversation"
           >
-            <DeleteIcon size={14} />
+            <TrashSolidIcon size={14} />
           </Button>
         )}
         {isStreaming && (
@@ -213,7 +213,7 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
             onClick={abortAgent}
             fullWidth
           >
-            <SquareIcon size={12} /> Stop
+            <SquareSolidIcon size={12} /> Stop
           </Button>
         ) : (
           <form onSubmit={handleSubmit} className={styles.inputForm}>
@@ -348,7 +348,7 @@ function ToolCallBadge({ toolCall }: { toolCall: AgentToolCall }) {
         ) : isSuccess ? (
           <CheckIcon size={10} />
         ) : (
-          <CircleAlertIcon size={10} />
+          <CircleAlertSolidIcon size={10} />
         )}
       </span>
       <span className={styles.toolCallType} aria-hidden="true">
@@ -388,7 +388,7 @@ function AgentEmptyState() {
   return (
     <EmptyState
       variant="centered"
-      icon={<AiBoxIcon size={28} color="var(--editor-text-subtle)" />}
+      icon={<AiBoxSolidIcon size={28} color="var(--editor-text-subtle)" />}
       title="Describe what you want to build and I'll do it for you."
       description={'Try: "Add a hero section with a heading and button"'}
     />

@@ -18,7 +18,7 @@ import {
   DataTableHeader,
   DataTableRow,
 } from '@ui/components/DataTable'
-import { CircleAlertIcon } from 'pixel-art-icons/icons/circle-alert'
+import { CircleAlertSolidIcon } from 'pixel-art-icons/icons/circle-alert-solid'
 import {
   listCmsLoginActivity,
   type CmsLoginActivityEvent,
@@ -107,7 +107,7 @@ export function ActivityTab() {
 
       {showSuspiciousBanner && (
         <div className={styles.suspiciousBanner} role="status" data-testid="account-activity-suspicious">
-          <CircleAlertIcon size={14} aria-hidden="true" />
+          <CircleAlertSolidIcon size={14} aria-hidden="true" />
           <span>
             Suspicious activity in the last 24 hours. Review the entries below — if any are unfamiliar,
             consider changing your password once that lands.

@@ -13,7 +13,7 @@
  * begin with `<pluginId>.`. This keeps a malicious or buggy plugin from
  * overriding `base.text` or shadowing another plugin's modules.
  */
-import { BoxStackIcon } from 'pixel-art-icons/icons/box-stack'
+import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import type {
   IconComponent,
 } from 'pixel-art-icons/types'
@@ -77,7 +77,7 @@ function translatePropertySchema(schema: PluginPropertySchema): PropertySchema {
   return out
 }
 
-const DEFAULT_PLUGIN_MODULE_ICON: IconComponent = BoxStackIcon
+const DEFAULT_PLUGIN_MODULE_ICON: IconComponent = BoxStackSolidIcon
 
 /**
  * `componentFactory` produces the React component used by the editor canvas

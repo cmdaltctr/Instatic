@@ -34,8 +34,8 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Button } from '@ui/components/Button'
 import { ReloadIcon } from 'pixel-art-icons/icons/reload'
-import { CircleAlertIcon } from 'pixel-art-icons/icons/circle-alert'
-import { CopyIcon } from 'pixel-art-icons/icons/copy'
+import { CircleAlertSolidIcon } from 'pixel-art-icons/icons/circle-alert-solid'
+import { CopySolidIcon } from 'pixel-art-icons/icons/copy-solid'
 import { pushToast } from '@ui/components/Toast'
 import {
   flattenErrorChain,
@@ -195,7 +195,7 @@ function DefaultErrorFallback({
     >
       <div className={styles.head}>
         <span className={styles.icon} aria-hidden="true">
-          <CircleAlertIcon size={16} />
+          <CircleAlertSolidIcon size={16} />
         </span>
         <div className={styles.headText}>
           <h2 id={`error-boundary-${location}-title`} className={styles.title}>
@@ -237,7 +237,7 @@ function DefaultErrorFallback({
         </Button>
         {isDev && (
           <Button variant="ghost" size="sm" onClick={() => void handleCopy()}>
-            <CopyIcon size={13} aria-hidden="true" />
+            <CopySolidIcon size={13} aria-hidden="true" />
             <span>Copy details</span>
           </Button>
         )}

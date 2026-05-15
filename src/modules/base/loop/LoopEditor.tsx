@@ -20,7 +20,7 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
-import { BoxStackIcon } from 'pixel-art-icons/icons/box-stack'
+import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import styles from './loop.module.css'
 
 export const LoopEditor: React.FC<ModuleComponentProps> = ({ children, mcClassName }) => {
@@ -29,7 +29,7 @@ export const LoopEditor: React.FC<ModuleComponentProps> = ({ children, mcClassNa
   if (!hasChildren) {
     return (
       <div className={styles.empty}>
-        <BoxStackIcon size={14} color="currentColor" aria-hidden="true" />
+        <BoxStackSolidIcon size={14} color="currentColor" aria-hidden="true" />
         <span>Drop a template subtree to repeat — the loop will iterate it per item.</span>
       </div>
     )

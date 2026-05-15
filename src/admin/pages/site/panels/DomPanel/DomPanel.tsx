@@ -59,14 +59,14 @@ import { PanelHeader } from '@admin/shared/PanelHeader'
 import { useDraggablePanel } from '@site/hooks/useDraggablePanel'
 import { cn } from '@ui/cn'
 import type { IconComponent } from 'pixel-art-icons/types'
-import { LayoutIcon } from 'pixel-art-icons/icons/layout'
+import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
 import { TextStartTIcon } from 'pixel-art-icons/icons/text-start-t'
-import { ImageIcon } from 'pixel-art-icons/icons/image'
-import { SquareIcon } from 'pixel-art-icons/icons/square'
+import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
+import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import { LinkIcon } from 'pixel-art-icons/icons/link'
-import { ListBoxIcon } from 'pixel-art-icons/icons/list-box'
-import { FileTextIcon } from 'pixel-art-icons/icons/file-text'
-import { VideoIcon } from 'pixel-art-icons/icons/video'
+import { ListBoxSolidIcon } from 'pixel-art-icons/icons/list-box-solid'
+import { FileTextSolidIcon } from 'pixel-art-icons/icons/file-text-solid'
+import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import styles from './DomPanel.module.css'
 
 const PANEL_STORAGE_KEY = 'pb-dom-panel'
@@ -542,21 +542,21 @@ export function DomPanel({ variant = 'floating', editable = true }: { variant?: 
 function getModuleIcon(moduleId: string): IconComponent {
   switch (moduleId) {
     case 'base.container':
-      return LayoutIcon
+      return LayoutSolidIcon
     case 'base.text':
       return TextStartTIcon
     case 'base.image':
-      return ImageIcon
+      return ImageSolidIcon
     case 'base.link':
       return LinkIcon
     case 'base.list':
-      return ListBoxIcon
+      return ListBoxSolidIcon
     case 'base.body':
-      return FileTextIcon
+      return FileTextSolidIcon
     case 'base.video':
-      return VideoIcon
+      return VideoSolidIcon
     case 'base.button':
     default:
-      return SquareIcon
+      return SquareSolidIcon
   }
 }

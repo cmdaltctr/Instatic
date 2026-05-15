@@ -24,7 +24,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { BoxStackIcon } from 'pixel-art-icons/icons/box-stack'
+import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import { LoopEditor } from './LoopEditor'
 
 interface LoopProps extends Record<string, unknown> {
@@ -44,7 +44,7 @@ const LoopModule: ModuleDefinition<LoopProps> = {
   description: 'Iterate a data source and repeat the child template per item.',
   category: 'Layout',
   version: '1.0.0',
-  icon: BoxStackIcon,
+  icon: BoxStackSolidIcon,
   trusted: true,
   canHaveChildren: true,
 

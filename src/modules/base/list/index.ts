@@ -6,7 +6,7 @@
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
-import { ListBoxIcon } from 'pixel-art-icons/icons/list-box'
+import { ListBoxSolidIcon } from 'pixel-art-icons/icons/list-box-solid'
 import { ListEditor } from './ListEditor'
 
 interface ListProps extends Record<string, unknown> {
@@ -27,7 +27,7 @@ export const ListModule: ModuleDefinition<ListProps> = {
   description: 'An ordered or unordered list.',
   category: 'Typography',
   version: '2.0.0',
-  icon: ListBoxIcon,
+  icon: ListBoxSolidIcon,
   trusted: true,
   canHaveChildren: false,
 

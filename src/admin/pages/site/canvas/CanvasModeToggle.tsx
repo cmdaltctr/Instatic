@@ -17,13 +17,13 @@
 import { useCallback, type SyntheticEvent } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { Breakpoint } from '@core/page-tree/schemas'
-import { CursorMinimalIcon } from 'pixel-art-icons/icons/cursor-minimal'
-import { EyeIcon } from 'pixel-art-icons/icons/eye'
-import { SmartphoneIcon } from 'pixel-art-icons/icons/smartphone'
-import { TabletIcon } from 'pixel-art-icons/icons/tablet'
-import { MonitorIcon } from 'pixel-art-icons/icons/monitor'
-import { LaptopIcon } from 'pixel-art-icons/icons/laptop'
-import { TvIcon } from 'pixel-art-icons/icons/tv'
+import { CursorMinimalSolidIcon } from 'pixel-art-icons/icons/cursor-minimal-solid'
+import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
+import { SmartphoneSolidIcon } from 'pixel-art-icons/icons/smartphone-solid'
+import { TabletSolidIcon } from 'pixel-art-icons/icons/tablet-solid'
+import { MonitorSolidIcon } from 'pixel-art-icons/icons/monitor-solid'
+import { LaptopSolidIcon } from 'pixel-art-icons/icons/laptop-solid'
+import { TvSolidIcon } from 'pixel-art-icons/icons/tv-solid'
 import { cn } from '@ui/cn'
 import { Tooltip } from '@ui/components/Tooltip'
 import styles from './CanvasModeToggle.module.css'
@@ -62,7 +62,7 @@ export function CanvasModeToggle() {
           className={cn(styles.tab, view === 'design' && styles.tabActive)}
           onClick={() => setView('design')}
         >
-          <CursorMinimalIcon size={14} aria-hidden="true" />
+          <CursorMinimalSolidIcon size={14} aria-hidden="true" />
         </button>
       </Tooltip>
       <Tooltip content="Preview mode (run site scripts in sandboxed iframe)">
@@ -75,7 +75,7 @@ export function CanvasModeToggle() {
           className={cn(styles.tab, view === 'preview' && styles.tabActive)}
           onClick={() => setView('preview')}
         >
-          <EyeIcon size={14} aria-hidden="true" />
+          <EyeSolidIcon size={14} aria-hidden="true" />
         </button>
       </Tooltip>
 
@@ -121,15 +121,15 @@ export function CanvasModeToggle() {
 function BreakpointIcon({ name }: { name: string }) {
   switch (name) {
     case 'smartphone':
-      return <SmartphoneIcon size={14} aria-hidden="true" />
+      return <SmartphoneSolidIcon size={14} aria-hidden="true" />
     case 'tablet':
-      return <TabletIcon size={14} aria-hidden="true" />
+      return <TabletSolidIcon size={14} aria-hidden="true" />
     case 'laptop':
-      return <LaptopIcon size={14} aria-hidden="true" />
+      return <LaptopSolidIcon size={14} aria-hidden="true" />
     case 'tv':
-      return <TvIcon size={14} aria-hidden="true" />
+      return <TvSolidIcon size={14} aria-hidden="true" />
     case 'monitor':
     default:
-      return <MonitorIcon size={14} aria-hidden="true" />
+      return <MonitorSolidIcon size={14} aria-hidden="true" />
   }
 }
