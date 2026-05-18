@@ -292,9 +292,11 @@ describe('base.image — render() specifics', () => {
 
   it('has only content and behavior module settings', () => {
     // N4: responsive pipeline added `sizes`, `fetchPriority`, `decoding` knobs
-    // alongside the existing `src` / `alt` / `loading` settings.
+    // alongside the existing `src` / `loading` settings. Alt text is sourced
+    // from the library asset row (single source of truth) — no per-instance
+    // `alt` prop exists on the module.
     expect(Object.keys(ImageModule.schema).sort()).toEqual(
-      ['alt', 'decoding', 'fetchPriority', 'loading', 'sizes', 'src'],
+      ['decoding', 'fetchPriority', 'loading', 'sizes', 'src'],
     )
   })
 
@@ -320,20 +322,57 @@ describe('base.image — render() specifics', () => {
     expect(html).not.toContain('javascript:')
   })
 
-  it('XSS: escapes alt text in <img>', () => {
-    // Simulate the publisher pipeline (Constraint #211)
-    const safeProps = escapeProps({ ...ImageModule.defaults, src: '/img.jpg', alt: '"><script>alert(1)</script>' })
-    const { html } = ImageModule.render(safeProps, [])
+  it('XSS: escapes library alt text in <img>', () => {
+    // Alt text comes from the library asset (`_resolvedMediaByKey.src.altText`),
+    // which is raw — the module's render() HTML-escapes at the boundary so
+    // malicious metadata in a library row can't break out of the attribute.
+    const safeProps = escapeProps({ ...ImageModule.defaults, src: '/img.jpg' })
+    const html = ImageModule.render(
+      {
+        ...safeProps,
+        _resolvedMediaByKey: {
+          src: {
+            publicPath: '/img.jpg',
+            width: 100,
+            height: 100,
+            altText: '"><script>alert(1)</script>',
+            blurHash: null,
+            variants: [],
+            posterPath: null,
+          },
+        },
+      },
+      [],
+    ).html
     expect(html).toBeCleanHTML()
     expect(html).not.toContain('<script>')
   })
 
-  it('includes alt attribute for accessibility when src is provided', () => {
-    const { html } = renderModule(ImageModule, {
-      src: '/img.jpg',
-      alt: 'Profile photo',
-    })
+  it('includes alt attribute from the library asset for accessibility', () => {
+    const safeProps = escapeProps({ ...ImageModule.defaults, src: '/img.jpg' })
+    const html = ImageModule.render(
+      {
+        ...safeProps,
+        _resolvedMediaByKey: {
+          src: {
+            publicPath: '/img.jpg',
+            width: 100,
+            height: 100,
+            altText: 'Profile photo',
+            blurHash: null,
+            variants: [],
+            posterPath: null,
+          },
+        },
+      },
+      [],
+    ).html
     expect(html).toContain('alt="Profile photo"')
+  })
+
+  it('emits empty alt attribute when no library asset is resolved', () => {
+    const { html } = renderModule(ImageModule, { src: '/img.jpg' })
+    expect(html).toContain('alt=""')
   })
 
   it('includes loading="lazy" by default', () => {

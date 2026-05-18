@@ -39,8 +39,6 @@ export interface CmsMediaAsset {
   width: number | null
   height: number | null
   durationMs: number | null
-  focalX: number
-  focalY: number
   dominantColor: string | null
   deletedAt: string | null
   replacedAt: string | null
@@ -68,8 +66,6 @@ export function normalizeCmsMediaAsset(wire: CmsMediaAssetWire): CmsMediaAsset {
     width: wire.width ?? null,
     height: wire.height ?? null,
     durationMs: wire.durationMs ?? null,
-    focalX: wire.focalX ?? 0.5,
-    focalY: wire.focalY ?? 0.5,
     dominantColor: wire.dominantColor ?? null,
     deletedAt: wire.deletedAt ?? null,
     replacedAt: wire.replacedAt ?? null,
@@ -101,6 +97,21 @@ function resolveClient(base: ClientBase | undefined) {
 export interface ListCmsMediaAssetsOptions extends ClientBase {
   /** `true` returns only soft-deleted assets (Trash view). */
   trash?: boolean
+}
+
+/**
+ * Fetch a subset of assets by their IDs. Implemented as a filtered list
+ * call — there is no batch-by-id endpoint yet. The caller is responsible
+ * for caching results to avoid redundant requests.
+ */
+export async function getCmsMediaAssetsByIds(
+  ids: readonly string[],
+  options: ClientBase = {},
+): Promise<CmsMediaAsset[]> {
+  if (ids.length === 0) return []
+  const all = await listCmsMediaAssets(options)
+  const idSet = new Set(ids)
+  return all.filter((a) => idSet.has(a.id))
 }
 
 export async function listCmsMediaAssets(
@@ -162,8 +173,6 @@ export interface UpdateCmsMediaAssetInput {
   caption?: string
   title?: string
   tags?: string[]
-  focalX?: number
-  focalY?: number
 }
 
 /**

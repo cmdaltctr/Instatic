@@ -64,17 +64,6 @@ function readOptionalString(body: Record<string, unknown>, key: string): string 
   return typeof value === 'string' ? value : null
 }
 
-function readOptionalUnitNumber(body: Record<string, unknown>, key: string): number | null {
-  const value = body[key]
-  if (value === undefined) return null
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null
-  // The repo also clamps, but we reject obviously-out-of-range payloads up
-  // front so a buggy client gets a clean validation error rather than a
-  // silently-clamped value.
-  if (value < 0 || value > 1) return null
-  return value
-}
-
 export async function handleMediaRoutes(
   req: Request,
   db: DbClient,
@@ -88,7 +77,26 @@ export async function handleMediaRoutes(
 
     if (req.method === 'GET') {
       const trash = url.searchParams.get('trash') === '1' || url.searchParams.get('trash') === 'true'
-      const assets = await listMediaAssets(db, { includeDeleted: trash })
+      const query = url.searchParams.get('query')?.trim().toLowerCase() ?? ''
+      const limitParam = url.searchParams.get('limit')
+      const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 25, 1), 100) : null
+
+      let assets = await listMediaAssets(db, { includeDeleted: trash })
+
+      // JS-side text filter (follows the intentional design of this repo — see
+      // listMediaAssets comment about JS-side filtering for small media libraries).
+      if (query) {
+        assets = assets.filter(
+          (a) =>
+            a.filename.toLowerCase().includes(query) ||
+            (a.title && a.title.toLowerCase().includes(query)),
+        )
+      }
+
+      if (limit !== null) {
+        assets = assets.slice(0, limit)
+      }
+
       return jsonResponse({ assets })
     }
 
@@ -183,7 +191,7 @@ export async function handleMediaRoutes(
     if (req.method === 'PATCH') {
       const body = await readJsonObject(req)
       // PATCH accepts any subset of:
-      //   filename, altText, caption, title, tags (string[]), focalX, focalY
+      //   filename, altText, caption, title, tags (string[])
       // Filename keeps the historical contract: when present-but-empty, that's
       // a 400. Other fields tolerate empty strings (clearing alt-text / caption
       // is a real operation).
@@ -201,10 +209,6 @@ export async function handleMediaRoutes(
       if (title !== null) patch.title = title
       const tags = readOptionalStringArray(body, 'tags')
       if (tags !== null) patch.tags = tags
-      const focalX = readOptionalUnitNumber(body, 'focalX')
-      if (focalX !== null) patch.focalX = focalX
-      const focalY = readOptionalUnitNumber(body, 'focalY')
-      if (focalY !== null) patch.focalY = focalY
 
       if (Object.keys(patch).length === 0) return badRequest('No editable fields supplied')
 

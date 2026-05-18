@@ -103,8 +103,6 @@ const CmsMediaAssetSchema = Type.Object({
   width: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
   height: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
   durationMs: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-  focalX: Type.Optional(Type.Number()),
-  focalY: Type.Optional(Type.Number()),
   dominantColor: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   deletedAt: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   replacedAt: Type.Optional(Type.Union([Type.String(), Type.Null()])),

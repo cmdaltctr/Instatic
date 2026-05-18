@@ -101,13 +101,12 @@ export const h = {
 
   image(options: {
     src: string
-    alt?: string
     classIds?: string[]
   }): NodeBuilder {
     return builder(
       'base.image',
       'img',
-      { src: options.src, alt: options.alt ?? '' },
+      { src: options.src },
       { classIds: options.classIds },
     )
   },

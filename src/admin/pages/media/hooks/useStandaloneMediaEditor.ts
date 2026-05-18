@@ -65,7 +65,7 @@ export function useStandaloneMediaEditor({
       onAssetChanged(next)
       // The editor canvas (`ImageEditor` / `useCmsMediaAssetByPath`)
       // keys its preview off the by-path cache — invalidate so the
-      // just-saved alt text / focal / etc. surface on next render.
+      // just-saved alt text / metadata surface on next render.
       refreshCmsMediaAssetCache()
       return next
     } catch (err) {

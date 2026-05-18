@@ -38,8 +38,8 @@ function pngFile(name: string): File {
 
 /**
  * Build a row that mimics what the real `media_assets` table returns after
- * the M2 migrations (alt_text / tags_json / focal / deleted_at / ...). Used
- * by the fake DB so the repository's SELECTs produce the full shape.
+ * the M2 migrations (alt_text / tags_json / deleted_at / ...). Used by the
+ * fake DB so the repository's SELECTs produce the full shape.
  */
 function mediaRow(input: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -50,8 +50,6 @@ function mediaRow(input: Record<string, unknown>): Record<string, unknown> {
     width: null,
     height: null,
     duration_ms: null,
-    focal_x: 0.5,
-    focal_y: 0.5,
     dominant_color: null,
     deleted_at: null,
     replaced_at: null,
@@ -148,19 +146,17 @@ function makeFakeDb() {
     }
 
     // updateMediaAssetMetadata — COALESCE update with field order:
-    // filename, alt_text, caption, title, tags_json, focal_x, focal_y, id
+    // filename, alt_text, caption, title, tags_json, id
     // MUST be matched BEFORE the bare rename branch below — the prefixes
     // overlap and `startsWith` would otherwise route here incorrectly.
     if (normalized.startsWith('update media_assets set filename = coalesce')) {
-      const row = media.find((asset) => asset.id === values[7])
+      const row = media.find((asset) => asset.id === values[5])
       if (!row) return { rows: [], rowCount: 0 }
       if (values[0] !== null) row.filename = values[0]
       if (values[1] !== null) row.alt_text = values[1]
       if (values[2] !== null) row.caption = values[2]
       if (values[3] !== null) row.title = values[3]
       if (values[4] !== null) row.tags_json = values[4]
-      if (values[5] !== null) row.focal_x = values[5]
-      if (values[6] !== null) row.focal_y = values[6]
       return { rows: [row as Row], rowCount: 1 }
     }
 
@@ -287,8 +283,6 @@ describe('CMS media repository', () => {
       altText: '',
       tags: [],
       folderIds: [],
-      focalX: 0.5,
-      focalY: 0.5,
       deletedAt: null,
     })
   })

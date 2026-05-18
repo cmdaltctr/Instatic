@@ -7,7 +7,8 @@
  *   - srcset + sizes so the browser can pick the right rung
  *   - intrinsic width / height to prevent CLS in the canvas
  *   - BlurHash data-URL backdrop while the variant streams in
- *   - fallback to the library's `alt` text when the module's `alt` is blank
+ *   - alt text comes from the library asset (single source of truth — edit
+ *     via the Media viewer; there is no per-instance override)
  *
  * Component-only file so React Fast Refresh can hot-patch edits without
  * re-running module registration.
@@ -25,7 +26,6 @@ import styles from './image.module.css'
 
 interface ImageProps extends Record<string, unknown> {
   src: string
-  alt: string
   loading: 'lazy' | 'eager'
 }
 
@@ -58,11 +58,10 @@ export const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props,
     return <div className={cn(styles.placeholder, mcClassName)}>No image selected</div>
   }
 
-  // Alt text: module override wins, library fallback otherwise. Matches
-  // the published-render behaviour so the canvas preview never disagrees
-  // with the published HTML.
-  const altOverride = (props.alt ?? '').trim()
-  const alt = altOverride || responsive?.libraryAlt || ''
+  // Alt text: library asset is the single source of truth. Matches the
+  // published-render behaviour so the canvas preview never disagrees
+  // with the published HTML. Edit alt via the Media viewer.
+  const alt = responsive?.libraryAlt ?? ''
 
   // No resolved asset yet (cache loading, external URL, or row missing).
   // Render the raw src so the user never sees a flash of blank.

@@ -23,8 +23,6 @@ export interface MediaAsset {
   width: number | null
   height: number | null
   durationMs: number | null
-  focalX: number
-  focalY: number
   dominantColor: string | null
   deletedAt: string | null
   replacedAt: string | null
@@ -50,8 +48,6 @@ export interface UpdateMediaAssetMetadataInput {
   caption?: string
   title?: string
   tags?: string[]
-  focalX?: number
-  focalY?: number
 }
 
 interface MediaAssetRow {
@@ -69,8 +65,6 @@ interface MediaAssetRow {
   width: number | null
   height: number | null
   duration_ms: number | string | null
-  focal_x: number | string | null
-  focal_y: number | string | null
   dominant_color: string | null
   deleted_at: Date | string | null
   replaced_at: Date | string | null
@@ -137,12 +131,6 @@ function numberOrNull(value: number | string | null | undefined): number | null 
   return Number.isFinite(n) ? n : null
 }
 
-function numberWithDefault(value: number | string | null | undefined, fallback: number): number {
-  if (value == null) return fallback
-  const n = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(n) ? n : fallback
-}
-
 function mapMediaAsset(row: MediaAssetRow, folderIds: string[] = []): MediaAsset {
   return {
     id: row.id,
@@ -159,8 +147,6 @@ function mapMediaAsset(row: MediaAssetRow, folderIds: string[] = []): MediaAsset
     width: numberOrNull(row.width),
     height: numberOrNull(row.height),
     durationMs: numberOrNull(row.duration_ms),
-    focalX: numberWithDefault(row.focal_x, 0.5),
-    focalY: numberWithDefault(row.focal_y, 0.5),
     dominantColor: row.dominant_color ?? null,
     deletedAt: toIsoOrNull(row.deleted_at),
     replacedAt: toIsoOrNull(row.replaced_at),
@@ -224,7 +210,7 @@ export async function createMediaAsset(
     )
     returning id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
              alt_text, caption, title, tags_json, width, height, duration_ms,
-             focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+             dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
   `
   return mapMediaAsset(rows[0])
@@ -237,8 +223,8 @@ export async function getMediaAsset(
   const { rows } = await db<MediaAssetRow>`
     select id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
            alt_text, caption, title, tags_json, width, height, duration_ms,
-           focal_x, focal_y, dominant_color, deleted_at, replaced_at,
-             blur_hash, variants_json, poster_path
+           dominant_color, deleted_at, replaced_at,
+           blur_hash, variants_json, poster_path
     from media_assets
     where id = ${id}
   `
@@ -267,7 +253,7 @@ export async function listMediaAssets(
     ? await db<MediaAssetRow>`
         select id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
                alt_text, caption, title, tags_json, width, height, duration_ms,
-               focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+               dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
         from media_assets
         where deleted_at is not null
@@ -276,7 +262,7 @@ export async function listMediaAssets(
     : await db<MediaAssetRow>`
         select id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
                alt_text, caption, title, tags_json, width, height, duration_ms,
-               focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+               dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
         from media_assets
         where deleted_at is null
@@ -295,7 +281,7 @@ export async function renameMediaAsset(
     where id = ${id}
     returning id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
              alt_text, caption, title, tags_json, width, height, duration_ms,
-             focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+             dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
   `
   if (rows.length === 0) return null
@@ -324,8 +310,6 @@ export async function updateMediaAssetMetadata(
   const altText = input.altText ?? null
   const caption = input.caption ?? null
   const title = input.title ?? null
-  const focalX = input.focalX !== undefined ? Math.max(0, Math.min(1, input.focalX)) : null
-  const focalY = input.focalY !== undefined ? Math.max(0, Math.min(1, input.focalY)) : null
 
   const { rows } = await db<MediaAssetRow>`
     update media_assets set
@@ -333,13 +317,11 @@ export async function updateMediaAssetMetadata(
       alt_text = coalesce(${altText}, alt_text),
       caption = coalesce(${caption}, caption),
       title = coalesce(${title}, title),
-      tags_json = coalesce(${tags}, tags_json),
-      focal_x = coalesce(${focalX}, focal_x),
-      focal_y = coalesce(${focalY}, focal_y)
+      tags_json = coalesce(${tags}, tags_json)
     where id = ${id}
     returning id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
              alt_text, caption, title, tags_json, width, height, duration_ms,
-             focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+             dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
   `
   if (rows.length === 0) return null
@@ -378,7 +360,7 @@ export async function setMediaAssetVariants(
     where id = ${id}
     returning id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
              alt_text, caption, title, tags_json, width, height, duration_ms,
-             focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+             dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
   `
   if (rows.length === 0) return null
@@ -400,7 +382,7 @@ export async function softDeleteMediaAsset(
     where id = ${id} and deleted_at is null
     returning id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
              alt_text, caption, title, tags_json, width, height, duration_ms,
-             focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+             dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
   `
   if (rows.length === 0) return getMediaAsset(db, id)
@@ -417,7 +399,7 @@ export async function restoreMediaAsset(
     where id = ${id}
     returning id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
              alt_text, caption, title, tags_json, width, height, duration_ms,
-             focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+             dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
   `
   if (rows.length === 0) return null
@@ -468,7 +450,7 @@ export async function replaceMediaAssetBinary(
     where id = ${id}
     returning id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
              alt_text, caption, title, tags_json, width, height, duration_ms,
-             focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+             dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
   `
   if (rows.length === 0) return null

@@ -180,7 +180,7 @@ describe('Publisher + real modules — XSS protection (end-to-end)', () => {
     const page = makePage({
       root: {
         moduleId: 'base.image',
-        props: { ...ImageModule.defaults, src: 'javascript:alert(1)', alt: 'test' },
+        props: { ...ImageModule.defaults, src: 'javascript:alert(1)' },
       },
     })
     const html = renderNode('root', realCtx(page))
@@ -203,7 +203,6 @@ describe('Publisher + real modules — URL edge cases', () => {
         props: {
           ...ImageModule.defaults,
           src: 'data:text/html,<script>alert(1)</script>',
-          alt: 'test',
         },
       },
     })
@@ -244,7 +243,6 @@ describe('Publisher + real modules — URL edge cases', () => {
         props: {
           ...ImageModule.defaults,
           src: 'https://cdn.example.com/hero.jpg',
-          alt: 'Hero image',
         },
       },
     })
@@ -305,18 +303,33 @@ describe('Publisher + real modules — quote and multi-character escaping', () =
     expect(html).not.toContain('&amp;quot;')
   })
 
-  it('image: alt text with all special chars is single-escaped in attribute', () => {
+  it('image: library alt text with all special chars is single-escaped in attribute', () => {
+    // Alt text comes from the resolved library asset, not a per-instance prop.
+    // The render() HTML-escapes the raw library value at the attribute boundary.
     const page = makePage({
       root: {
         moduleId: 'base.image',
         props: {
           ...ImageModule.defaults,
-          src: 'https://example.com/img.jpg',
-          alt: 'AT&T "Premium" Plan <Pro>',
+          src: '/uploads/img.jpg',
         },
       },
     })
-    const html = renderNode('root', realCtx(page))
+    const mediaAssets = new Map([
+      [
+        '/uploads/img.jpg',
+        {
+          publicPath: '/uploads/img.jpg',
+          width: 100,
+          height: 100,
+          altText: 'AT&T "Premium" Plan <Pro>',
+          blurHash: null,
+          variants: [],
+          posterPath: null,
+        },
+      ],
+    ])
+    const html = renderNode('root', { ...realCtx(page), mediaAssets })
     expect(html).toContain('AT&amp;T')
     expect(html).toContain('&quot;Premium&quot;')
     expect(html).toContain('&lt;Pro&gt;')
@@ -483,15 +496,33 @@ describe('publishPage() + real modules — end-to-end document', () => {
     expect(html).toContain("script-src 'none'")
   })
 
-  it('image alt text with & is correctly single-escaped in published output', () => {
+  it('image library alt text with & is correctly single-escaped in published output', () => {
+    // The publisher attaches resolved library assets to each image node; the
+    // module's render() then HTML-escapes the library altText at the attribute
+    // boundary so a special-char metadata value can't break out of the attr
+    // or get double-escaped on its way through the pipeline.
     const page = makePage({
       root: {
         moduleId: 'base.image',
-        props: { ...ImageModule.defaults, src: 'https://example.com/img.jpg', alt: 'Cat & Dog' },
+        props: { ...ImageModule.defaults, src: '/uploads/img.jpg' },
       },
     })
     const site = makeSite()
-    const { html } = publishPage(page, site, REAL_REGISTRY)
+    const mediaAssets = new Map([
+      [
+        '/uploads/img.jpg',
+        {
+          publicPath: '/uploads/img.jpg',
+          width: 100,
+          height: 100,
+          altText: 'Cat & Dog',
+          blurHash: null,
+          variants: [],
+          posterPath: null,
+        },
+      ],
+    ])
+    const { html } = publishPage(page, site, REAL_REGISTRY, { mediaAssets })
     expect(html).toContain('alt="Cat &amp; Dog"')
     expect(html).not.toContain('alt="Cat &amp;amp; Dog"')
   })

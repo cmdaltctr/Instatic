@@ -69,9 +69,9 @@ interface ImageProps {
   // Fallback: external URL (or a legacy `/uploads/...` path). Used when
   // mediaId is null, or as a graceful degrade if the asset is missing.
   src: string
-  // Override of asset alt text. Empty → use `asset.altText` from the
-  // library (single source of truth for accessibility metadata).
-  alt: string
+  // Alt text is sourced from the library asset (`asset.altText`) — there
+  // is no per-instance override. Edit alt in the Media viewer (single
+  // source of truth for accessibility metadata).
   // 'auto' computes sizes from the canvas breakpoints. A custom string
   // (e.g. "(min-width: 1024px) 50vw, 100vw") gets emitted verbatim.
   sizes: 'auto' | string
@@ -203,14 +203,14 @@ Out of scope for v1:
 - Replaces the cramped sidebar picker entirely.
 
 **N4 — Image module rewrite**
-- Add `mediaId`, `sizes`, `fetchPriority`, `decoding` props. Keep `src` / `alt` / `loading`.
+- Add `mediaId`, `sizes`, `fetchPriority`, `decoding` props. Keep `src` / `loading`.
 - Render full responsive `<img>` with srcset/sizes/blurhash/intrinsic dims when `mediaId` resolves.
 - Back-compat path: resolve `src` → `mediaId` on the fly when `src` matches a known `/uploads/` asset.
 - Editor canvas + publisher both emit the same markup.
 
 **N5 — Image module ↔ Media page alt text**
-- When `alt` prop is empty AND a `mediaId` resolves → fall back to `asset.altText` at render time.
-- Optional UI: "Use library alt text" button in the property control that clears the prop's local alt and pins it to "follow asset".
+- Alt text is owned by the library asset (`asset.altText`) — single source of truth, no per-instance override.
+- The MediaLibraryControl's "currently picked" tile opens the MediaViewerWindow on click (plus an explicit "Edit" button) so the author can edit alt text without leaving the canvas.
 
 **N6 — Video module rewrite**
 - Add `mediaId`, `poster`, `playsinline`, `preload`, `width`/`height` props.

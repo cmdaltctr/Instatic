@@ -14,6 +14,29 @@ function renderCanvas() {
 
 const originalFetch = globalThis.fetch
 
+const postsTable = {
+  id: 'posts',
+  name: 'Posts',
+  slug: 'posts',
+  kind: 'postType',
+  routeBase: '/posts',
+  singularLabel: 'Post',
+  pluralLabel: 'Posts',
+  primaryFieldId: 'title',
+  fields: [
+    { type: 'text', id: 'title', label: 'Title', required: true, builtIn: true },
+    { type: 'text', id: 'slug', label: 'Slug', required: true, builtIn: true },
+    { type: 'richText', id: 'body', label: 'Body', format: 'markdown', builtIn: true },
+    { type: 'media', id: 'featuredMedia', label: 'Featured media', mediaKind: 'image', builtIn: true },
+    { type: 'text', id: 'seoTitle', label: 'SEO title', builtIn: true },
+    { type: 'longText', id: 'seoDescription', label: 'SEO description', builtIn: true },
+  ],
+  createdByUserId: null,
+  updatedByUserId: null,
+  createdAt: '2026-05-01T10:00:00.000Z',
+  updatedAt: '2026-05-01T10:00:00.000Z',
+}
+
 beforeEach(() => {
   localStorage.clear()
   useEditorStore.setState({
@@ -32,57 +55,8 @@ beforeEach(() => {
   } as Parameters<typeof useEditorStore.setState>[0])
 
   globalThis.fetch = (async (input: RequestInfo | URL) => {
-    if (String(input) === '/admin/api/cms/content/collections/posts/entries') {
-      return new Response(JSON.stringify({
-        entries: [
-          {
-            id: 'entry-old',
-            collectionId: 'posts',
-            title: 'Old Post',
-            slug: 'old-post',
-            status: 'draft',
-            bodyMarkdown: '',
-            featuredMediaId: null,
-            seoTitle: '',
-            seoDescription: '',
-            createdAt: '2026-05-01T08:00:00.000Z',
-            updatedAt: '2026-05-01T08:00:00.000Z',
-            publishedAt: null,
-            deletedAt: null,
-          },
-          {
-            id: 'entry-latest',
-            collectionId: 'posts',
-            title: 'Latest Post',
-            slug: 'latest-post',
-            status: 'draft',
-            bodyMarkdown: '',
-            featuredMediaId: 'media-cover',
-            seoTitle: '',
-            seoDescription: '',
-            createdAt: '2026-05-01T10:00:00.000Z',
-            updatedAt: '2026-05-01T10:00:00.000Z',
-            publishedAt: null,
-            deletedAt: null,
-          },
-        ],
-      }), { status: 200 })
-    }
-
-    if (String(input) === '/admin/api/cms/media') {
-      return new Response(JSON.stringify({
-        assets: [
-          {
-            id: 'media-cover',
-            filename: 'cover.png',
-            mimeType: 'image/png',
-            sizeBytes: 1024,
-            publicPath: '/uploads/template-cover.png',
-            uploadedByUserId: null,
-            createdAt: '2026-05-01T09:00:00.000Z',
-          },
-        ],
-      }), { status: 200 })
+    if (String(input) === '/admin/api/cms/data/tables') {
+      return new Response(JSON.stringify({ tables: [postsTable] }), { status: 200 })
     }
 
     return new Response('{}', { status: 404 })
@@ -95,7 +69,7 @@ afterEach(() => {
 })
 
 describe('canvas template preview bindings', () => {
-  it('renders template dynamic bindings with the latest entry from the template collection', async () => {
+  it('renders template dynamic bindings with synthetic preview data from the table schema', async () => {
     const root = makeNode({ id: 'root', moduleId: 'base.body', children: ['title'] })
     const title = makeNode({
       id: 'title',
@@ -114,7 +88,7 @@ describe('canvas template preview bindings', () => {
       template: {
         enabled: true,
         context: 'entry',
-        collectionId: 'posts',
+        tableSlug: 'posts',
         priority: 100,
         conditions: [],
       },
@@ -129,17 +103,17 @@ describe('canvas template preview bindings', () => {
     renderCanvas()
 
     await waitFor(() => {
-      expect(screen.getAllByText('Latest Post').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Example Post Title').length).toBeGreaterThan(0)
     })
     expect(screen.queryByText('Static fallback')).toBeNull()
   })
 
-  it('renders featured media bindings with the latest entry media asset', async () => {
+  it('renders no image when featured media binding resolves to null in preview', async () => {
     const root = makeNode({ id: 'root', moduleId: 'base.body', children: ['image'] })
     const image = makeNode({
       id: 'image',
       moduleId: 'base.image',
-      props: { src: '', alt: 'Template image', loading: 'lazy' },
+      props: { src: '', loading: 'lazy' },
       dynamicBindings: {
         src: { source: 'currentEntry', field: 'featuredMedia', format: 'media' },
       },
@@ -153,7 +127,7 @@ describe('canvas template preview bindings', () => {
       template: {
         enabled: true,
         context: 'entry',
-        collectionId: 'posts',
+        tableSlug: 'posts',
         priority: 100,
         conditions: [],
       },
@@ -168,8 +142,8 @@ describe('canvas template preview bindings', () => {
     renderCanvas()
 
     await waitFor(() => {
-      expect(screen.getAllByAltText('Template image')[0].getAttribute('src')).toBe('/uploads/template-cover.png')
+      expect(screen.queryByAltText('Template image')).toBeNull()
+      expect(screen.getAllByText('No image selected').length).toBeGreaterThan(0)
     })
-    expect(screen.queryByText('No image selected')).toBeNull()
   })
 })

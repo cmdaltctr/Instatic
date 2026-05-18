@@ -309,7 +309,7 @@ describe('SiteExplorerPanel', () => {
     home.nodes['image-node'] = makeNode({
       id: 'image-node',
       moduleId: 'base.image',
-      props: { src: '', alt: '', loading: 'lazy' },
+      props: { src: '', loading: 'lazy' },
     })
     home.nodes['video-node'] = makeNode({
       id: 'video-node',

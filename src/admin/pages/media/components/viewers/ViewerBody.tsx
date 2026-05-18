@@ -1,7 +1,7 @@
 /**
  * ViewerBody — picks the right viewer for an asset's MIME type.
  *
- * Today: `image/*` → ImageViewer (with focal-point picker),
+ * Today: `image/*` → ImageViewer,
  *        `video/*` → VideoViewer,
  *        everything else → FallbackViewer.
  *
@@ -16,23 +16,12 @@ import { FallbackViewer } from './FallbackViewer'
 
 interface ViewerBodyProps {
   asset: CmsMediaAsset
-  /** Live focal coords during a drag (the parent owns the debounced save). */
-  focalX: number
-  focalY: number
-  onFocalChange: (x: number, y: number) => void
 }
 
-export function ViewerBody({ asset, focalX, focalY, onFocalChange }: ViewerBodyProps) {
+export function ViewerBody({ asset }: ViewerBodyProps) {
   const bucket = bucketForMime(asset.mimeType)
   if (bucket === 'image') {
-    return (
-      <ImageViewer
-        asset={asset}
-        focalX={focalX}
-        focalY={focalY}
-        onFocalChange={onFocalChange}
-      />
-    )
+    return <ImageViewer asset={asset} />
   }
   if (bucket === 'video') {
     return <VideoViewer src={asset.publicPath} />

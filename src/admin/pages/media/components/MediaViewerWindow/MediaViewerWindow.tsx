@@ -71,8 +71,7 @@ interface MediaViewerWindowProps {
 export function MediaViewerWindow({ editor, open, onClose }: MediaViewerWindowProps) {
   if (!open || !editor) return null
   // Key by asset id so switching to a different asset remounts the inner
-  // state (debounced-save hooks reset cleanly, focal field reads the new
-  // asset's coords).
+  // state (debounced-save hooks reset cleanly).
   return <ViewerForAsset key={editor.asset.id} editor={editor} onClose={onClose} />
 }
 
@@ -131,9 +130,6 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
   const saveTags = useCallback(async (next: string[]) => {
     await editor.updateAsset(asset.id, { tags: next })
   }, [editor, asset.id])
-  const saveFocal = useCallback(async (focal: { x: number; y: number }) => {
-    await editor.updateAsset(asset.id, { focalX: focal.x, focalY: focal.y })
-  }, [editor, asset.id])
 
   const titleField = useDebouncedSave({ value: asset.title, save: saveTitle })
   const filenameField = useDebouncedSave({ value: asset.filename, save: saveFilename })
@@ -144,12 +140,6 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
     save: saveTags,
     equals: arraysEqual,
     delay: 200,
-  })
-  const focalField = useDebouncedSave({
-    value: { x: asset.focalX, y: asset.focalY },
-    save: saveFocal,
-    equals: (a, b) => a.x === b.x && a.y === b.y,
-    delay: 50,
   })
 
   const copyUrl = useCallback(async () => {
@@ -184,12 +174,7 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
 
       <div className={styles.body}>
         <div className={styles.viewer}>
-          <ViewerBody
-            asset={asset}
-            focalX={focalField.local.x}
-            focalY={focalField.local.y}
-            onFocalChange={(x, y) => focalField.setLocal({ x, y })}
-          />
+          <ViewerBody asset={asset} />
         </div>
 
         <aside className={styles.sidebar} aria-label="Asset metadata">

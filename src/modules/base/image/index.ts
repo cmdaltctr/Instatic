@@ -23,7 +23,6 @@ import { ImageEditor } from './ImageEditor'
 
 interface ImageProps extends Record<string, unknown> {
   src: string
-  alt: string
   loading: 'lazy' | 'eager'
   /**
    * `sizes` attribute. `'auto'` resolves to `100vw` at publish time —
@@ -126,7 +125,11 @@ function buildSrcset(media: RenderResolvedMedia): string | null {
 }
 
 function escapeAttr(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 }
 
 export const ImageModule: ModuleDefinition<ImageProps> = {
@@ -134,14 +137,13 @@ export const ImageModule: ModuleDefinition<ImageProps> = {
   name: 'Image',
   description: 'A responsive image.',
   category: 'Media',
-  version: '3.0.0',
+  version: '4.0.0',
   icon: ImageSolidIcon,
   trusted: true,
   canHaveChildren: false,
 
   schema: {
     src: { type: 'image', label: 'Image' },
-    alt: { type: 'text', label: 'Alt text', placeholder: 'Describe the image…', layout: 'stacked' },
     loading: {
       type: 'select',
       label: 'Loading',
@@ -178,7 +180,6 @@ export const ImageModule: ModuleDefinition<ImageProps> = {
 
   defaults: {
     src: '',
-    alt: '',
     loading: 'lazy',
     sizes: 'auto',
     fetchPriority: 'auto',
@@ -193,18 +194,14 @@ export const ImageModule: ModuleDefinition<ImageProps> = {
     const src = safeUrl(props.src)
     if (!src) return { html: '' }
 
-    // Effective alt text — module override wins, otherwise fall back to
-    // the library's asset.altText so the library is the single source of
-    // truth for accessibility metadata.
+    // Alt text comes exclusively from the library asset — the library is
+    // the single source of truth for accessibility metadata. Edited in
+    // the Media viewer (asset row), never as a per-instance module prop.
     //
-    // `props.alt` came in via the publisher's `escapeProps` (Constraint
-    // #211) so it's already HTML-escaped — do NOT re-escape. The library
-    // fallback comes straight from the resolved-media payload and IS raw,
-    // so we escape it ourselves only on the fallback path.
-    const moduleAlt = String(props.alt ?? '').trim()
+    // The resolved-media payload is raw (not run through the publisher's
+    // `escapeProps`), so we HTML-escape here at the boundary.
     const media = props._resolvedMediaByKey?.src
-    const libraryAltRaw = media?.altText?.trim() ?? ''
-    const alt = moduleAlt || escapeAttr(libraryAltRaw)
+    const alt = escapeAttr(media?.altText?.trim() ?? '')
 
     const loading = props.loading === 'eager' ? 'eager' : 'lazy'
     const decoding = props.decoding === 'sync' ? 'sync' : props.decoding === 'auto' ? 'auto' : 'async'

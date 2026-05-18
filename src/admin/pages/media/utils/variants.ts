@@ -1,6 +1,6 @@
 /**
  * Variant-picking + BlurHash helpers shared by every admin surface that
- * renders a media asset (canvas grid, viewer body, picker, focal-point).
+ * renders a media asset (canvas grid, viewer body, picker).
  *
  * The single rule for picking a variant: pick the smallest variant whose
  * width is greater-than-or-equal-to the target rendered width, accounting

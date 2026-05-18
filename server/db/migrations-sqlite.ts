@@ -43,9 +43,10 @@ export const sqliteMigrations: Migration[] = [
 
       insert into roles (id, slug, name, description, is_system, capabilities_json)
       values
-        ('owner', 'owner', 'Owner', 'Permanent installation owner with full system access.', 1, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
-        ('admin', 'admin', 'Admin', 'Full admin access.', 1, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
-        ('editor', 'editor', 'Editor', 'Can edit and publish assigned site content.', 1, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.publish.own","media.manage"]'),
+        ('owner', 'owner', 'Owner', 'Permanent installation owner with full system access.', 1, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
+        ('admin', 'admin', 'Admin', 'Full admin access.', 1, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
+        ('editor', 'editor', 'Editor', 'Can edit and publish assigned site content.', 1, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.publish.own","media.manage"]'),
+        ('client', 'client', 'Client', 'Can edit page copy (text, images, links) but not structure or styles.', 1, '["site.read","site.content.edit"]'),
         ('content-manager', 'content-manager', 'Content Manager', 'Can manage all content entries and collections.', 1, '["site.read","content.create","content.edit.any","content.publish.any","content.manage","media.manage"]'),
         ('viewer', 'viewer', 'Viewer', 'Read-only admin access.', 1, '["site.read"]'),
         ('subscriber', 'subscriber', 'Subscriber', 'Reserved for future public member accounts.', 1, '[]')
@@ -355,8 +356,6 @@ export const sqliteMigrations: Migration[] = [
         width integer,
         height integer,
         duration_ms integer,
-        focal_x real not null default 0.5,
-        focal_y real not null default 0.5,
         dominant_color text,
         blur_hash text,
         variants_json text not null default '[]',

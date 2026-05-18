@@ -116,8 +116,8 @@ export function MediaLibraryControl({
   const [libraryError, setLibraryError] = useState('')
   // Viewer state: when set, the MediaViewerWindow opens with this asset.
   // The viewer is the same draggable window the Media page uses, so the
-  // user can edit alt text, caption, tags, focal point, replace the file,
-  // etc. — all from inside the editor canvas without leaving the page.
+  // user can edit alt text, caption, tags, replace the file, etc. — all
+  // from inside the editor canvas without leaving the page.
   const [viewerAssetId, setViewerAssetId] = useState<string | null>(null)
   const [urlDraftState, setUrlDraftState] = useState(() => ({
     sourceValue: currentValue,
@@ -337,7 +337,7 @@ function CurrentPickedTile({ asset, mediaKind, currentValue, onOpenViewer }: Cur
   // the user can never guess what's saved on the field. Three states:
   //   1. asset matched in the library → real thumb + blurhash bg, clickable
   //      (opens the MediaViewerWindow for editing alt text, caption, tags,
-  //      focal point, replace file…)
+  //      replace file…)
   //   2. publicPath set but library hasn't matched yet (loading / stale) →
   //      filename derived from the path, non-interactive
   //   3. nothing saved → empty hint, non-interactive

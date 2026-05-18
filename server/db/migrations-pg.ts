@@ -49,9 +49,10 @@ export const pgMigrations: Migration[] = [
 
       insert into roles (id, slug, name, description, is_system, capabilities_json)
       values
-        ('owner', 'owner', 'Owner', 'Permanent installation owner with full system access.', true, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'::jsonb),
-        ('admin', 'admin', 'Admin', 'Full admin access.', true, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'::jsonb),
-        ('editor', 'editor', 'Editor', 'Can edit and publish assigned site content.', true, '["site.read","site.edit","pages.edit","pages.publish","content.create","content.edit.own","content.publish.own","media.manage"]'::jsonb),
+        ('owner', 'owner', 'Owner', 'Permanent installation owner with full system access.', true, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'::jsonb),
+        ('admin', 'admin', 'Admin', 'Full admin access.', true, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'::jsonb),
+        ('editor', 'editor', 'Editor', 'Can edit and publish assigned site content.', true, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.publish.own","media.manage"]'::jsonb),
+        ('client', 'client', 'Client', 'Can edit page copy (text, images, links) but not structure or styles.', true, '["site.read","site.content.edit"]'::jsonb),
         ('content-manager', 'content-manager', 'Content Manager', 'Can manage all content entries and collections.', true, '["site.read","content.create","content.edit.any","content.publish.any","content.manage","media.manage"]'::jsonb),
         ('viewer', 'viewer', 'Viewer', 'Read-only admin access.', true, '["site.read"]'::jsonb),
         ('subscriber', 'subscriber', 'Subscriber', 'Reserved for future public member accounts.', true, '[]'::jsonb)
@@ -355,7 +356,7 @@ export const pgMigrations: Migration[] = [
 
       -- ─── Media ────────────────────────────────────────────────────────────
       --
-      -- Media inspector metadata (alt/caption/title/tags/focal/dominant_color/
+      -- Media inspector metadata (alt/caption/title/tags/dominant_color/
       -- deleted/replaced), responsive pipeline outputs (blur_hash, variants,
       -- poster), and intrinsic dimensions (width/height/duration_ms) are
       -- inline. Folders are many-to-many (HappyFiles-style). Smart folders
@@ -377,8 +378,6 @@ export const pgMigrations: Migration[] = [
         width integer,
         height integer,
         duration_ms integer,
-        focal_x real not null default 0.5,
-        focal_y real not null default 0.5,
         dominant_color text,
         blur_hash text,
         variants_json jsonb not null default '[]'::jsonb,

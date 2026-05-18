@@ -117,8 +117,6 @@ All names use the `*_json` suffix convention for JSON columns. Both `migrations-
 | `width`           | `integer`        | `integer`     | Nullable, populated on upload from image metadata.            |
 | `height`          | `integer`        | `integer`     | Nullable.                                                     |
 | `duration_ms`     | `integer`        | `integer`     | Nullable, for video/audio.                                    |
-| `focal_x`         | `real`           | `real`        | Nullable, 0–1, image focal point. Default `0.5`.              |
-| `focal_y`         | `real`           | `real`        | Nullable, 0–1. Default `0.5`.                                 |
 | `dominant_color`  | `text`           | `text`        | Nullable, `#rrggbb`. Computed server-side on upload.          |
 | `deleted_at`      | `timestamptz`    | `text`        | Nullable. Non-null = in Trash.                                |
 | `replaced_at`     | `timestamptz`    | `text`        | Nullable. Set when binary is swapped via "Replace file".      |
@@ -203,7 +201,7 @@ All gated by `media.manage` unless noted. New endpoints live in new files alongs
 |--------|--------------------------------------------|---------------------------------------|-------------------------------|
 | GET    | `/admin/api/cms/media`                     | `?folder=&type=&q=&tag=&sort=&page=&pageSize=&trash=true` | `{ assets, total, page }`     |
 | POST   | `/admin/api/cms/media`                     | multipart `file=`, optional `folderId=` | `{ asset }`                 |
-| PATCH  | `/admin/api/cms/media/:id`                 | `{ filename?, alt_text?, caption?, title?, tags?, focal_x?, focal_y? }` | `{ asset }` |
+| PATCH  | `/admin/api/cms/media/:id`                 | `{ filename?, alt_text?, caption?, title?, tags? }` | `{ asset }` |
 | DELETE | `/admin/api/cms/media/:id`                 | —                                     | `{ ok: true }` (soft delete)  |
 | POST   | `/admin/api/cms/media/:id/restore`         | —                                     | `{ asset }`                   |
 | DELETE | `/admin/api/cms/media/:id?purge=true`      | —                                     | `{ ok: true }` (hard delete)  |
@@ -250,7 +248,7 @@ The list endpoint always merges in:
 - `listMediaAssets(db, filter)` — paginated, filter-aware.
 - `softDeleteMediaAsset(db, id)` / `restoreMediaAsset(db, id)` / `purgeMediaAsset(db, id)`.
 - `replaceMediaAssetBinary(db, id, newStoragePath, newSizeBytes, newMime)` — keeps `public_path` and `id` stable.
-- `updateMediaAssetMetadata(db, id, patch)` — alt text, caption, title, tags, focal.
+- `updateMediaAssetMetadata(db, id, patch)` — alt text, caption, title, tags.
 - `assignAssetToFolders(db, assetId, { add, remove })`.
 - `bulkOperation(db, ids, op, payload)` — wraps a transaction.
 
@@ -287,7 +285,7 @@ The list endpoint always merges in:
 ### Inspector (docked + detachable)
 
 - Preview at the top (image / video player / icon).
-- Editable fields: filename, alt text, caption, title, tags, focal point (visual picker for images).
+- Editable fields: filename, alt text, caption, title, tags.
 - Read-only: MIME, size, dimensions, dominant color swatch, uploader, created date, replaced date.
 - Folder chip list with `⊕` to add to more folders.
 - **Replace file** — opens dialog, accepts a new file with same-or-different MIME, swaps binary, bumps `replaced_at`.
@@ -337,7 +335,7 @@ One migration ID per change, parity across both dialects. IDs follow the existin
 
 ```
 NNN_media_assets_metadata        — alt_text, caption, title, tags_json, width, height,
-                                   duration_ms, focal_x, focal_y, dominant_color,
+                                   duration_ms, dominant_color,
                                    deleted_at, replaced_at
 NNN_media_folders                — create media_folders + media_asset_folders + indices
 NNN_media_smart_folders          — create media_smart_folders

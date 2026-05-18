@@ -45,8 +45,6 @@ interface PrefetchedAssetRow {
   width: number | null
   height: number | null
   duration_ms: number | string | null
-  focal_x: number | string | null
-  focal_y: number | string | null
   dominant_color: string | null
   deleted_at: Date | string | null
   replaced_at: Date | string | null
@@ -129,12 +127,6 @@ function numberOrNull(value: number | string | null | undefined): number | null 
   return Number.isFinite(n) ? n : null
 }
 
-function numberWithDefault(value: number | string | null | undefined, fallback: number): number {
-  if (value == null) return fallback
-  const n = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(n) ? n : fallback
-}
-
 function mapRow(row: PrefetchedAssetRow): MediaAsset {
   return {
     id: row.id,
@@ -151,8 +143,6 @@ function mapRow(row: PrefetchedAssetRow): MediaAsset {
     width: numberOrNull(row.width),
     height: numberOrNull(row.height),
     durationMs: numberOrNull(row.duration_ms),
-    focalX: numberWithDefault(row.focal_x, 0.5),
-    focalY: numberWithDefault(row.focal_y, 0.5),
     dominantColor: row.dominant_color ?? null,
     deletedAt: toIsoOrNull(row.deleted_at),
     replacedAt: toIsoOrNull(row.replaced_at),
@@ -187,7 +177,7 @@ export async function prefetchMediaAssets(
     const { rows } = await db<PrefetchedAssetRow>`
       select id, filename, mime_type, size_bytes, public_path, uploaded_by_user_id, created_at,
              alt_text, caption, title, tags_json, width, height, duration_ms,
-             focal_x, focal_y, dominant_color, deleted_at, replaced_at,
+             dominant_color, deleted_at, replaced_at,
              blur_hash, variants_json, poster_path
       from media_assets
       where public_path = ${path} and deleted_at is null
