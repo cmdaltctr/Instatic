@@ -2,27 +2,28 @@
  * base.container editor preview component.
  *
  * Component-only file so React Fast Refresh can hot-patch edits without
- * re-running module registration. Per Constraint #309, this file MUST NOT
- * export non-component values — `resolveContainerTag` is duplicated in
- * `index.ts` for the publisher render path.
+ * re-running module registration. Tag resolution lives in the shared
+ * `@modules/base/utils/htmlTag` helper — same code path the publisher
+ * uses, so canvas + published HTML match exactly.
+ *
+ * Empty containers render the shared `CanvasModulePlaceholder` *inside*
+ * the user's resolved tag so the empty state reads the same way as every
+ * other module (image, video, content, loop, slot-outlet, …) while still
+ * emitting the user's semantic element (`<section>`, `<header>`, etc.) on
+ * canvas. The user's `mcClassName` stays on the outer tag where they
+ * authored it, and `data-canvas-empty-container` stays on the outer
+ * element so the canvas selection logic keeps treating the slot as a
+ * pickable affordance.
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
-import { cn } from '@ui/cn'
-import styles from './ContainerEditor.module.css'
-
-type ContainerTag = 'div' | 'section' | 'article' | 'main' | 'header' | 'footer'
+import { resolveHtmlTag } from '@modules/base/utils/htmlTag'
+import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
+import { ContainerSolidIcon } from 'pixel-art-icons/icons/container-solid'
 
 interface ContainerProps extends Record<string, unknown> {
-  tag: ContainerTag
-}
-
-const VALID_TAGS = new Set<ContainerTag>(['div', 'section', 'article', 'main', 'header', 'footer'])
-
-function resolveContainerTag(value: unknown): ContainerTag {
-  return typeof value === 'string' && VALID_TAGS.has(value as ContainerTag)
-    ? (value as ContainerTag)
-    : 'div'
+  tag: string
+  customTag: string
 }
 
 export const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = ({
@@ -30,15 +31,20 @@ export const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = (
   children,
   mcClassName,
 }) => {
-  const Tag = resolveContainerTag(props.tag)
+  const Tag = resolveHtmlTag(props.tag, props.customTag)
   const isEmpty = React.Children.count(children) === 0
 
   return React.createElement(
     Tag,
     {
-      className: cn(isEmpty && styles.emptyCanvasContainer, mcClassName),
+      className: mcClassName,
       'data-canvas-empty-container': isEmpty ? 'true' : undefined,
     },
-    children,
+    isEmpty ? (
+      <CanvasModulePlaceholder
+        icon={<ContainerSolidIcon size={16} color="currentColor" />}
+        label="Empty container"
+      />
+    ) : children,
   )
 }

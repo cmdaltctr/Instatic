@@ -202,8 +202,8 @@ describe('base.container — render() specifics', () => {
     expect(ContainerModule.canHaveChildren).toBe(true)
   })
 
-  it('has only the HTML tag module setting', () => {
-    expect(Object.keys(ContainerModule.schema)).toEqual(['tag'])
+  it('exposes HTML tag selection (built-in tag + custom override)', () => {
+    expect(Object.keys(ContainerModule.schema).sort()).toEqual(['customTag', 'tag'])
   })
 
   it('renders children HTML inside the container', () => {
@@ -256,13 +256,30 @@ describe('base.container — render() specifics', () => {
     expect(container.firstElementChild?.hasAttribute('data-canvas-empty-container')).toBe(false)
   })
 
-  it('defines editor-only minimum bounds for empty container affordances', async () => {
-    const css = await Bun.file('src/modules/base/container/ContainerEditor.module.css').text()
+  it('renders the shared CanvasModulePlaceholder inside empty containers', () => {
+    // The empty-state affordance is now the unified CanvasModulePlaceholder
+    // (same primitive used by base.image, base.video, base.content, base.loop,
+    // base.slot-outlet, base.visual-component-ref) so an empty container reads
+    // the same way as every other empty module — one consistent stripe-pattern
+    // language across the canvas. The legacy `.emptyCanvasContainer` CSS rule
+    // (dashed outline + 72×48 min bounds) has been retired.
+    const Component = ContainerModule.component
+    const { container } = renderReact(React.createElement(Component, {
+      props: {},
+      nodeId: 'empty-container',
+      isSelected: false,
+    }))
 
-    expect(css).toContain('.emptyCanvasContainer')
-    expect(css).toContain('min-width: 72px')
-    expect(css).toContain('min-height: 48px')
-    expect(css).toContain('var(--editor-border-med)')
+    // The user's resolved tag still wraps the placeholder so the semantic
+    // element is preserved on canvas (matches what the publisher emits).
+    const outer = container.firstElementChild
+    expect(outer?.getAttribute('data-canvas-empty-container')).toBe('true')
+
+    // The placeholder primitive emits this data attribute on its root so
+    // the canvas can identify the shared affordance unambiguously.
+    const placeholder = outer?.querySelector('[data-canvas-module-placeholder]')
+    expect(placeholder).not.toBeNull()
+    expect(placeholder?.textContent).toContain('Empty container')
   })
 
   it('falls back to div for invalid published tag values', () => {
@@ -392,7 +409,7 @@ describe('base.image — render() specifics', () => {
 // ---------------------------------------------------------------------------
 
 describe('base.video — render() specifics', () => {
-  it('exposes the v3 schema (source, playback, poster, perf hints)', () => {
+  it('exposes the v4 schema (single videoUrl, playback, poster, perf hints)', () => {
     expect(Object.keys(VideoModule.schema).sort()).toEqual([
       'autoplay',
       'controls',
@@ -401,46 +418,74 @@ describe('base.video — render() specifics', () => {
       'playsinline',
       'poster',
       'preload',
-      'source',
       'videoUrl',
-      'youtubeId',
     ])
   })
 
-  it('defaults to media library video selection', () => {
-    expect(VideoModule.defaults.source).toBe('media')
-    expect(VideoModule.schema.source).toMatchObject({
-      type: 'select',
-      options: [
-        { label: 'Media library', value: 'media' },
-        { label: 'YouTube', value: 'youtube' },
-      ],
-    })
+  it('exposes videoUrl as a media-kind:video control with no condition gate', () => {
     expect(VideoModule.schema.videoUrl).toMatchObject({
       type: 'media',
       mediaKind: 'video',
-      condition: { field: 'source', eq: 'media' },
     })
+    // The old `source`/`youtubeId` props are gone — the URL alone decides.
+    expect(VideoModule.schema).not.toHaveProperty('source')
+    expect(VideoModule.schema).not.toHaveProperty('youtubeId')
+    expect(VideoModule.defaults).not.toHaveProperty('source')
+    expect(VideoModule.defaults).not.toHaveProperty('youtubeId')
   })
 
   it('is NOT a container (canHaveChildren: false)', () => {
     expect(VideoModule.canHaveChildren).toBe(false)
   })
 
-  it('renders a YouTube iframe for source=youtube with a valid ID', () => {
-    const { html } = renderModule(VideoModule, { source: 'youtube', youtubeId: 'dQw4w9WgXcQ' })
+  it('renders a YouTube iframe when videoUrl is a watch URL', () => {
+    const { html } = renderModule(VideoModule, {
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    })
+    expect(html).toContain('youtube.com/embed/dQw4w9WgXcQ')
+    expect(html).toMatch(/<iframe/)
+    expect(html).toContain('loading="lazy"')
+  })
+
+  it('renders a YouTube iframe when videoUrl is a youtu.be short link', () => {
+    const { html } = renderModule(VideoModule, {
+      videoUrl: 'https://youtu.be/dQw4w9WgXcQ',
+    })
     expect(html).toContain('youtube.com/embed/dQw4w9WgXcQ')
     expect(html).toMatch(/<iframe/)
   })
 
-  it('renders a <video> element for source=media', () => {
-    const { html } = renderModule(VideoModule, { source: 'media', videoUrl: '/uploads/intro.mp4' })
+  it('renders a YouTube iframe when videoUrl is a shorts URL', () => {
+    const { html } = renderModule(VideoModule, {
+      videoUrl: 'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+    })
+    expect(html).toContain('youtube.com/embed/dQw4w9WgXcQ')
+    expect(html).toMatch(/<iframe/)
+  })
+
+  it('wraps the YouTube iframe in a poster facade when a poster is set', () => {
+    const { html, css } = renderModule(VideoModule, {
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      poster: '/uploads/hero.webp',
+    })
+    expect(html).toContain('class="bv-yt"')
+    expect(html).toMatch(/<img class="bv-yt-poster"/)
+    expect(html).toContain('src="/uploads/hero.webp"')
+    expect(html).toContain('loading="eager"')
+    expect(html).toContain('fetchpriority="high"')
+    expect(html).toContain('class="bv-yt-frame"')
+    expect(html).toContain('loading="lazy"')
+    expect(css).toContain('.bv-yt')
+  })
+
+  it('renders a <video> element when videoUrl is a library path', () => {
+    const { html } = renderModule(VideoModule, { videoUrl: '/uploads/intro.mp4' })
     expect(html).toMatch(/<video/)
     expect(html).toContain('/uploads/intro.mp4')
   })
 
   it('XSS: strips javascript: in videoUrl (url-validated by publisher)', () => {
-    const { html } = renderModule(VideoModule, { source: 'media', videoUrl: 'javascript:alert(1)' })
+    const { html } = renderModule(VideoModule, { videoUrl: 'javascript:alert(1)' })
     expect(html).toBeCleanHTML()
     expect(html).not.toContain('javascript:')
   })
@@ -449,7 +494,6 @@ describe('base.video — render() specifics', () => {
     // data:text/html URLs open a new browsing context with arbitrary HTML/JS,
     // bypassing the published page's CSP (isSafeUrl blocks all data: schemes).
     const { html } = renderModule(VideoModule, {
-      source: 'media',
       videoUrl: 'data:text/html,<script>alert(1)</script>',
     })
     expect(html).not.toContain('data:text/html')
@@ -457,13 +501,13 @@ describe('base.video — render() specifics', () => {
   })
 
   it('XSS: strips vbscript: in videoUrl', () => {
-    const { html } = renderModule(VideoModule, { source: 'media', videoUrl: 'vbscript:MsgBox(1)' })
+    const { html } = renderModule(VideoModule, { videoUrl: 'vbscript:MsgBox(1)' })
     expect(html).not.toContain('vbscript:')
   })
 
   it('XSS: strips tab-normalised javascript: bypass in videoUrl', () => {
     // WHATWG URL parser strips \t before scheme detection — isSafeUrl mirrors this
-    const { html } = renderModule(VideoModule, { source: 'media', videoUrl: 'java\tscript:alert(1)' })
+    const { html } = renderModule(VideoModule, { videoUrl: 'java\tscript:alert(1)' })
     expect(html).not.toContain('alert(1)')
   })
 

@@ -20,6 +20,11 @@ import type { LoopEntitySource } from '@core/loops/types'
 import type { PropertyControl, PropertySchema } from '@core/module-engine/types'
 import { listCmsDataTables } from '@core/persistence/cmsData'
 import { PropertyControlRenderer } from '@site/property-controls/PropertyControlRenderer'
+import {
+  CUSTOM_HTML_TAG_VALUE,
+  customHtmlTagControl,
+  htmlTagControl,
+} from '@modules/base/utils/htmlTag'
 
 interface LoopPropertiesViewProps {
   nodeId: string
@@ -109,8 +114,26 @@ export function LoopPropertiesView({ nodeId, props }: LoopPropertiesViewProps) {
     updateNodeProps(nodeId, { [key]: value })
   }
 
+  const tagValue = typeof props.tag === 'string' ? props.tag : 'div'
+  const customTagValue = typeof props.customTag === 'string' ? props.customTag : ''
+
   return (
     <>
+      <PropertyControlRenderer
+        propKey="tag"
+        control={htmlTagControl()}
+        value={tagValue}
+        onChange={handleScalarChange}
+      />
+      {tagValue === CUSTOM_HTML_TAG_VALUE ? (
+        <PropertyControlRenderer
+          propKey="customTag"
+          control={customHtmlTagControl()}
+          value={customTagValue}
+          onChange={handleScalarChange}
+        />
+      ) : null}
+
       <PropertyControlRenderer
         propKey="sourceId"
         control={{

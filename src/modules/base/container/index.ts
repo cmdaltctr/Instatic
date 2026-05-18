@@ -3,24 +3,24 @@
  *
  * Emits the chosen semantic tag with no default class or default CSS.
  * Visual styling is opt-in via user classes (mcClassName / multi-class system).
+ *
+ * Tag selection is shared with `base.loop` via `@modules/base/utils/htmlTag`:
+ * built-in layout/list tags plus a 'custom' escape hatch (free-form `customTag`
+ * text input) so authors can render any valid HTML element name.
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
+import {
+  customHtmlTagControl,
+  htmlTagControl,
+  resolveHtmlTag,
+} from '@modules/base/utils/htmlTag'
 import { ContainerEditor } from './ContainerEditor'
 
-type ContainerTag = 'div' | 'section' | 'article' | 'main' | 'header' | 'footer'
-
 interface ContainerProps extends Record<string, unknown> {
-  tag: ContainerTag
-}
-
-const VALID_TAGS = new Set<ContainerTag>(['div', 'section', 'article', 'main', 'header', 'footer'])
-
-function resolveContainerTag(value: unknown): ContainerTag {
-  return typeof value === 'string' && VALID_TAGS.has(value as ContainerTag)
-    ? (value as ContainerTag)
-    : 'div'
+  tag: string
+  customTag: string
 }
 
 export const ContainerModule: ModuleDefinition<ContainerProps> = {
@@ -34,30 +34,21 @@ export const ContainerModule: ModuleDefinition<ContainerProps> = {
   canHaveChildren: true,
 
   schema: {
-    tag: {
-      type: 'select',
-      label: 'HTML tag',
-      options: [
-        { label: 'div', value: 'div' },
-        { label: 'section', value: 'section' },
-        { label: 'article', value: 'article' },
-        { label: 'main', value: 'main' },
-        { label: 'header', value: 'header' },
-        { label: 'footer', value: 'footer' },
-      ],
-    },
+    tag: htmlTagControl(),
+    customTag: customHtmlTagControl(),
   },
 
   defaults: {
     tag: 'div',
+    customTag: '',
   },
 
   component: ContainerEditor,
 
-  htmlTag: (props) => resolveContainerTag(props.tag),
+  htmlTag: (props) => resolveHtmlTag(props.tag, props.customTag),
 
   render: (props, renderedChildren) => {
-    const tag = resolveContainerTag(props.tag)
+    const tag = resolveHtmlTag(props.tag, props.customTag)
     return {
       html: `<${tag}>${renderedChildren.join('')}</${tag}>`,
     }

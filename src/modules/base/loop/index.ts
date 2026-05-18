@@ -21,10 +21,16 @@
  *
  * Numeric pagination is intentionally NOT a mode here — it will live in
  * a separate `base.pagination` module that pairs with a loop by ID.
+ *
+ * The wrapper element emitted around iterations is configurable via the
+ * shared `htmlTag` helper (same controls as `base.container`): authors
+ * can pick a built-in tag (div, ul, nav, …) or supply a custom name.
+ * Default is 'div' so existing loops keep their current published HTML.
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
+import { resolveHtmlTag } from '@modules/base/utils/htmlTag'
 import { LoopEditor } from './LoopEditor'
 
 interface LoopProps extends Record<string, unknown> {
@@ -36,6 +42,8 @@ interface LoopProps extends Record<string, unknown> {
   offset: number
   pagination: 'none' | 'infinite'
   pageSize: number
+  tag: string
+  customTag: string
 }
 
 const LoopModule: ModuleDefinition<LoopProps> = {
@@ -50,7 +58,8 @@ const LoopModule: ModuleDefinition<LoopProps> = {
 
   // Loop properties are NOT panel-edited via the generic schema renderer
   // because filterSchema is dynamic per source. The Properties Panel
-  // branches on moduleId === 'base.loop' (Phase 7).
+  // branches on moduleId === 'base.loop' and renders LoopPropertiesView,
+  // which itself renders the shared htmlTag controls.
   schema: {},
 
   defaults: {
@@ -62,9 +71,13 @@ const LoopModule: ModuleDefinition<LoopProps> = {
     offset: 0,
     pagination: 'none',
     pageSize: 10,
+    tag: 'div',
+    customTag: '',
   },
 
   component: LoopEditor,
+
+  htmlTag: (props) => resolveHtmlTag(props.tag, props.customTag),
 
   /**
    * Defense-in-depth fallback: the publisher walker intercepts base.loop

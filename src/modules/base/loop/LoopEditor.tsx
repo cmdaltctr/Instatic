@@ -4,12 +4,13 @@
  * Render strategy:
  *  - Empty (no children authored): show a hint placeholder so the author
  *    knows to drop a template subtree inside.
- *  - Has children: render them directly inside a single wrapper `<div>`
- *    that takes the user's class assignments via `mcClassName`. The
- *    canvas wrapper element is therefore the same element the publisher
- *    will emit (`<div class="<user-classes>">…</div>` from `renderLoop()`),
- *    so layout styles like `display: grid; gap: 24px` actually take
- *    effect on canvas the same way they will on the published page.
+ *  - Has children: render them directly inside a single wrapper element
+ *    whose tag is resolved from the author's `tag` / `customTag` props
+ *    (defaults to `<div>`). The wrapper takes the user's class assignments
+ *    via `mcClassName`. The canvas wrapper element is therefore the same
+ *    element the publisher will emit (`<tag class="<user-classes>">…</tag>`
+ *    from `renderLoop()`), so layout styles like `display: grid; gap: 24px`
+ *    actually take effect on canvas the same way they will on the published page.
  *
  * The component intentionally adds no default visual styling — no inner
  * `display: contents` wrappers, no extra divs. Whatever the author
@@ -20,20 +21,23 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
+import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
-import styles from './loop.module.css'
+import { resolveHtmlTag } from '@modules/base/utils/htmlTag'
 
-export const LoopEditor: React.FC<ModuleComponentProps> = ({ children, mcClassName }) => {
+export const LoopEditor: React.FC<ModuleComponentProps> = ({ props, children, mcClassName }) => {
   const hasChildren = React.Children.count(children) > 0
 
   if (!hasChildren) {
     return (
-      <div className={styles.empty}>
-        <BoxStackSolidIcon size={14} color="currentColor" aria-hidden="true" />
-        <span>Drop a template subtree to repeat — the loop will iterate it per item.</span>
-      </div>
+      <CanvasModulePlaceholder
+        className={mcClassName}
+        icon={<BoxStackSolidIcon size={16} color="currentColor" />}
+        label="Empty loop"
+      />
     )
   }
 
-  return <div className={mcClassName}>{children}</div>
+  const Tag = resolveHtmlTag(props.tag, props.customTag)
+  return React.createElement(Tag, { className: mcClassName }, children)
 }

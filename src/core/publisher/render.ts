@@ -26,6 +26,7 @@ import { hasPublishedRuntimeScripts, scriptTagsForRuntimeAssets } from '@core/si
 import { sanitizeRichtext } from '@core/sanitize'
 import { instantiateVCAtRef, type InstantiatedVCNode } from '@core/visualComponents/instantiate'
 import type { LoopFetchResult, LoopItem } from '@core/loops/types'
+import { resolveHtmlTag } from '@modules/base/utils/htmlTag'
 import { resolveAutoSizes } from './sizesResolver'
 
 // Re-export canonical utilities so existing imports from this file keep working
@@ -372,7 +373,11 @@ function renderLoop(node: PageNode, ctx: RenderContext): string {
     ctx.infiniteLoopIds.add(loopId)
   }
 
-  let html = `<div${attrs}>${body}</div>`
+  // Wrapper element — author-selectable via the shared htmlTag helper
+  // (defaults to 'div'). `resolveHtmlTag` always returns a safe lowercase
+  // tag name, so it's already escape-safe for interpolation.
+  const tag = resolveHtmlTag(props.tag, props.customTag)
+  let html = `<${tag}${attrs}>${body}</${tag}>`
 
   // Inject the loop's own classIds onto the wrapper element.
   if (node.classIds?.length) {
