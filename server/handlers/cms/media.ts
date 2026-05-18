@@ -11,6 +11,7 @@
  *                                                  permitted on already-trashed
  *                                                  assets) and removes the file
  *   POST   /admin/api/cms/media/:id/restore    — restore a soft-deleted asset
+ *   POST   /admin/api/cms/media/:id/replace    — overwrite the bytes for an asset
  *   POST   /admin/api/cms/media/:id/folders    — add/remove folder memberships
  *                                                  body: { add?: string[], remove?: string[] }
  *
@@ -19,6 +20,12 @@
  * shared with the avatar endpoint in `./me.ts`. Anything that writes to
  * `uploads/` MUST go through `acceptUploadedMedia` so the byte-level checks
  * stay in one place.
+ *
+ * Dispatch shape: a small route table maps `(method, pattern)` to a per-route
+ * async handler. The dispatcher itself is a short loop — adding a new media
+ * endpoint is "new handler function + one row in `MEDIA_ROUTES`", not "edit a
+ * giant if/else chain". Parameterised paths use a `RegExp` pattern with a
+ * named `id` capture group.
  */
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -35,7 +42,7 @@ import {
   type UpdateMediaAssetMetadataInput,
 } from '../../repositories/media'
 import { badRequest, jsonResponse, methodNotAllowed, readJsonObject } from '../../http'
-import { readString, type CmsHandlerOptions } from './shared'
+import { CMS_API_PREFIX, readString, type CmsHandlerOptions } from './shared'
 import {
   EXTENSION_FOR_MIME,
   acceptReplacementMedia,
@@ -51,6 +58,8 @@ const MEDIA_LIBRARY_MIMES = Object.keys(EXTENSION_FOR_MIME) as Array<
   keyof typeof EXTENSION_FOR_MIME
 >
 
+const MEDIA_PREFIX = `${CMS_API_PREFIX}/media`
+
 function readOptionalStringArray(body: Record<string, unknown>, key: string): string[] | null {
   const value = body[key]
   if (value === undefined) return null
@@ -64,192 +73,292 @@ function readOptionalString(body: Record<string, unknown>, key: string): string 
   return typeof value === 'string' ? value : null
 }
 
+function notFound(): Response {
+  return jsonResponse({ error: 'Media asset not found' }, { status: 404 })
+}
+
+function readLimit(url: URL): number | null {
+  const param = url.searchParams.get('limit')
+  if (!param) return null
+  return Math.min(Math.max(parseInt(param, 10) || 25, 1), 100)
+}
+
+function readQueryFlag(url: URL, key: string): boolean {
+  const value = url.searchParams.get(key)
+  return value === '1' || value === 'true'
+}
+
+function readMetadataPatch(body: Record<string, unknown>): UpdateMediaAssetMetadataInput | Response {
+  // PATCH accepts any subset of:
+  //   filename, altText, caption, title, tags (string[])
+  // Filename keeps the historical contract: when present-but-empty, that's
+  // a 400. Other fields tolerate empty strings (clearing alt-text / caption
+  // is a real operation).
+  const patch: UpdateMediaAssetMetadataInput = {}
+  if (body['filename'] !== undefined) {
+    const filename = readString(body, 'filename')
+    if (!filename) return badRequest('Filename is required')
+    patch.filename = filename
+  }
+  const altText = readOptionalString(body, 'altText')
+  if (altText !== null) patch.altText = altText
+  const caption = readOptionalString(body, 'caption')
+  if (caption !== null) patch.caption = caption
+  const title = readOptionalString(body, 'title')
+  if (title !== null) patch.title = title
+  const tags = readOptionalStringArray(body, 'tags')
+  if (tags !== null) patch.tags = tags
+  return patch
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-route handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleListMedia(req: Request, db: DbClient): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.manage')
+  if (user instanceof Response) return user
+
+  const url = new URL(req.url)
+  const trash = readQueryFlag(url, 'trash')
+  const query = url.searchParams.get('query')?.trim().toLowerCase() ?? ''
+  const limit = readLimit(url)
+
+  let assets = await listMediaAssets(db, { includeDeleted: trash })
+
+  // JS-side text filter (follows the intentional design of this repo — see
+  // listMediaAssets comment about JS-side filtering for small media libraries).
+  if (query) {
+    assets = assets.filter(
+      (a) =>
+        a.filename.toLowerCase().includes(query) ||
+        (a.title && a.title.toLowerCase().includes(query)),
+    )
+  }
+
+  if (limit !== null) assets = assets.slice(0, limit)
+
+  return jsonResponse({ assets })
+}
+
+async function handleUploadMedia(
+  req: Request,
+  db: DbClient,
+  options: CmsHandlerOptions,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.manage')
+  if (user instanceof Response) return user
+  if (!options.uploadsDir) return uploadsDirRequired()
+
+  const file = await readUploadedFile(req)
+  if (!file) return badRequest('Missing file')
+
+  const result = await acceptUploadedMedia(db, {
+    file,
+    maxBytes: MAX_MEDIA_BYTES,
+    allowedMimes: MEDIA_LIBRARY_MIMES,
+    uploadsDir: options.uploadsDir,
+    uploadedByUserId: user.id,
+    oversizedMessage: 'File exceeds the 50 MB hard limit',
+    unsupportedMessage: 'Only JPEG, PNG, GIF, WebP, MP4, and WebM files can be uploaded',
+  })
+  if (result instanceof Response) return result
+  return jsonResponse({ asset: result }, { status: 201 })
+}
+
+async function handleRestoreMedia(
+  req: Request,
+  db: DbClient,
+  _options: CmsHandlerOptions,
+  params: RouteParams,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.manage')
+  if (user instanceof Response) return user
+
+  const restored = await restoreMediaAsset(db, params.id)
+  if (!restored) return notFound()
+  return jsonResponse({ asset: restored })
+}
+
+async function handleReplaceMedia(
+  req: Request,
+  db: DbClient,
+  options: CmsHandlerOptions,
+  params: RouteParams,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.manage')
+  if (user instanceof Response) return user
+  if (!options.uploadsDir) return uploadsDirRequired()
+
+  const file = await readUploadedFile(req)
+  if (!file) return badRequest('Missing file')
+
+  const result = await acceptReplacementMedia(db, params.id, {
+    file,
+    maxBytes: MAX_MEDIA_BYTES,
+    allowedMimes: MEDIA_LIBRARY_MIMES,
+    uploadsDir: options.uploadsDir,
+    uploadedByUserId: user.id,
+    oversizedMessage: 'File exceeds the 50 MB hard limit',
+    unsupportedMessage: 'Only JPEG, PNG, GIF, WebP, MP4, and WebM files can be uploaded',
+  })
+  if (result instanceof Response) return result
+  return jsonResponse({ asset: result })
+}
+
+async function handleAssignMediaFolders(
+  req: Request,
+  db: DbClient,
+  _options: CmsHandlerOptions,
+  params: RouteParams,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.manage')
+  if (user instanceof Response) return user
+
+  const body = await readJsonObject(req)
+  const add = readOptionalStringArray(body, 'add') ?? []
+  const remove = readOptionalStringArray(body, 'remove') ?? []
+  if (add.length === 0 && remove.length === 0) {
+    return badRequest('Provide `add` or `remove` folder ids')
+  }
+  const asset = await assignAssetToFolders(db, params.id, { add, remove })
+  if (!asset) return notFound()
+  return jsonResponse({ asset })
+}
+
+async function handleUpdateMediaMetadata(
+  req: Request,
+  db: DbClient,
+  _options: CmsHandlerOptions,
+  params: RouteParams,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.manage')
+  if (user instanceof Response) return user
+
+  const body = await readJsonObject(req)
+  const patch = readMetadataPatch(body)
+  if (patch instanceof Response) return patch
+  if (Object.keys(patch).length === 0) return badRequest('No editable fields supplied')
+
+  const asset = await updateMediaAssetMetadata(db, params.id, patch)
+  if (!asset) return notFound()
+  return jsonResponse({ asset })
+}
+
+async function handleDeleteMedia(
+  req: Request,
+  db: DbClient,
+  options: CmsHandlerOptions,
+  params: RouteParams,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.manage')
+  if (user instanceof Response) return user
+
+  const url = new URL(req.url)
+  const purge = readQueryFlag(url, 'purge')
+
+  if (!purge) {
+    const asset = await softDeleteMediaAsset(db, params.id)
+    if (!asset) return notFound()
+    return jsonResponse({ asset })
+  }
+
+  // Hard delete — only legal on already-trashed assets so a single
+  // click can't bypass the trash safety net. Caller must explicitly
+  // soft-delete first and then purge from the Trash view.
+  if (!options.uploadsDir) return uploadsDirRequired()
+
+  const existing = await getMediaAsset(db, params.id)
+  if (!existing) return notFound()
+  if (!existing.deletedAt) return badRequest('Asset must be soft-deleted before purge')
+
+  // Snapshot the variant list BEFORE deletion so we know which
+  // extra files to sweep off disk alongside the original.
+  const variants = existing.variants
+  const deleted = await deleteMediaAsset(db, params.id)
+  if (!deleted) return notFound()
+
+  await rm(join(options.uploadsDir, deleted.storagePath), { force: true })
+  await removeVariantFiles(variants, options.uploadsDir)
+  return jsonResponse({ ok: true })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Route table + dispatcher
+// ─────────────────────────────────────────────────────────────────────────────
+
+type RouteParams = { id: string }
+
+type MediaHandler = (
+  req: Request,
+  db: DbClient,
+  options: CmsHandlerOptions,
+  params: RouteParams,
+) => Promise<Response>
+
+interface MediaRoute {
+  readonly method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  readonly pattern: string | RegExp
+  readonly handler: MediaHandler
+}
+
+const ID_PATTERN = '([^/]+)'
+
+const MEDIA_ROUTES: readonly MediaRoute[] = [
+  { method: 'GET', pattern: MEDIA_PREFIX, handler: handleListMedia },
+  { method: 'POST', pattern: MEDIA_PREFIX, handler: handleUploadMedia },
+  {
+    method: 'POST',
+    pattern: new RegExp(`^${MEDIA_PREFIX}/${ID_PATTERN}/restore$`),
+    handler: handleRestoreMedia,
+  },
+  {
+    method: 'POST',
+    pattern: new RegExp(`^${MEDIA_PREFIX}/${ID_PATTERN}/replace$`),
+    handler: handleReplaceMedia,
+  },
+  {
+    method: 'POST',
+    pattern: new RegExp(`^${MEDIA_PREFIX}/${ID_PATTERN}/folders$`),
+    handler: handleAssignMediaFolders,
+  },
+  {
+    method: 'PATCH',
+    pattern: new RegExp(`^${MEDIA_PREFIX}/${ID_PATTERN}$`),
+    handler: handleUpdateMediaMetadata,
+  },
+  {
+    method: 'DELETE',
+    pattern: new RegExp(`^${MEDIA_PREFIX}/${ID_PATTERN}$`),
+    handler: handleDeleteMedia,
+  },
+]
+
+function matchRoute(pathname: string, route: MediaRoute): RouteParams | null {
+  if (typeof route.pattern === 'string') {
+    return pathname === route.pattern ? { id: '' } : null
+  }
+  const match = pathname.match(route.pattern)
+  if (!match) return null
+  return { id: decodeURIComponent(match[1] ?? '') }
+}
+
 export async function handleMediaRoutes(
   req: Request,
   db: DbClient,
   options: CmsHandlerOptions,
 ): Promise<Response | null> {
-  const url = new URL(req.url)
-
-  if (url.pathname === '/admin/api/cms/media') {
-    const user = await requireCapability(req, db, 'media.manage')
-    if (user instanceof Response) return user
-
-    if (req.method === 'GET') {
-      const trash = url.searchParams.get('trash') === '1' || url.searchParams.get('trash') === 'true'
-      const query = url.searchParams.get('query')?.trim().toLowerCase() ?? ''
-      const limitParam = url.searchParams.get('limit')
-      const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 25, 1), 100) : null
-
-      let assets = await listMediaAssets(db, { includeDeleted: trash })
-
-      // JS-side text filter (follows the intentional design of this repo — see
-      // listMediaAssets comment about JS-side filtering for small media libraries).
-      if (query) {
-        assets = assets.filter(
-          (a) =>
-            a.filename.toLowerCase().includes(query) ||
-            (a.title && a.title.toLowerCase().includes(query)),
-        )
-      }
-
-      if (limit !== null) {
-        assets = assets.slice(0, limit)
-      }
-
-      return jsonResponse({ assets })
-    }
-
-    if (req.method === 'POST') {
-      if (!options.uploadsDir) return uploadsDirRequired()
-
-      const file = await readUploadedFile(req)
-      if (!file) return badRequest('Missing file')
-
-      const result = await acceptUploadedMedia(db, {
-        file,
-        maxBytes: MAX_MEDIA_BYTES,
-        allowedMimes: MEDIA_LIBRARY_MIMES,
-        uploadsDir: options.uploadsDir,
-        uploadedByUserId: user.id,
-        oversizedMessage: 'File exceeds the 50 MB hard limit',
-        unsupportedMessage:
-          'Only JPEG, PNG, GIF, WebP, MP4, and WebM files can be uploaded',
-      })
-      if (result instanceof Response) return result
-      return jsonResponse({ asset: result }, { status: 201 })
-    }
-
-    return methodNotAllowed()
+  const { pathname } = new URL(req.url)
+  // The same pathname can carry multiple methods (e.g. GET + POST on
+  // `/media`, PATCH + DELETE on `/media/:id`), so the dispatcher remembers
+  // whether ANY route's pathname matched before deciding between 404 and 405.
+  let pathMatched = false
+  for (const route of MEDIA_ROUTES) {
+    const params = matchRoute(pathname, route)
+    if (params === null) continue
+    pathMatched = true
+    if (req.method !== route.method) continue
+    return route.handler(req, db, options, params)
   }
-
-  const restoreMatch = url.pathname.match(/^\/admin\/api\/cms\/media\/([^/]+)\/restore$/)
-  if (restoreMatch) {
-    const user = await requireCapability(req, db, 'media.manage')
-    if (user instanceof Response) return user
-
-    if (req.method !== 'POST') return methodNotAllowed()
-
-    const assetId = decodeURIComponent(restoreMatch[1])
-    const restored = await restoreMediaAsset(db, assetId)
-    if (!restored) return jsonResponse({ error: 'Media asset not found' }, { status: 404 })
-    return jsonResponse({ asset: restored })
-  }
-
-  const replaceMatch = url.pathname.match(/^\/admin\/api\/cms\/media\/([^/]+)\/replace$/)
-  if (replaceMatch) {
-    const user = await requireCapability(req, db, 'media.manage')
-    if (user instanceof Response) return user
-
-    if (req.method !== 'POST') return methodNotAllowed()
-    if (!options.uploadsDir) return uploadsDirRequired()
-
-    const assetId = decodeURIComponent(replaceMatch[1])
-    const file = await readUploadedFile(req)
-    if (!file) return badRequest('Missing file')
-
-    const result = await acceptReplacementMedia(db, assetId, {
-      file,
-      maxBytes: MAX_MEDIA_BYTES,
-      allowedMimes: MEDIA_LIBRARY_MIMES,
-      uploadsDir: options.uploadsDir,
-      uploadedByUserId: user.id,
-      oversizedMessage: 'File exceeds the 50 MB hard limit',
-      unsupportedMessage:
-        'Only JPEG, PNG, GIF, WebP, MP4, and WebM files can be uploaded',
-    })
-    if (result instanceof Response) return result
-    return jsonResponse({ asset: result })
-  }
-
-  const foldersMatch = url.pathname.match(/^\/admin\/api\/cms\/media\/([^/]+)\/folders$/)
-  if (foldersMatch) {
-    const user = await requireCapability(req, db, 'media.manage')
-    if (user instanceof Response) return user
-
-    if (req.method !== 'POST') return methodNotAllowed()
-
-    const assetId = decodeURIComponent(foldersMatch[1])
-    const body = await readJsonObject(req)
-    const add = readOptionalStringArray(body, 'add') ?? []
-    const remove = readOptionalStringArray(body, 'remove') ?? []
-    if (add.length === 0 && remove.length === 0) {
-      return badRequest('Provide `add` or `remove` folder ids')
-    }
-    const asset = await assignAssetToFolders(db, assetId, { add, remove })
-    if (!asset) return jsonResponse({ error: 'Media asset not found' }, { status: 404 })
-    return jsonResponse({ asset })
-  }
-
-  const mediaItemMatch = url.pathname.match(/^\/admin\/api\/cms\/media\/([^/]+)$/)
-  if (mediaItemMatch) {
-    const user = await requireCapability(req, db, 'media.manage')
-    if (user instanceof Response) return user
-
-    const assetId = decodeURIComponent(mediaItemMatch[1])
-
-    if (req.method === 'PATCH') {
-      const body = await readJsonObject(req)
-      // PATCH accepts any subset of:
-      //   filename, altText, caption, title, tags (string[])
-      // Filename keeps the historical contract: when present-but-empty, that's
-      // a 400. Other fields tolerate empty strings (clearing alt-text / caption
-      // is a real operation).
-      const patch: UpdateMediaAssetMetadataInput = {}
-      if (body['filename'] !== undefined) {
-        const filename = readString(body, 'filename')
-        if (!filename) return badRequest('Filename is required')
-        patch.filename = filename
-      }
-      const altText = readOptionalString(body, 'altText')
-      if (altText !== null) patch.altText = altText
-      const caption = readOptionalString(body, 'caption')
-      if (caption !== null) patch.caption = caption
-      const title = readOptionalString(body, 'title')
-      if (title !== null) patch.title = title
-      const tags = readOptionalStringArray(body, 'tags')
-      if (tags !== null) patch.tags = tags
-
-      if (Object.keys(patch).length === 0) return badRequest('No editable fields supplied')
-
-      const asset = await updateMediaAssetMetadata(db, assetId, patch)
-      if (!asset) return jsonResponse({ error: 'Media asset not found' }, { status: 404 })
-      return jsonResponse({ asset })
-    }
-
-    if (req.method === 'DELETE') {
-      const purge = url.searchParams.get('purge') === '1' || url.searchParams.get('purge') === 'true'
-
-      if (purge) {
-        // Hard delete — only legal on already-trashed assets so a single
-        // click can't bypass the trash safety net. Caller must explicitly
-        // soft-delete first and then purge from the Trash view.
-        if (!options.uploadsDir) return uploadsDirRequired()
-
-        const existing = await getMediaAsset(db, assetId)
-        if (!existing) return jsonResponse({ error: 'Media asset not found' }, { status: 404 })
-        if (!existing.deletedAt) {
-          return badRequest('Asset must be soft-deleted before purge')
-        }
-
-        // Snapshot the variant list BEFORE deletion so we know which
-        // extra files to sweep off disk alongside the original.
-        const variants = existing.variants
-        const deleted = await deleteMediaAsset(db, assetId)
-        if (!deleted) return jsonResponse({ error: 'Media asset not found' }, { status: 404 })
-
-        await rm(join(options.uploadsDir, deleted.storagePath), { force: true })
-        await removeVariantFiles(variants, options.uploadsDir)
-        return jsonResponse({ ok: true })
-      }
-
-      const asset = await softDeleteMediaAsset(db, assetId)
-      if (!asset) return jsonResponse({ error: 'Media asset not found' }, { status: 404 })
-      return jsonResponse({ asset })
-    }
-
-    return methodNotAllowed()
-  }
-
-  return null
+  return pathMatched ? methodNotAllowed() : null
 }
