@@ -25,6 +25,7 @@
  * shell hasn't hydrated yet), the component returns null.
  */
 import { useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
 import {
   ContextMenu,
@@ -124,7 +125,7 @@ export function AccountMenuButton(): ReactNode {
       >
         <UserAvatar user={user} size={26} alt={null} className={styles.triggerAvatar} />
       </Button>
-      {open && (
+      {open && typeof document !== 'undefined' && createPortal(
         <ContextMenu
           ariaLabel="Account menu"
           onClose={close}
@@ -132,6 +133,7 @@ export function AccountMenuButton(): ReactNode {
           side="bottom"
           align="end"
           width={240}
+          zIndex={10000}
         >
           <header className={styles.header}>
             <span className={styles.headerName}>{displayName}</span>
@@ -175,7 +177,8 @@ export function AccountMenuButton(): ReactNode {
               {status.message}
             </p>
           )}
-        </ContextMenu>
+        </ContextMenu>,
+        document.body,
       )}
     </>
   )
