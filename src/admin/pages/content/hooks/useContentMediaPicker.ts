@@ -11,9 +11,9 @@ import { mediaTypeFromAsset } from '@content/utils/contentEntryUtils'
 import { useStandaloneMediaEditor } from '@admin/pages/media/hooks/useStandaloneMediaEditor'
 import type { MediaAssetEditor } from '@admin/pages/media/components/MediaViewerWindow/MediaViewerWindow'
 
-export type MediaPickerKind = 'media' | 'featured'
+type MediaPickerKind = 'media' | 'featured'
 
-export interface MediaPickerState {
+interface MediaPickerState {
   kind: MediaPickerKind
   targetBlockId?: string
 }

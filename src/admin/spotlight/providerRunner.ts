@@ -21,7 +21,7 @@
  */
 
 import type { SpotlightAction } from './state'
-import type { SpotlightProvider, CommandContext, Command, Scope } from './types'
+import type { SpotlightProvider, CommandContext, Command } from './types'
 import { getScope, getPluginPaletteSpotlightProviders } from './commandRegistry'
 
 const CACHE_TTL_MS = 30_000
@@ -67,7 +67,11 @@ export class ProviderRunner {
    * Providers with debounceMs > 0 are deferred; providers with debounceMs === 0
    * run as soon as the current JS task yields (setTimeout 0 equivalent, via
    * a resolved Promise microtask for zero-latency locals).
+   *
+   * Note: invoked as `runner.run(...)` where `runner = runnerRef.current` in
+   * `SpotlightRoot.tsx` — fallow can't trace method calls through useRef.
    */
+  // fallow-ignore-next-line unused-class-member
   run(scopeId: string, query: string): void {
     const scope = getScope(scopeId)
     const scopeProviders = scope?.providers ?? []
@@ -108,17 +112,6 @@ export class ProviderRunner {
     }
     this.providerStates.clear()
     this.cache.clear()
-  }
-
-  /**
-   * Abort all in-flight calls and clear debounce timers, but keep the cache
-   * (used when re-opening after a brief pause — cache entries are still warm).
-   */
-  abortAll(): void {
-    for (const [id, state] of this.providerStates) {
-      this.cancelProvider(id, state)
-    }
-    this.providerStates.clear()
   }
 
   // ─── Internal ───────────────────────────────────────────────────────────────
@@ -207,42 +200,3 @@ export class ProviderRunner {
   }
 }
 
-/**
- * Collect all providers that belong to the given scopes (active scope + root
- * when not on root) plus all plugin-registered palette providers.
- *
- * Deduplicates by provider id — root providers fire once even when the active
- * scope is root. Plugin providers are appended last so scope-local definitions
- * take precedence if ids happen to collide.
- */
-export function collectScopeProviders(scopeId: string): SpotlightProvider[] {
-  const seen = new Set<string>()
-  const providers: SpotlightProvider[] = []
-
-  function addFromScope(scope: Scope | undefined): void {
-    for (const p of scope?.providers ?? []) {
-      if (!seen.has(p.id)) {
-        seen.add(p.id)
-        providers.push(p)
-      }
-    }
-  }
-
-  addFromScope(getScope(scopeId))
-
-  // Also fire root providers when in a non-root scope (they power the
-  // "search everything" lane described in §C of Phase 3).
-  if (scopeId !== 'root') {
-    addFromScope(getScope('root'))
-  }
-
-  // Plugin palette providers fire in every scope.
-  for (const p of getPluginPaletteSpotlightProviders()) {
-    if (!seen.has(p.id)) {
-      seen.add(p.id)
-      providers.push(p)
-    }
-  }
-
-  return providers
-}

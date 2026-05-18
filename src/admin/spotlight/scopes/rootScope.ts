@@ -10,7 +10,7 @@
  */
 
 import type { Scope } from '../types'
-import { getAllCommands } from '../commandRegistry'
+import { getAllCommands } from '../builtinCommands'
 import { pagesProvider } from '../providers/pagesProvider'
 import { contentProvider } from '../providers/contentProvider'
 import { mediaProvider } from '../providers/mediaProvider'

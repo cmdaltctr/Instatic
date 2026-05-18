@@ -15,9 +15,9 @@
  *     pack,
  *     // Optional entry-point hooks — pure objects, not file paths.
  *     // The build script wires them into the runtime zip layout.
- *     editor: () => import('./editor'),
- *     server: () => import('./server'),
- *     frontend: () => import('./frontend/tracker'),
+ *     editor:   () => import(`./editor`),
+ *     server:   () => import(`./server`),
+ *     frontend: () => import(`./frontend/tracker`),
  *   })
  *
  * The return value is the host's runtime `PluginManifest` plus the bundled
@@ -62,6 +62,14 @@ export interface DefinePluginConfig {
    */
   apiVersion?: number
   permissions: PluginPermission[]
+
+  /**
+   * Allowed outbound HTTP hosts. Required when `permissions` includes
+   * `network.outbound`; ignored otherwise. Plain hostnames match exactly,
+   * the leading `*.` wildcard matches one subdomain segment. See
+   * `docs/plugins/sandbox.md` for full semantics.
+   */
+  networkAllowedHosts?: string[]
 
   /**
    * Resources declared by the plugin (used by `cms.storage`). The host
@@ -131,22 +139,36 @@ export function definePlugin(config: DefinePluginConfig): PluginDefinition {
     validatePluginSettingsDefinitions(config.id, config.settings)
   }
 
+  // The manifest is round-tripped through `plugin.json` at build time, so
+  // we omit optional fields entirely when undefined rather than setting
+  // `key: undefined`. Two reasons:
+  //
+  //   1. In-memory shape == disk shape. Tests / tooling that hand the
+  //      manifest straight into `parsePluginManifest` get the same result
+  //      as the host install path that reads the zipped JSON.
+  //   2. TypeBox's `Value.Convert` (run by `parsePluginManifest`) coerces
+  //      `key: undefined` for array-typed optional fields into `[null]`
+  //      before assertion, which then fails with a confusing
+  //      "Expected string" error far from the actual cause.
   const manifest: PluginManifest = {
     id: config.id,
     name: config.name,
     version: config.version,
     apiVersion: config.apiVersion ?? PLUGIN_API_VERSION,
-    description: config.description,
     permissions: [...config.permissions],
     resources: config.resources ?? [],
     adminPages: config.adminPages ?? [],
-    settings: config.settings,
-    author: config.author,
-    license: config.license,
-    homepage: config.homepage,
-    repository: config.repository,
-    keywords: config.keywords ? [...config.keywords] : undefined,
-    icon: config.icon,
+    ...(config.description !== undefined ? { description: config.description } : {}),
+    ...(config.networkAllowedHosts
+      ? { networkAllowedHosts: [...config.networkAllowedHosts] }
+      : {}),
+    ...(config.settings !== undefined ? { settings: config.settings } : {}),
+    ...(config.author !== undefined ? { author: config.author } : {}),
+    ...(config.license !== undefined ? { license: config.license } : {}),
+    ...(config.homepage !== undefined ? { homepage: config.homepage } : {}),
+    ...(config.repository !== undefined ? { repository: config.repository } : {}),
+    ...(config.keywords ? { keywords: [...config.keywords] } : {}),
+    ...(config.icon !== undefined ? { icon: config.icon } : {}),
   }
   return {
     manifest,

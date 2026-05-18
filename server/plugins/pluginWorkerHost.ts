@@ -61,6 +61,7 @@ import type {
   WorkerToMainMessage,
 } from './workerProtocol'
 import { parseApiCall } from './workerProtocol'
+import { registerPluginSchedule } from './pluginScheduleRegistration'
 
 // ---------------------------------------------------------------------------
 // Per-plugin host-side bookkeeping
@@ -95,6 +96,15 @@ interface HostPluginRecord {
   hookListeners: HostHookListenerEntry[]
   hookFilters: HostHookFilterEntry[]
   loopSources: HostLoopSourceEntry[]
+  /**
+   * In-flight outbound fetches keyed by the plugin's `abortId`. Populated
+   * by `performGatedFetch` (which registers a fresh AbortController before
+   * issuing the upstream `fetch`) and dropped in its `finally` block.
+   * `network.abort` dispatch looks up the controller here and aborts it,
+   * tearing down the underlying socket / response stream instead of
+   * waiting for natural completion.
+   */
+  inflightFetches: Map<string, AbortController>
 }
 
 const hostPlugins = new Map<string, HostPluginRecord>()
@@ -274,6 +284,13 @@ function handleWorkerCrash(pluginId: string, reason: string): void {
     for (const source of entry.loopSources) {
       loopSourceRegistry.unregister(source.sourceId)
     }
+    // Abort every in-flight outbound fetch. The worker that requested them
+    // is dead, so completing the response would just drop bytes on the
+    // floor and tie up sockets/memory. Cancelling now releases them.
+    for (const ctrl of entry.inflightFetches.values()) {
+      try { ctrl.abort(new Error(`Plugin "${pluginId}" worker crashed`)) } catch { /* ignore */ }
+    }
+    entry.inflightFetches.clear()
     hookBus.unregisterPlugin(pluginId)
     hostPlugins.delete(pluginId)
   }
@@ -411,6 +428,7 @@ export async function loadPluginInWorker(args: {
     hookListeners: [],
     hookFilters: [],
     loopSources: [],
+    inflightFetches: new Map(),
   })
 
   const correlationId = nanoid()
@@ -439,6 +457,13 @@ export async function unloadPluginInWorker(pluginId: string): Promise<void> {
     for (const source of entry.loopSources) {
       loopSourceRegistry.unregister(source.sourceId)
     }
+    // Mirror the crash path: abort any in-flight outbound fetches before
+    // tearing down the host record, so naked sockets don't outlive the
+    // plugin record they belonged to.
+    for (const ctrl of entry.inflightFetches.values()) {
+      try { ctrl.abort(new Error(`Plugin "${pluginId}" unloaded`)) } catch { /* ignore */ }
+    }
+    entry.inflightFetches.clear()
     hookBus.unregisterPlugin(pluginId)
   }
   hostPlugins.delete(pluginId)
@@ -571,7 +596,7 @@ function materializeResponse(response: SerializedResponse): Response {
   return Response.json(response.value)
 }
 
-export function getRegisteredRoute(
+function getRegisteredRoute(
   pluginId: string,
   method: string,
   path: string,
@@ -767,8 +792,54 @@ async function dispatchApiCall(msg: ValidatedApiCall): Promise<void> {
       case 'network.fetch': {
         assertHostPluginPermission(entry, 'network.outbound')
         const [urlString, init] = msg.args
-        const result = await performGatedFetch(entry.manifest, urlString, init)
+        const result = await performGatedFetch(entry, urlString, init)
         replyApiOk(msg.pluginId, msg.correlationId, result as unknown)
+        return
+      }
+
+      case 'network.abort': {
+        // Intentionally NOT permission-gated. A plugin without
+        // `network.outbound` can never have registered a live abortId in
+        // the first place, so the lookup just no-ops. Treat this target
+        // as a cheap correlation-id cancel.
+        const [{ abortId }] = msg.args
+        const controller = entry.inflightFetches.get(abortId)
+        if (controller) {
+          try {
+            const err = new Error('AbortError')
+            err.name = 'AbortError'
+            controller.abort(err)
+          } catch { /* ignore */ }
+          entry.inflightFetches.delete(abortId)
+        }
+        replyApiOk(msg.pluginId, msg.correlationId)
+        return
+      }
+
+      case 'cms.schedule.register': {
+        assertHostPluginPermission(entry, 'cms.schedule')
+        const [arg] = msg.args
+        // The pluginScheduleRegistration module owns the DB upsert +
+        // next_run_at calc. Routing through it (rather than inlining SQL
+        // here) keeps all cadence math in one place so registration and
+        // tick share identical interpretation.
+        await registerPluginSchedule(db, {
+          pluginId: msg.pluginId,
+          scheduleId: arg.scheduleId,
+          cadence: arg.cadence,
+          overlap: arg.overlap,
+          maxDurationMs: arg.maxDurationMs,
+        })
+        replyApiOk(msg.pluginId, msg.correlationId)
+        return
+      }
+
+      case 'cms.schedule.cancel': {
+        assertHostPluginPermission(entry, 'cms.schedule')
+        const [{ scheduleId }] = msg.args
+        const { disablePluginSchedule } = await import('../repositories/pluginSchedules')
+        await disablePluginSchedule(db, msg.pluginId, scheduleId)
+        replyApiOk(msg.pluginId, msg.correlationId)
         return
       }
     }
@@ -819,10 +890,11 @@ function hostMatchesAllowlist(host: string, allowlist: ReadonlyArray<string>): b
 }
 
 async function performGatedFetch(
-  manifest: PluginManifest,
+  entry: HostPluginRecord,
   urlString: string,
-  init: { method?: string; headers?: Record<string, string>; body?: string },
+  init: { method?: string; headers?: Record<string, string>; body?: string; abortId?: string },
 ): Promise<SerializedNetworkResponse> {
+  const manifest = entry.manifest
   let parsed: URL
   try {
     parsed = new URL(urlString)
@@ -838,19 +910,32 @@ async function performGatedFetch(
       `Plugin "${manifest.id}" requested fetch to "${parsed.host}", which is not in the manifest's networkAllowedHosts allowlist.`,
     )
   }
-  const response = await fetch(urlString, {
-    method: init.method ?? 'GET',
-    headers: init.headers,
-    body: init.body,
-  })
-  const headers: Record<string, string> = {}
-  response.headers.forEach((v, k) => { headers[k] = v })
-  const body = await response.text()
-  return {
-    status: response.status,
-    ok: response.ok,
-    headers,
-    body,
+  // Per-call AbortController so the plugin's VM-side signal can short-
+  // circuit the actual upstream request, not just the in-VM wait. If the
+  // plugin didn't supply an abortId, we still allocate a controller so
+  // crash/unload teardown can cancel it; we just don't register it for
+  // lookup since no `network.abort` can ever target it.
+  const controller = new AbortController()
+  const abortId = init.abortId
+  if (abortId) entry.inflightFetches.set(abortId, controller)
+  try {
+    const response = await fetch(urlString, {
+      method: init.method ?? 'GET',
+      headers: init.headers,
+      body: init.body,
+      signal: controller.signal,
+    })
+    const headers: Record<string, string> = {}
+    response.headers.forEach((v, k) => { headers[k] = v })
+    const body = await response.text()
+    return {
+      status: response.status,
+      ok: response.ok,
+      headers,
+      body,
+    }
+  } finally {
+    if (abortId) entry.inflightFetches.delete(abortId)
   }
 }
 
@@ -933,6 +1018,36 @@ async function runLoopFetchInWorker(
 }
 
 /**
+ * Fire a registered schedule handler in the plugin's worker. Returns the
+ * status + measured duration. The scheduler tick records the outcome to
+ * `plugin_schedules` + `plugin_schedule_runs`. If the worker isn't running
+ * or has been terminated, the call rejects with the underlying error;
+ * the scheduler converts that into a 'error' status row.
+ */
+export async function runScheduleInWorker(args: {
+  pluginId: string
+  scheduleId: string
+  maxDurationMs: number
+}): Promise<{ status: 'ok' | 'error' | 'timeout'; error?: string; durationMs: number }> {
+  const result = await requestFromWorker(
+    args.pluginId,
+    {
+      kind: 'run-schedule',
+      correlationId: nanoid(),
+      pluginId: args.pluginId,
+      scheduleId: args.scheduleId,
+      maxDurationMs: args.maxDurationMs,
+    },
+    'schedule-result',
+  )
+  return {
+    status: result.status,
+    error: result.error,
+    durationMs: result.durationMs,
+  }
+}
+
+/**
  * Lookup helper used by the existing plugin-runtime route table — given a
  * plugin id and request method/path, return whether that plugin has a
  * registered route, and which capability gates it.
@@ -945,27 +1060,3 @@ export function findPluginRouteCapability(
   return getRegisteredRoute(pluginId, method, path)
 }
 
-/**
- * Test-only / diagnostics: list current host-side bookkeeping. Useful for
- * checking that registrations land where expected, and for asserting
- * worker isolation invariants in tests (e.g. crash of one plugin's worker
- * does not affect a sibling plugin's worker).
- */
-export function inspectPluginWorkerState(): {
-  loaded: string[]
-  workers: string[]
-  routes: { pluginId: string; method: string; path: string }[]
-} {
-  const loaded = [...hostPlugins.keys()]
-  const workersOut = [...workers.keys()]
-  const routes: { pluginId: string; method: string; path: string }[] = []
-  for (const [pluginId, entry] of hostPlugins) {
-    for (const route of entry.routes.values()) {
-      routes.push({ pluginId, method: route.method, path: route.path })
-    }
-  }
-  return { loaded, workers: workersOut, routes }
-}
-
-// Re-export the permission union so external callers can pass it.
-export type { PluginPermission }

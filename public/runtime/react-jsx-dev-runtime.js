@@ -1,3 +1,6 @@
+// fallow-ignore-file unused-file
+// Loaded at runtime by plugin bundles via the import map in index.html.
+// Fallow cannot see this static-asset path; the file is live in production.
 /**
  * Plugin-runtime shim for `react/jsx-dev-runtime`.
  *

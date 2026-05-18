@@ -16,24 +16,6 @@
 
 import type { Command, CommandContext, Scope, SpotlightProvider } from './types'
 import { pluginRuntime } from '@core/plugins/runtime'
-import { getNavigationCommands } from './commands/navigation'
-import { getAccountCommands } from './commands/account'
-import { getEditorCommands } from './commands/editor'
-import { getLayersCommands } from './commands/layers'
-import { getPanelsCommands } from './commands/panels'
-import { getSettingsCommands } from './commands/settings'
-import { getHelpCommands } from './commands/help'
-import { getPagesCommands } from './commands/pages'
-import { getBreakpointsCommands } from './commands/breakpoints'
-import { getContentCommands } from './commands/content'
-import { getMediaCommands } from './commands/media'
-import { getDataCommands } from './commands/data'
-import { getFrameworkCommands } from './commands/framework'
-import { getVisualComponentsCommands } from './commands/visualComponents'
-import { getBuiltInPluginCommands, getPluginsCommands } from './commands/plugins'
-import { getUsersCommands } from './commands/users'
-import { getPreviewCommands } from './commands/preview'
-import { getAiAssistantCommands } from './commands/aiAssistant'
 
 import { rootScope } from './scopes/rootScope'
 import { editorScope } from './scopes/editorScope'
@@ -75,54 +57,9 @@ export function getScope(id: string): Scope | undefined {
 
 // ─── Built-in commands ────────────────────────────────────────────────────────
 
-/**
- * Module-level cache of the STATIC built-in command list. Each
- * `getXxxCommands()` factory creates fresh `Command` objects on every call;
- * caching the array here guarantees stable command references across renders.
- * Stable references are critical for `mergedFlatList.indexOf(cmd)` to work
- * in keyboard-navigation index tracking — without this, the highlighted row
- * tracking and `getCommandAtIndex` would never line up.
- *
- * Plugin commands are NOT cached here — `getPluginsCommands()` reads the
- * plugin runtime each call, so newly-registered plugins surface immediately
- * without a palette restart. The runtime maintains stable per-plugin command
- * references between registrations, so identity-based row matching still
- * works in practice (a plugin re-registering the same id during a session
- * is rare and would invalidate identity anyway).
- */
-let CACHED_STATIC_COMMANDS: Command[] | null = null
-
-/**
- * Returns all registered built-in commands plus the live plugin command set.
- * Static commands are computed once (stable references); plugin commands are
- * re-evaluated on every call so newly-installed plugins appear in the next
- * palette open without a refresh.
- */
-export function getAllCommands(): Command[] {
-  if (CACHED_STATIC_COMMANDS === null) {
-    CACHED_STATIC_COMMANDS = [
-      ...getNavigationCommands(),
-      ...getEditorCommands(),
-      ...getLayersCommands(),
-      ...getPanelsCommands(),
-      ...getPagesCommands(),
-      ...getBreakpointsCommands(),
-      ...getContentCommands(),
-      ...getMediaCommands(),
-      ...getDataCommands(),
-      ...getFrameworkCommands(),
-      ...getVisualComponentsCommands(),
-      ...getBuiltInPluginCommands(),
-      ...getUsersCommands(),
-      ...getAccountCommands(),
-      ...getSettingsCommands(),
-      ...getPreviewCommands(),
-      ...getAiAssistantCommands(),
-      ...getHelpCommands(),
-    ]
-  }
-  return [...CACHED_STATIC_COMMANDS, ...getPluginsCommands()]
-}
+// `getAllCommands` lives in `builtinCommands.ts` so scopes (like `rootScope`)
+// can import it without re-entering this registry — see that file's header.
+export { getAllCommands } from './builtinCommands'
 
 /**
  * Filter commands by the current workspace, capability, and when() predicate.

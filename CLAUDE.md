@@ -1,5 +1,15 @@
 # Page Builder CMS
 
+## Local admin credentials (for agent-browser smoke tests)
+
+Dev server: `http://127.0.0.1:5173/admin/site` (launches with `bun run dev`).
+
+Login:
+- email: `ai@ai.com`
+- password: `qwerty123456`
+
+Use these whenever a task asks you to smoke-test the admin UI in a browser. Do not commit them anywhere else and do not propagate them to non-local environments — they are a seeded local-dev account only.
+
 ## What this project is
 
 A self-hosted, open-source CMS with a built-in visual page builder and a first-class plugin system. It is designed to compete directly with WordPress: easier to use, dramatically faster, and shipping clean HTML/CSS rather than bloated runtime markup.
