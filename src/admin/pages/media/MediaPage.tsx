@@ -13,7 +13,7 @@
  * the user has a primary selection.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { AdminCanvasLayout } from '@admin/layouts'
+import { AdminCanvasLayout } from '@admin/layouts/AdminCanvasLayout'
 import { Button } from '@ui/components/Button'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
 import { MediaSidebar, type MediaSidebarPanelId } from './components/MediaSidebar/MediaSidebar'

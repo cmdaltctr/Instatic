@@ -29,7 +29,7 @@
  */
 import { useState } from 'react'
 import { Button } from '@ui/components/Button'
-import { AdminPageLayout } from '@admin/layouts'
+import { AdminPageLayout } from '@admin/layouts/AdminPageLayout'
 import { useAuthenticatedAdminUser } from '@admin/sessionContext'
 import { ProfileTab } from './tabs/ProfileTab'
 import { SessionsTab } from './tabs/SessionsTab'

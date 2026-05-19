@@ -44,14 +44,14 @@ import {
 import { getKeybindingForCommand } from '@admin/spotlight/keybindings'
 
 /**
- * Event dispatched by the Plugins admin page after a pack install (which
- * mutates the site document at the DB level via `saveDraftSite`). The
- * editor's in-memory store doesn't know to re-fetch — listening for this
- * event causes `usePersistence` to pull the fresh document and replay it
- * into the store so newly-imported Visual Components, pages, and CSS
- * classes appear without a hard browser reload.
+ * Re-exported for back-compat. The canonical declaration lives in
+ * `@admin/state/adminEvents` so plugin code (which just dispatches the
+ * event after a pack install) can import the constant without dragging
+ * this whole hook — and its editor-store dependency — into the
+ * non-editor admin bundle.
  */
-export const CMS_SITE_RELOAD_EVENT = 'cms-site-reload'
+export { CMS_SITE_RELOAD_EVENT } from '@admin/state/adminEvents'
+import { CMS_SITE_RELOAD_EVENT } from '@admin/state/adminEvents'
 
 export interface PersistenceSaveStatus {
   state: 'loading' | 'saved' | 'unsaved' | 'saving' | 'error'

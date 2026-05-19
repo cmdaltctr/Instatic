@@ -554,6 +554,42 @@ function parseDynamicPropBinding(raw: unknown): DynamicPropBinding | null {
   }
 }
 
+/**
+ * Parse a raw dynamicBindings map. Invalid entries are silently dropped
+ * (per-entry tolerance). For entries whose target prop currently holds a
+ * string value (or is unset), the binding is migrated in-place to a
+ * `{source.field}` token in the prop value and the binding entry is dropped.
+ * Non-string-valued props (number, boolean) keep the structured binding form
+ * because tokens cannot carry non-string values.
+ *
+ * Returns the surviving structured bindings, or `undefined` when none remain.
+ * `props` is mutated in place — that is the source-of-truth migration.
+ */
+function parseAndMigrateDynamicBindings(
+  raw: unknown,
+  props: Record<string, unknown>,
+): Record<string, DynamicPropBinding> | undefined {
+  const outer = asPlainObject(raw)
+  if (!outer) return undefined
+
+  const result: Record<string, DynamicPropBinding> = {}
+  for (const [propKey, entry] of Object.entries(outer)) {
+    const binding = parseDynamicPropBinding(entry)
+    if (!binding) continue
+
+    // Migrate string-prop bindings to inline tokens. The prop value becomes
+    // `{source.field}`; if the prop was unset, we still seed it as a string
+    // so token interpolation has something to walk.
+    const target = props[propKey]
+    if (typeof target === 'string' || target === undefined) {
+      props[propKey] = `{${binding.source}.${binding.field}}`
+      continue
+    }
+    result[propKey] = binding
+  }
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
 /** Parse a PageTemplateConfig, providing fallbacks for priority and conditions. */
 function parsePageTemplate(raw: unknown): PageTemplateConfig | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
@@ -583,69 +619,27 @@ function parsePageTemplate(raw: unknown): PageTemplateConfig | null {
  * `nodes: Record<string, PageNode>` map, iterated directly in parsePage.
  */
 function parsePageNode(raw: unknown, nodePath: string): PageNode {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error(`${nodePath}: not an object`)
-  }
-  const r = raw as Record<string, unknown>
-  if (typeof r.id !== 'string') throw new Error(`${nodePath}.id: Expected string`)
-  if (typeof r.moduleId !== 'string') throw new Error(`${nodePath}.moduleId: Expected string`)
-  if (!Array.isArray(r.children)) throw new Error(`${nodePath}.children: Expected array`)
+  const r = asPlainObject(raw)
+  if (!r) throw new Error(`${nodePath}: not an object`)
 
-  const props: Record<string, unknown> =
-    r.props && typeof r.props === 'object' && !Array.isArray(r.props)
-      ? (r.props as Record<string, unknown>)
-      : {}
+  const id = requireStringField(r, 'id', nodePath)
+  const moduleId = requireStringField(r, 'moduleId', nodePath)
+  const rawChildren = requireArrayField(r, 'children', nodePath)
 
-  const breakpointOverrides: Record<string, Record<string, unknown>> =
-    r.breakpointOverrides && typeof r.breakpointOverrides === 'object' && !Array.isArray(r.breakpointOverrides)
-      ? (r.breakpointOverrides as Record<string, Record<string, unknown>>)
-      : {}
-
-  const children = r.children.filter((c): c is string => typeof c === 'string')
-
-  const classIds = Array.isArray(r.classIds)
-    ? r.classIds.filter((c): c is string => typeof c === 'string')
-    : []
-
+  // dynamicBindings parsing mutates `props` in place to migrate legacy
+  // string-prop bindings into inline `{source.field}` tokens — see
+  // parseAndMigrateDynamicBindings.
+  const props = parseStylesBag(r.props)
   const propBindings = parsePropBindings(r.propBindings)
-
-  // Parse dynamicBindings: silently drop invalid entries (per-entry tolerance).
-  //
-  // Phase 4 migration: any binding whose target prop holds a STRING value
-  // is converted in-place to a `{source.field}` token in that prop value,
-  // and the binding entry is dropped. This makes the legacy single-binding
-  // form for string props disappear — string props go through token
-  // interpolation only, which matches how the picker writes them today.
-  //
-  // Non-string-valued props (number, boolean, undefined) keep the legacy
-  // single-binding form because tokens can't carry non-string values.
-  let dynamicBindings: Record<string, DynamicPropBinding> | undefined = undefined
-  if (r.dynamicBindings && typeof r.dynamicBindings === 'object' && !Array.isArray(r.dynamicBindings)) {
-    const result: Record<string, DynamicPropBinding> = {}
-    for (const [k, v] of Object.entries(r.dynamicBindings as Record<string, unknown>)) {
-      const parsed = parseDynamicPropBinding(v)
-      if (!parsed) continue
-      // Migrate string-prop bindings to inline tokens. The prop value
-      // becomes `{source.field}`; if the prop was unset, we still seed
-      // it as a string so token interpolation has something to walk.
-      const target = props[k]
-      const targetIsString = typeof target === 'string' || target === undefined
-      if (targetIsString) {
-        props[k] = `{${parsed.source}.${parsed.field}}`
-        continue
-      }
-      result[k] = parsed
-    }
-    if (Object.keys(result).length > 0) dynamicBindings = result
-  }
+  const dynamicBindings = parseAndMigrateDynamicBindings(r.dynamicBindings, props)
 
   return {
-    id: r.id,
-    moduleId: r.moduleId,
+    id,
+    moduleId,
     props,
-    breakpointOverrides,
-    children,
-    classIds,
+    breakpointOverrides: parseBreakpointStylesBag(r.breakpointOverrides),
+    children: onlyStrings(rawChildren),
+    classIds: Array.isArray(r.classIds) ? onlyStrings(r.classIds) : [],
     ...(typeof r.label === 'string' ? { label: r.label } : {}),
     ...(typeof r.locked === 'boolean' ? { locked: r.locked } : {}),
     ...(typeof r.hidden === 'boolean' ? { hidden: r.hidden } : {}),
@@ -677,6 +671,32 @@ function parseBreakpoint(raw: unknown): Breakpoint | null {
 function asPlainObject(raw: unknown): Record<string, unknown> | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   return raw as Record<string, unknown>
+}
+
+/**
+ * Read a required string field from a record. Throws a path-prefixed error
+ * if absent or not a string — `parsePage` / `parseSiteDocument` bubble the
+ * path so validate.ts can report the exact invalid location.
+ */
+function requireStringField(r: Record<string, unknown>, field: string, path: string): string {
+  const v = r[field]
+  if (typeof v !== 'string') throw new Error(`${path}.${field}: Expected string`)
+  return v
+}
+
+/**
+ * Read a required array field, throwing a path-prefixed error if absent or
+ * not an array. Returns the raw array; callers filter / coerce as needed.
+ */
+function requireArrayField(r: Record<string, unknown>, field: string, path: string): unknown[] {
+  const v = r[field]
+  if (!Array.isArray(v)) throw new Error(`${path}.${field}: Expected array`)
+  return v
+}
+
+/** Keep only the string entries of an array. */
+function onlyStrings(items: readonly unknown[]): string[] {
+  return items.filter((c): c is string => typeof c === 'string')
 }
 
 /** Parse a CSSClass scope (currently only `{ type: 'node', nodeId, role: 'module-style' }`). */

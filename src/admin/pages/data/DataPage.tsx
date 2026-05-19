@@ -6,7 +6,7 @@
  */
 import { Button } from '@ui/components/Button'
 import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
-import { AdminCanvasLayout } from '@admin/layouts'
+import { AdminCanvasLayout } from '@admin/layouts/AdminCanvasLayout'
 import { useAuthenticatedAdminUser } from '@admin/sessionContext'
 import { useNavigate } from '@admin/lib/routing'
 import { useEditorStore } from '@site/store/store'

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { AdminCanvasLayout } from '@admin/layouts'
+import { AdminCanvasLayout } from '@admin/layouts/AdminCanvasLayout'
 import { useEditorStore } from '@site/store/store'
 import { consumePendingAction } from '@admin/spotlight/pendingAction'
 import { useAutoResolveDependencies } from '@site/hooks/useAutoResolveDependencies'

@@ -19,6 +19,15 @@
  * If the upgrade adds zero new permissions, we render a quick reassurance
  * banner ("No new permissions in this update") so the user can confirm
  * with confidence.
+ *
+ * Also displays `networkAllowedHosts` from the manifest in its own section.
+ * Permissions describe broad CMS capabilities ("inject scripts"); the
+ * host list describes the concrete remote origins those scripts will talk
+ * to (e.g. `threejs.org`, `*.cdn.example.com`). Both dimensions are
+ * security-relevant: a plugin with `frontend.scripts` plus an unexpected
+ * allowlist entry can exfiltrate visitor data to that host. Showing both
+ * before activation is the only way the operator can make an informed
+ * decision.
  */
 import { Button } from '@ui/components/Button'
 import {
@@ -38,6 +47,43 @@ interface PermissionReviewPending {
   manifest: PluginManifest
   upgradeFromVersion?: string
   previouslyGrantedPermissions?: PluginPermission[]
+  /**
+   * The previously-installed manifest's `networkAllowedHosts` (when this is
+   * an upgrade). Used to flag hosts the upgrade adds compared to what the
+   * operator already approved — a moved-or-added external dependency is
+   * exactly the kind of supply-chain attack the consent screen should catch.
+   */
+  previousNetworkAllowedHosts?: string[]
+}
+
+type HostDiffStatus = 'new' | 'existing' | 'dropped'
+
+interface HostDiffRow {
+  host: string
+  status: HostDiffStatus
+}
+
+function diffNetworkAllowedHosts(
+  next: readonly string[],
+  previous: readonly string[] | undefined,
+  isUpgrade: boolean,
+): HostDiffRow[] {
+  const previousSet = new Set(previous ?? [])
+  const nextSet = new Set(next)
+  const rows: HostDiffRow[] = []
+  for (const host of next) {
+    const status: HostDiffStatus = !isUpgrade || !previousSet.has(host) ? 'new' : 'existing'
+    rows.push({ host, status })
+  }
+  if (isUpgrade) {
+    for (const host of previous ?? []) {
+      if (!nextSet.has(host)) rows.push({ host, status: 'dropped' })
+    }
+  }
+  // Sort: new first, then existing, then dropped — same order the
+  // permission diff list uses for consistency.
+  const order: Record<HostDiffStatus, number> = { new: 0, existing: 1, dropped: 2 }
+  return rows.sort((a, b) => order[a.status] - order[b.status] || a.host.localeCompare(b.host))
 }
 
 interface PermissionReviewSectionProps {
@@ -136,6 +182,48 @@ export function PermissionReviewSection({
           ))}
         </ul>
       )}
+
+      {(() => {
+        const hostRows = diffNetworkAllowedHosts(
+          pending.manifest.networkAllowedHosts ?? [],
+          pending.previousNetworkAllowedHosts,
+          isUpgrade,
+        )
+        if (hostRows.length === 0) return null
+        return (
+          <div
+            className={styles.networkSection}
+            data-testid="permission-review-network-hosts"
+          >
+            <div className={styles.networkHeader}>
+              <strong>External hosts</strong>
+              <span className={styles.description}>
+                The plugin will connect to these hosts from the server and
+                from published pages. Hosts not listed here are blocked.
+              </span>
+            </div>
+            <ul className={styles.list}>
+              {hostRows.map((row) => (
+                <li
+                  key={`${row.host}:${row.status}`}
+                  className={styles.row}
+                  data-status={row.status}
+                  data-network-host={row.host}
+                >
+                  <div className={styles.label}>
+                    <code>{row.host}</code>
+                    {isUpgrade && (
+                      <span className={`${styles.badge} ${statusBadgeClass(row.status)}`}>
+                        {statusBadgeLabel(row.status)}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })()}
 
       <div className={styles.actions}>
         <Button
