@@ -4,7 +4,9 @@
  * Responsibilities:
  * - Captures all wheel, drag, and pinch gestures via useCanvas
  * - Manages the CanvasSelectionContext (click → selectNode, hover → hoverNode)
- * - Handles canvas-level keyboard shortcuts (Delete, Ctrl+D, Escape)
+ * - Delegates canvas-level keyboard shortcuts to useCanvasKeyboardShortcuts
+ * - Delegates the rename modal to useCanvasRenameDialog + CanvasRenameDialog
+ * - Delegates the right-click menu to useCanvasLayerContextMenu + CanvasLayerContextMenu
  * - Renders CanvasTransformLayer inside the gesture-capture area
  * - Renders CanvasNotch (position: absolute, not in transform layer)
  * - Handles double-click on base.visual-component-ref → enters VC canvas mode
@@ -20,20 +22,15 @@
  * - prefers-reduced-motion: CSS transitions are disabled for users who opt out
  */
 
-import { useRef, useCallback, useMemo, useState, type FormEvent } from 'react'
-import { createPortal } from 'react-dom'
+import { useRef, useCallback, useMemo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore, selectActiveCanvasPage, selectRightSidebarExpanded } from '@site/store/store'
 import type { Breakpoint } from '@core/page-tree/schemas'
 import { registry } from '@core/module-engine/registry'
 import { getNodeDisplayName } from '@core/page-tree/nodeDisplayName'
-import { Button } from '@ui/components/Button'
-import { Dialog } from '@ui/components/Dialog'
 import { ErrorBoundary } from '@ui/components/ErrorBoundary'
-import { Input } from '@ui/components/Input'
 import { useCanvas } from '@site/hooks/useCanvas'
 import { useEditorPermissions } from '@site/editorPermissionsContext'
-import { getKeybindingForCommand } from '@admin/spotlight/keybindings'
 import { CanvasTransformLayer } from './CanvasTransformLayer'
 import { CanvasPreviewSurface } from './CanvasPreviewSurface'
 import { CanvasNotch } from './CanvasNotch'
@@ -42,7 +39,11 @@ import { CanvasBreakpointSelector } from './CanvasBreakpointSelector'
 import { CanvasSelectionContext, CanvasViewportActionsContext } from './CanvasContexts'
 import { ClassStyleInjector } from './ClassStyleInjector'
 import { PluginCanvasOverlayLayer } from './PluginCanvasOverlayLayer'
-import { LayerNodeContextMenu } from '@site/panels/DomPanel/LayerNodeContextMenu'
+import { CanvasRenameDialog } from './CanvasRenameDialog'
+import { useCanvasRenameDialog } from './useCanvasRenameDialog'
+import { CanvasLayerContextMenu } from './CanvasLayerContextMenu'
+import { useCanvasLayerContextMenu } from './useCanvasLayerContextMenu'
+import { useCanvasKeyboardShortcuts } from './useCanvasKeyboardShortcuts'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { useTemplatePreviewContext } from '@site/hooks/useTemplatePreviewContext'
@@ -68,19 +69,9 @@ interface CanvasRootProps {
   editable?: boolean
 }
 
-interface RenameDialogState {
-  nodeId: string
-  currentName: string
-  value: string
-  error: string | null
-}
-
 export function CanvasRoot({ editable = true }: CanvasRootProps) {
   const transformLayerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
-  const renameInputRef = useRef<HTMLInputElement>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null)
-  const [renameDialog, setRenameDialog] = useState<RenameDialogState | null>(null)
 
   // B2 — Register canvas root as a drop target for visualComponentRef drags.
   // The AdminCanvasLayout DndContext's onDragEnd checks event.over.id against CANVAS_ROOT_DROPPABLE_ID.
@@ -182,6 +173,11 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
     enabled: !isPreview,
   })
 
+  // ─── Modals & overlays ─────────────────────────────────────────────────────
+
+  const renameDialog = useCanvasRenameDialog(renameNode)
+  const contextMenu = useCanvasLayerContextMenu()
+
   // ─── Selection context value ───────────────────────────────────────────────
 
   const onNodeClick = useCallback(
@@ -227,9 +223,9 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
         selectNode(nodeId)
       }
       setFocusedPanel('canvas')
-      setContextMenu({ x: e.clientX, y: e.clientY, nodeId })
+      contextMenu.open({ x: e.clientX, y: e.clientY, nodeId })
     },
-    [activeBreakpointId, editable, selectNode, setActiveBreakpoint, setFocusedPanel],
+    [activeBreakpointId, contextMenu, editable, selectNode, setActiveBreakpoint, setFocusedPanel],
   )
 
   /**
@@ -288,154 +284,30 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
   // ─── Canvas-level keyboard shortcuts ──────────────────────────────────────
   // Match predicates come from the keybindings registry — single source of truth.
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      // Let useCanvas handle zoom/pan shortcuts
-      canvasKeyDown(e)
-
-      // Escape exits VC mode regardless of selection state (SF-1 / CR #666).
-      // This branch must run BEFORE the selectedNodeId guard so pressing Escape
-      // while in VC mode with nothing selected still returns to the page canvas.
-      if (e.key === 'Escape') {
-        clearSelection()
-        if (activeDocument?.kind === 'visualComponent') {
-          setActiveDocument(null)
-        }
-        return
-      }
-
-      if (!editable) return
-      if (!selectedNodeId) return
-
-      // Read the live selection set inside the handler so multi-actions see
-      // the latest state (subscribing in the component body would cause
-      // re-renders on every selection change just to refresh this callback).
-      const currentIds = useEditorStore.getState().selectedNodeIds
-
-      // Delete / Backspace → delete selected layer(s)
-      if (getKeybindingForCommand('layers.delete')?.match(e)) {
-        // Don't intercept backspace in inputs
-        const target = e.target as HTMLElement
-        if (
-          target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable
-        ) return
-        e.preventDefault()
-        if (currentIds.length > 1) {
-          // Multi-delete: skip the central confirm dialog for v1 (no plumbing
-          // to render "Delete N layers?" from this hot path). Undo via Ctrl+Z.
-          deleteNodes(currentIds)
-          clearSelection()
-        } else {
-          requestDeleteNode(selectedNodeId)
-        }
-      }
-
-      // Ctrl/Cmd+D → duplicate
-      if (getKeybindingForCommand('layers.duplicate')?.match(e)) {
-        e.preventDefault()
-        if (currentIds.length > 1) {
-          duplicateNodes(currentIds)
-        } else {
-          duplicateNode(selectedNodeId)
-        }
-      }
-
-      // Ctrl/Cmd+C / X / V — clipboard. Skip when the active element is a
-      // text input / contenteditable so native text-clipboard behaviour wins
-      // when the user is editing a value, not the layer tree.
-      const target = e.target as HTMLElement
-      const isTextInput =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      if (!isTextInput) {
-        if (getKeybindingForCommand('layers.copy')?.match(e)) {
-          e.preventDefault()
-          if (currentIds.length > 1) copyNodes(currentIds)
-          else copyNode(selectedNodeId)
-        } else if (getKeybindingForCommand('layers.cut')?.match(e)) {
-          e.preventDefault()
-          if (currentIds.length > 1) cutNodes(currentIds)
-          else cutNode(selectedNodeId)
-        } else if (getKeybindingForCommand('layers.paste')?.match(e)) {
-          e.preventDefault()
-          // Paste anchors to the multi-selection's anchor — same single target.
-          pasteNode(selectedNodeId)
-        }
-      }
-    },
-    [
-      selectedNodeId,
-      canvasKeyDown,
-      clearSelection,
-      requestDeleteNode,
-      duplicateNode,
-      duplicateNodes,
-      deleteNodes,
-      activeDocument,
-      editable,
-      setActiveDocument,
-      copyNode,
-      copyNodes,
-      cutNode,
-      cutNodes,
-      pasteNode,
-    ],
-  )
+  const handleKeyDown = useCanvasKeyboardShortcuts({
+    canvasKeyDown,
+    selectedNodeId,
+    editable,
+    activeDocument,
+    setActiveDocument,
+    clearSelection,
+    requestDeleteNode,
+    deleteNodes,
+    duplicateNode,
+    duplicateNodes,
+    copyNode,
+    copyNodes,
+    cutNode,
+    cutNodes,
+    pasteNode,
+  })
 
   // ─── Canvas background click → deselect ───────────────────────────────────
 
   const handleCanvasClick = useCallback(() => {
-    setContextMenu(null)
+    contextMenu.close()
     clearSelection()
-  }, [clearSelection])
-
-  const closeContextMenu = useCallback(() => {
-    setContextMenu(null)
-  }, [])
-
-  const openRenameDialog = useCallback((nodeId: string) => {
-    const state = useEditorStore.getState()
-    const node = selectActiveCanvasPage(state)?.nodes[nodeId]
-    if (!node) return
-
-    const definition = registry.get(node.moduleId)
-    const currentName = getNodeDisplayName(node, definition, state.site?.visualComponents)
-    setRenameDialog({
-      nodeId,
-      currentName,
-      value: currentName,
-      error: null,
-    })
-  }, [])
-
-  const closeRenameDialog = useCallback(() => {
-    setRenameDialog(null)
-  }, [])
-
-  const commitRenameDialog = useCallback(() => {
-    if (!renameDialog) return
-
-    const nextName = renameDialog.value.trim()
-    if (!nextName) {
-      setRenameDialog((current) =>
-        current ? { ...current, error: 'Name is required' } : current,
-      )
-      return
-    }
-
-    if (nextName !== renameDialog.currentName) {
-      renameNode(renameDialog.nodeId, nextName)
-    }
-    setRenameDialog(null)
-  }, [renameDialog, renameNode])
-
-  const handleRenameSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    commitRenameDialog()
-  }, [commitRenameDialog])
+  }, [clearSelection, contextMenu])
 
   // Resolve the active breakpoint object for the preview surface (which
   // wants the full Breakpoint, not just the id, to read .width).
@@ -541,96 +413,29 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
         */}
           {!isPreview && editable && <PluginCanvasOverlayLayer />}
 
-          {!isPreview && editable && contextMenu && createPortal(
-            <LayerNodeContextMenu
-              x={contextMenu.x}
-              y={contextMenu.y}
-              nodeId={contextMenu.nodeId}
-              onClose={closeContextMenu}
-              onDelete={() => {
-                const id = contextMenu.nodeId
-                closeContextMenu()
-                requestDeleteNode(id)
+          {!isPreview && editable && contextMenu.position && (
+            <CanvasLayerContextMenu
+              position={contextMenu.position}
+              onClose={contextMenu.close}
+              actions={{
+                requestDeleteNode,
+                duplicateNode,
+                openRenameDialog: renameDialog.open,
+                wrapNode,
+                copyNode,
+                cutNode,
+                pasteNode,
               }}
-              onDuplicate={() => {
-                duplicateNode(contextMenu.nodeId)
-                closeContextMenu()
-              }}
-              onRename={() => {
-                const { nodeId } = contextMenu
-                closeContextMenu()
-                openRenameDialog(nodeId)
-              }}
-              onWrapInContainer={() => {
-                wrapNode(contextMenu.nodeId, 'base.container')
-                closeContextMenu()
-              }}
-              onCopy={() => {
-                copyNode(contextMenu.nodeId)
-                closeContextMenu()
-              }}
-              onCut={() => {
-                cutNode(contextMenu.nodeId)
-                closeContextMenu()
-              }}
-              onPaste={() => {
-                pasteNode(contextMenu.nodeId)
-                closeContextMenu()
-              }}
-            />,
-            document.body,
+            />
           )}
 
-          {!isPreview && editable && renameDialog && (
-            <Dialog
-              open
-              onClose={closeRenameDialog}
-              title="Rename element"
-              size="sm"
-              initialFocusRef={renameInputRef}
-              footer={
-                <>
-                  <Button variant="secondary" size="sm" type="button" onClick={closeRenameDialog}>
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    type="button"
-                    onClick={commitRenameDialog}
-                    disabled={!renameDialog.value.trim()}
-                  >
-                    Save
-                  </Button>
-                </>
-              }
-            >
-              <form className={styles.renameForm} onSubmit={handleRenameSubmit}>
-                <label className={styles.renameField}>
-                  <span className={styles.renameLabel}>Name</span>
-                  <Input
-                    ref={renameInputRef}
-                    fieldSize="sm"
-                    value={renameDialog.value}
-                    autoComplete="off"
-                    spellCheck={false}
-                    invalid={Boolean(renameDialog.error)}
-                    aria-describedby={renameDialog.error ? 'canvas-rename-error' : undefined}
-                    onChange={(event) => {
-                      const value = event.currentTarget.value
-                      setRenameDialog((current) =>
-                        current ? { ...current, value, error: null } : current,
-                      )
-                    }}
-                  />
-                </label>
-                {renameDialog.error && (
-                  <p id="canvas-rename-error" role="alert" className={styles.renameError}>
-                    {renameDialog.error}
-                  </p>
-                )}
-              </form>
-            </Dialog>
+          {!isPreview && editable && renameDialog.state && (
+            <CanvasRenameDialog
+              state={renameDialog.state}
+              onChange={renameDialog.replace}
+              onCommit={renameDialog.commit}
+              onClose={renameDialog.close}
+            />
           )}
         </div>
       </CanvasSelectionContext.Provider>
