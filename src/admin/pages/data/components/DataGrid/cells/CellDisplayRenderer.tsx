@@ -15,6 +15,8 @@
 import type { ReactElement } from 'react'
 import {
   readBooleanCell,
+  readFieldSchemaCell,
+  readNodeTreeCell,
   readNumberCell,
   readStringArrayCell,
   readStringCell,
@@ -417,6 +419,17 @@ export function CellDisplayRenderer({
             return typeof v === 'string' && v.length > 0 ? [v] : []
           })()
       return <RelationDisplay ids={ids} field={field} tables={tables} rows={rows} />
+    }
+    case 'pageTree': {
+      const tree = readNodeTreeCell(cells, field.id)
+      if (!tree) return <Empty />
+      return <span className={styles.text}>Page tree</span>
+    }
+    case 'fieldSchema': {
+      const params = readFieldSchemaCell(cells, field.id)
+      if (params.length === 0) return <Empty />
+      const label = params.length === 1 ? '1 param' : `${params.length} params`
+      return <span className={styles.text}>{label}</span>
     }
     default: {
       const _exhaustive: never = field

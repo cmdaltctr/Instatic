@@ -37,6 +37,8 @@ export interface DataCanvasProps {
   onOpenRow: (rowId: string) => void
   /** Set a row's status — powers the grid's bulk publish / draft actions. */
   onSetRowStatus: (rowId: string, status: DataRowStatus) => Promise<DataRow>
+  /** Opens the ExportDialog pre-filled with the selected row ids. */
+  onExportRows?: (rowIds: string[]) => void
   canEdit: boolean
   canDelete: boolean
 }
@@ -58,6 +60,7 @@ export function DataCanvas({
   onEditInContent,
   onOpenRow,
   onSetRowStatus,
+  onExportRows,
   canEdit,
   canDelete,
 }: DataCanvasProps) {
@@ -90,6 +93,7 @@ export function DataCanvas({
         onOpenRow={onOpenRow}
         onDeleteRow={canDelete ? onDeleteRow : undefined}
         onSetRowStatus={canEdit ? onSetRowStatus : undefined}
+        onExportRows={canEdit ? onExportRows : undefined}
       />
     </section>
   )

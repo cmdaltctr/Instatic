@@ -25,7 +25,7 @@ import { createAuditEvent } from '../../../repositories/audit'
 import {
   createDataTable,
   getDataTable,
-  listDataTables,
+  listDataTablesWithCounts,
   softDeleteDataTable,
   updateDataTable,
   createDataRow,
@@ -144,7 +144,7 @@ async function handleTablesCollection(req: Request, db: DbClient): Promise<Respo
     const limitParam = url.searchParams.get('limit')
     const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 25, 1), 100) : null
 
-    let tables = await listDataTables(db)
+    let tables = await listDataTablesWithCounts(db)
 
     if (query) {
       tables = tables.filter(

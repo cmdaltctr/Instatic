@@ -92,6 +92,7 @@ describe('data CMS repository', () => {
       pluralLabel: 'Posts',
       primaryFieldId: 'title',
       fields: defaultFields,
+      system: false,
       createdByUserId: null,
       updatedByUserId: null,
       createdAt: '2026-05-01T10:00:00.000Z',
@@ -453,7 +454,8 @@ describe('data CMS public routes', () => {
         return undefined
       },
       (sql) => {
-        if (sql.startsWith('select page_versions.snapshot_json')) {
+        // getPublishedPageBySlug — now queries data_row_versions.snapshot_json
+        if (sql.startsWith('select data_row_versions.snapshot_json')) {
           return { rows: [], rowCount: 0 }
         }
         return undefined

@@ -204,7 +204,6 @@ export function defineComponent(
     name,
     tree,
     params: [],
-    breakpoints: [],
     classIds: [...usedClassIds],
     createdAt: 0,
   }

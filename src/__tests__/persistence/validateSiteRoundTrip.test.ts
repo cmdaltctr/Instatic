@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'bun:test'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { validateSite, SiteValidationError } from '@core/persistence/validate'
+import { validateSite, validatePages, validateVisualComponents, SiteValidationError } from '@core/persistence/validate'
 
 // ---------------------------------------------------------------------------
 // Fixture loader
@@ -26,9 +26,14 @@ function loadFixture(): unknown {
 // ---------------------------------------------------------------------------
 
 describe('validateSite — round-trip with representative fixture', () => {
-  it('survives validateSite() and deep-equals the source fixture', () => {
-    const raw = loadFixture()
-    const result = validateSite(raw)
+  it('survives three-phase validation and deep-equals the source fixture', () => {
+    const raw = loadFixture() as Record<string, unknown>
+    const rawPages = Array.isArray(raw.pages) ? raw.pages as unknown[] : []
+    const rawVCs = Array.isArray(raw.visualComponents) ? raw.visualComponents as unknown[] : []
+    const shell = validateSite(raw)
+    const visualComponents = validateVisualComponents(rawVCs)
+    const pages = validatePages(shell, rawPages, visualComponents)
+    const result = { ...shell, pages, visualComponents }
     // JSON round-trip strips undefined optional-absent fields so the comparison
     // matches raw (which also never has undefined keys, being parsed JSON).
     expect(JSON.parse(JSON.stringify(result))).toEqual(raw)
@@ -42,8 +47,10 @@ describe('validateSite — round-trip with representative fixture', () => {
   })
 
   it('preserves propBindings on page nodes', () => {
-    const result = validateSite(loadFixture())
-    const node = result.pages[0].nodes['heading-1']
+    const raw = loadFixture() as Record<string, unknown>
+    const shell = validateSite(raw)
+    const pages = validatePages(shell, Array.isArray(raw.pages) ? raw.pages as unknown[] : [])
+    const node = pages[0].nodes['heading-1']
     expect(node.propBindings).toEqual({
       text:  { paramId: 'param-title' },
       extra: { paramId: 'param-desc' },
@@ -51,8 +58,10 @@ describe('validateSite — round-trip with representative fixture', () => {
   })
 
   it('preserves the VC flat tree (tree.nodes + rootNodeId)', () => {
-    const result = validateSite(loadFixture())
-    const vc = result.visualComponents[0]
+    const raw = loadFixture() as Record<string, unknown>
+    const rawVCs = Array.isArray(raw.visualComponents) ? raw.visualComponents as unknown[] : []
+    const vcs = validateVisualComponents(rawVCs)
+    const vc = vcs[0]
     expect(vc.tree.rootNodeId).toBe('vc-root')
     // Both the root and its child must be in the flat map
     expect(vc.tree.nodes['vc-root']).toBeDefined()
@@ -63,10 +72,12 @@ describe('validateSite — round-trip with representative fixture', () => {
   })
 
   it('preserves the page template config including conditions', () => {
-    const result = validateSite(loadFixture())
-    expect(result.pages[0].template?.enabled).toBe(true)
-    expect(result.pages[0].template?.conditions).toHaveLength(1)
-    expect(result.pages[0].template?.conditions[0].operator).toBe('equals')
+    const raw = loadFixture() as Record<string, unknown>
+    const shell = validateSite(raw)
+    const pages = validatePages(shell, Array.isArray(raw.pages) ? raw.pages as unknown[] : [])
+    expect(pages[0].template?.enabled).toBe(true)
+    expect(pages[0].template?.conditions).toHaveLength(1)
+    expect(pages[0].template?.conditions[0].operator).toBe('equals')
   })
 
   it('preserves non-empty breakpoints', () => {
@@ -104,24 +115,21 @@ describe('validateSite — round-trip with representative fixture', () => {
 // Negative tests — each exercises a specific domain post-check rule
 // ---------------------------------------------------------------------------
 
-describe('validateSite — negative: bad VC name is silently dropped (rule 4)', () => {
+describe('validateVisualComponents — negative: bad VC name is silently dropped (rule 4)', () => {
   it('VC with empty name is dropped; valid VCs survive', () => {
     const raw = loadFixture() as Record<string, unknown>
-    const fixture = raw as { visualComponents: Array<Record<string, unknown>> }
+    const rawVCs = Array.isArray(raw.visualComponents) ? [...raw.visualComponents as Array<Record<string, unknown>>] : []
     // Prepend an invalid VC (whitespace-only name) before the valid one
-    fixture.visualComponents = [
-      { id: 'vc-bad', name: '   ', rootNode: { id: 'n', moduleId: 'base.text', props: {}, breakpointOverrides: {}, children: [], classIds: [] }, params: [], breakpoints: [], classIds: [], createdAt: 1700000000000 },
-      ...fixture.visualComponents,
-    ]
-    const result = validateSite(raw)
-    expect(result.visualComponents.some((vc) => vc.name.trim().length === 0)).toBe(false)
-    expect(result.visualComponents.some((vc) => vc.name === 'MyCard')).toBe(true)
+    const vcBad = { id: 'vc-bad', name: '   ', tree: { rootNodeId: 'n', nodes: { n: { id: 'n', moduleId: 'base.text', props: {}, breakpointOverrides: {}, children: [], classIds: [] } } }, params: [], classIds: [], createdAt: 1700000000000 }
+    const vcs = validateVisualComponents([vcBad, ...rawVCs])
+    expect(vcs.some((vc) => vc.name.trim().length === 0)).toBe(false)
+    expect(vcs.some((vc) => vc.name === 'MyCard')).toBe(true)
   })
 })
 
 describe('validateSite — negative: duplicate page slug throws (rules 1–2)', () => {
   it('throws SiteValidationError with path site.pages[1].slug', () => {
-    const raw = loadFixture() as { pages: Array<Record<string, unknown>> }
+    const raw = loadFixture() as { pages: Array<Record<string, unknown>> } & Record<string, unknown>
     // Add a second page with the same slug as page-home
     raw.pages.push({
       id: 'page-dup',
@@ -132,9 +140,10 @@ describe('validateSite — negative: duplicate page slug throws (rules 1–2)', 
         'root-dup': { id: 'root-dup', moduleId: 'base.body', props: {}, breakpointOverrides: {}, children: [], classIds: [] },
       },
     })
-    expect(() => validateSite(raw)).toThrow(SiteValidationError)
+    const shell = validateSite(raw)
+    expect(() => validatePages(shell, raw.pages)).toThrow(SiteValidationError)
     try {
-      validateSite(raw)
+      validatePages(shell, raw.pages)
     } catch (e) {
       expect((e as SiteValidationError).message).toContain('duplicate slug')
       // pages[0] has slug 'index'; pages[2] also has slug 'index'.
@@ -147,7 +156,7 @@ describe('validateSite — negative: duplicate page slug throws (rules 1–2)', 
 
 describe('validateSite — negative: malformed propBindings entry silently dropped (rule 5.3)', () => {
   it('bad entry is dropped; valid entry survives intact', () => {
-    const raw = loadFixture() as { pages: Array<{ nodes: Record<string, Record<string, unknown>> }> }
+    const raw = loadFixture() as { pages: Array<{ nodes: Record<string, Record<string, unknown>> }> } & Record<string, unknown>
     // Inject a mix of good + bad propBindings on heading-1
     raw.pages[0].nodes['heading-1'].propBindings = {
       text:    { paramId: 'param-title' },   // valid
@@ -155,8 +164,9 @@ describe('validateSite — negative: malformed propBindings entry silently dropp
       anotherBad: { wrongField: 'x' },       // invalid — missing paramId
       extra:   { paramId: 'param-desc' },    // valid
     }
-    const result = validateSite(raw)
-    const bindings = result.pages[0].nodes['heading-1'].propBindings
+    const shell = validateSite(raw)
+    const pages = validatePages(shell, raw.pages as unknown[])
+    const bindings = pages[0].nodes['heading-1'].propBindings
     expect(bindings).toEqual({
       text:  { paramId: 'param-title' },
       extra: { paramId: 'param-desc' },
@@ -181,10 +191,11 @@ describe('validateSite — negative: unsafe SiteFile path is silently dropped (r
   })
 
   it('throws SiteValidationError with correct path for reserved-word slug', () => {
-    const raw = loadFixture() as { pages: Array<Record<string, unknown>> }
+    const raw = loadFixture() as { pages: Array<Record<string, unknown>> } & Record<string, unknown>
     raw.pages[0].slug = 'admin'
+    const shell = validateSite(raw)
     try {
-      validateSite(raw)
+      validatePages(shell, raw.pages)
       throw new Error('expected throw')
     } catch (e) {
       expect(e).toBeInstanceOf(SiteValidationError)

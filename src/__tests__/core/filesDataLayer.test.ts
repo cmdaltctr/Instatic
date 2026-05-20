@@ -555,10 +555,10 @@ describe('validateSite — files field', () => {
     const raw = minimalValidRaw()
     raw.files = []
     const site = validateSite(raw)
-    // Existing fields must be intact
+    // Existing shell fields must be intact after files processing
     expect(site.id).toBe('proj-1')
     expect(site.name).toBe('Test SiteDocument')
-    expect(site.pages).toHaveLength(1)
+    expect(site.breakpoints).toHaveLength(1)
     expect(site.files).toEqual([])
   })
 

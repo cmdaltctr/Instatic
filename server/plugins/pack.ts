@@ -144,8 +144,14 @@ function suggestClassName(pluginId: string, classId: string): string {
 }
 
 /**
- * Merge a parsed pack into a site document, replacing entries by id.
- * Returns the next site document and a list of replaced ids per category.
+ * Merge a parsed pack's pages and classes into a site document, replacing
+ * entries by id. Returns the next site document and a list of replaced ids
+ * per category.
+ *
+ * NOTE: Visual Components are no longer merged into the shell. They are
+ * returned separately in `pack.visualComponents` so the caller can upsert
+ * them as `data_rows` (table_id = 'components') via the data API.
+ * See `installPluginPackToSite` in `server/handlers/cms/plugins/pack.ts`.
  */
 export function applyPluginPackToSite(
   site: SiteDocument,
@@ -157,10 +163,12 @@ export function applyPluginPackToSite(
     classes: [],
   }
 
-  const vcsById = new Map(site.visualComponents.map((vc) => [vc.id, vc]))
+  // VCs are handled separately by the caller (upserted as data_rows).
+  // Record which existing VC ids would be replaced.
   for (const vc of pack.visualComponents) {
-    if (vcsById.has(vc.id)) replaced.visualComponents.push(vc.id)
-    vcsById.set(vc.id, vc)
+    if (site.visualComponents.some((v) => v.id === vc.id)) {
+      replaced.visualComponents.push(vc.id)
+    }
   }
 
   const pagesById = new Map(site.pages.map((p) => [p.id, p]))
@@ -178,7 +186,6 @@ export function applyPluginPackToSite(
   return {
     site: {
       ...site,
-      visualComponents: [...vcsById.values()],
       pages: [...pagesById.values()],
       classes: nextClasses,
       updatedAt: Date.now(),

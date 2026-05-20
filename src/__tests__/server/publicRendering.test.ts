@@ -7,7 +7,7 @@ import { handleServerRequest } from '../../../server/router'
 function snapshot(text: string): PublishedPageSnapshot {
   return {
     cmsSnapshotVersion: 1,
-    pageId: 'page_home',
+    pageRowId: 'page_home',
     site: {
       id: 'project_1',
       name: 'Public Site',
@@ -42,7 +42,6 @@ function snapshot(text: string): PublishedPageSnapshot {
       ],
       settings: {
         metaTitle: 'Public Site',
-        colorTokens: {},
         shortcuts: {},
       },
       classes: {},
@@ -69,8 +68,8 @@ function makeFakeDb(
       const row = runtimeAssets.find((asset) => asset.public_path === values[0])
       return { rows: row ? [row as Row] : [], rowCount: row ? 1 : 0 }
     }
-    // getPublishedPageBySlug / publishRepository queries — return active snapshot
-    if (normalized.includes('select page_versions.snapshot_json')) {
+    // getPublishedPageBySlug — queries data_row_versions.snapshot_json
+    if (normalized.includes('select data_row_versions.snapshot_json')) {
       return {
         rows: activeSnapshot ? [{ snapshot_json: activeSnapshot } as Row] : [],
         rowCount: activeSnapshot ? 1 : 0,

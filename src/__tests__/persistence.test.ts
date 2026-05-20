@@ -6,10 +6,24 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { validateSite, SiteValidationError } from '@core/persistence/validate'
+import { validateSite, validatePages, SiteValidationError } from '@core/persistence/validate'
 import type { SiteDocument } from '@core/page-tree/schemas'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Run the full three-phase validation (shell + pages + VCs) and return a SiteDocument.
+ * Mirrors the production path: adapter calls validateSite, validateVisualComponents,
+ * then validatePages. VCs default to [] when not provided in the raw data.
+ */
+function validateFull(raw: unknown): SiteDocument {
+  const r = raw as Record<string, unknown>
+  const shell = validateSite(r)
+  const rawPages = Array.isArray(r?.pages) ? r.pages as unknown[] : []
+  const pages = validatePages(shell, rawPages)
+  // VCs are stored separately in data_rows; the fixture omits them so we default to [].
+  return { ...shell, pages, visualComponents: [] }
+}
 
 function validSite(): SiteDocument {
   return {
@@ -65,7 +79,7 @@ function validSite(): SiteDocument {
 describe('validateSite — happy path', () => {
   it('accepts a valid site and returns a typed SiteDocument', () => {
     const input = validSite()
-    const result = validateSite(input)
+    const result = validateFull(input)
     expect(result.id).toBe('proj-1')
     expect(result.name).toBe('Test SiteDocument')
     expect(result.pages).toHaveLength(1)
@@ -73,7 +87,7 @@ describe('validateSite — happy path', () => {
   })
 
   it('preserves breakpoint overrides on nodes', () => {
-    const result = validateSite(validSite())
+    const result = validateFull(validSite())
     expect(result.pages[0].nodes['heading-1'].breakpointOverrides.mobile).toEqual({ text: 'Hi' })
   })
 
@@ -82,14 +96,14 @@ describe('validateSite — happy path', () => {
     p.pages[0].nodes.root.label = 'My Root'
     p.pages[0].nodes.root.locked = true
     p.pages[0].nodes.root.hidden = false
-    const result = validateSite(p)
+    const result = validateFull(p)
     expect(result.pages[0].nodes.root.label).toBe('My Root')
     expect(result.pages[0].nodes.root.locked).toBe(true)
     expect(result.pages[0].nodes.root.hidden).toBe(false)
   })
 
   it('omits optional fields when absent', () => {
-    const result = validateSite(validSite())
+    const result = validateFull(validSite())
     expect(result.pages[0].nodes.root.label).toBeUndefined()
     expect(result.pages[0].nodes.root.locked).toBeUndefined()
   })
@@ -148,24 +162,28 @@ describe('validateSite — rejects invalid data', () => {
     expect(() => validateSite(p as unknown)).toThrow(SiteValidationError)
   })
 
-  it('throws for non-array site.pages', () => {
+  it('returns empty pages array for non-array site.pages', () => {
+    // validateSite (shell-only) ignores the pages field entirely.
+    // validatePages requires a typed array — pass [] when pages is missing/invalid.
     const p = { ...validSite(), pages: 'not-an-array' }
-    expect(() => validateSite(p as unknown)).toThrow(SiteValidationError)
+    const shell = validateSite(p as unknown)
+    // Shell parses fine; pages defaulted to []
+    const pages = validatePages(shell, [])
+    expect(pages).toHaveLength(0)
   })
 
-  it('throws for empty pages array', () => {
-    const p = { ...validSite(), pages: [] }
-    expect(() => validateSite(p as unknown)).toThrow(SiteValidationError)
-    try { validateSite(p as unknown) } catch (e) {
-      expect((e as SiteValidationError).path).toBe('site.pages')
-    }
+  it('returns empty pages array for empty pages input', () => {
+    const shell = validateSite(validSite())
+    const pages = validatePages(shell, [])
+    expect(pages).toHaveLength(0)
   })
 
   it('throws when rootNodeId is missing from nodes', () => {
     const p = validSite()
     p.pages[0].rootNodeId = 'nonexistent-id'
-    expect(() => validateSite(p)).toThrow(SiteValidationError)
-    try { validateSite(p) } catch (e) {
+    const shell = validateSite(p)
+    expect(() => validatePages(shell, p.pages)).toThrow(SiteValidationError)
+    try { validatePages(shell, p.pages) } catch (e) {
       expect((e as SiteValidationError).path).toBe('site.pages[0].rootNodeId')
     }
   })
@@ -173,9 +191,9 @@ describe('validateSite — rejects invalid data', () => {
   it('throws for invalid public page slugs', () => {
     const p = validSite()
     p.pages[0].slug = 'About Us'
-
-    expect(() => validateSite(p)).toThrow(SiteValidationError)
-    try { validateSite(p) } catch (e) {
+    const shell = validateSite(p)
+    expect(() => validatePages(shell, p.pages)).toThrow(SiteValidationError)
+    try { validatePages(shell, p.pages) } catch (e) {
       expect((e as SiteValidationError).path).toBe('site.pages[0].slug')
     }
   })
@@ -183,9 +201,9 @@ describe('validateSite — rejects invalid data', () => {
   it('throws for reserved public page slugs', () => {
     const p = validSite()
     p.pages[0].slug = 'admin'
-
-    expect(() => validateSite(p)).toThrow(SiteValidationError)
-    try { validateSite(p) } catch (e) {
+    const shell = validateSite(p)
+    expect(() => validatePages(shell, p.pages)).toThrow(SiteValidationError)
+    try { validatePages(shell, p.pages) } catch (e) {
       expect((e as SiteValidationError).message).toContain('reserved')
     }
   })
@@ -193,9 +211,9 @@ describe('validateSite — rejects invalid data', () => {
   it('throws for duplicate public page slugs', () => {
     const p = validSite()
     p.pages.push({ ...structuredClone(p.pages[0]), id: 'page-2', title: 'Duplicate Home' })
-
-    expect(() => validateSite(p)).toThrow(SiteValidationError)
-    try { validateSite(p) } catch (e) {
+    const shell = validateSite(p)
+    expect(() => validatePages(shell, p.pages)).toThrow(SiteValidationError)
+    try { validatePages(shell, p.pages) } catch (e) {
       expect((e as SiteValidationError).message).toContain('duplicate slug')
     }
   })
@@ -203,7 +221,8 @@ describe('validateSite — rejects invalid data', () => {
   it('throws for non-array node.children', () => {
     const p = validSite()
     ;(p.pages[0].nodes.root as Record<string, unknown>).children = 'bad'
-    expect(() => validateSite(p as unknown)).toThrow(SiteValidationError)
+    const shell = validateSite(p)
+    expect(() => validatePages(shell, p.pages as unknown[])).toThrow(SiteValidationError)
   })
 
   it('throws for non-numeric createdAt', () => {
@@ -215,14 +234,16 @@ describe('validateSite — rejects invalid data', () => {
     const p = validSite()
     const node = p.pages[0].nodes.root as Record<string, unknown>
     delete node.moduleId
-    expect(() => validateSite(p as unknown)).toThrow(SiteValidationError)
+    const shell = validateSite(p)
+    expect(() => validatePages(shell, p.pages as unknown[])).toThrow(SiteValidationError)
   })
 
   it('provides a descriptive path in the error', () => {
     const p = validSite()
     ;(p.pages[0].nodes['heading-1'] as Record<string, unknown>).id = 99
+    const shell = validateSite(p)
     try {
-      validateSite(p as unknown)
+      validatePages(shell, p.pages as unknown[])
       throw new Error('expected throw')
     } catch (e) {
       expect(e).toBeInstanceOf(SiteValidationError)
@@ -244,7 +265,7 @@ describe('validateSite — richtext prop sanitization on hydration', () => {
     const p = validSite()
     ;(p.pages[0].nodes['heading-1'].props as Record<string, unknown>).richtext =
       '<b>hello</b><script>alert(1)</script>'
-    const result = validateSite(p)
+    const result = validateFull(p)
     const sanitized = result.pages[0].nodes['heading-1'].props.richtext as string
     expect(sanitized).not.toContain('<script>')
     expect(sanitized).not.toContain('alert(1)')
@@ -255,7 +276,7 @@ describe('validateSite — richtext prop sanitization on hydration', () => {
     const p = validSite()
     ;(p.pages[0].nodes['heading-1'].props as Record<string, unknown>).html =
       '<img src="x" onerror="alert(1)">'
-    const result = validateSite(p)
+    const result = validateFull(p)
     const sanitized = result.pages[0].nodes['heading-1'].props.html as string
     expect(sanitized).not.toContain('onerror')
     expect(sanitized).not.toContain('alert(1)')
@@ -265,7 +286,7 @@ describe('validateSite — richtext prop sanitization on hydration', () => {
     const p = validSite()
     ;(p.pages[0].nodes['heading-1'].props as Record<string, unknown>).richtext =
       '<a href="javascript:alert(1)">click me</a>'
-    const result = validateSite(p)
+    const result = validateFull(p)
     const sanitized = result.pages[0].nodes['heading-1'].props.richtext as string
     expect(sanitized).not.toContain('javascript:')
   })
@@ -276,7 +297,7 @@ describe('validateSite — richtext prop sanitization on hydration', () => {
       '<p>safe</p><script>evil()</script>'
     ;(p.pages[0].nodes['heading-1'].props as Record<string, unknown>).contentRichtext =
       '<em>ok</em><iframe src="evil.com"></iframe>'
-    const result = validateSite(p)
+    const result = validateFull(p)
     expect(result.pages[0].nodes['heading-1'].props.bodyHtml as string).not.toContain('<script>')
     expect(result.pages[0].nodes['heading-1'].props.contentRichtext as string).not.toContain('<iframe>')
   })
@@ -285,7 +306,7 @@ describe('validateSite — richtext prop sanitization on hydration', () => {
     const p = validSite()
     const safe = '<p><strong>Bold</strong> and <em>italic</em> <a href="https://example.com">link</a></p>'
     ;(p.pages[0].nodes['heading-1'].props as Record<string, unknown>).richtext = safe
-    const result = validateSite(p)
+    const result = validateFull(p)
     const sanitized = result.pages[0].nodes['heading-1'].props.richtext as string
     expect(sanitized).toContain('<strong>Bold</strong>')
     expect(sanitized).toContain('<em>italic</em>')
@@ -296,7 +317,7 @@ describe('validateSite — richtext prop sanitization on hydration', () => {
     // 'text', 'label', 'fontSize' are not richtext keys — must not be altered
     ;(p.pages[0].nodes['heading-1'].props as Record<string, unknown>).text = 'Hello World'
     ;(p.pages[0].nodes['heading-1'].props as Record<string, unknown>).fontSize = 24
-    const result = validateSite(p)
+    const result = validateFull(p)
     expect(result.pages[0].nodes['heading-1'].props.text).toBe('Hello World')
     expect(result.pages[0].nodes['heading-1'].props.fontSize).toBe(24)
   })
@@ -304,7 +325,7 @@ describe('validateSite — richtext prop sanitization on hydration', () => {
   it('handles empty richtext prop without error', () => {
     const p = validSite()
     ;(p.pages[0].nodes['heading-1'].props as Record<string, unknown>).richtext = ''
-    const result = validateSite(p)
+    const result = validateFull(p)
     expect(result.pages[0].nodes['heading-1'].props.richtext).toBe('')
   })
 })

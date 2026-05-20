@@ -440,7 +440,6 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
         rootNodeId,
       },
       params: [],
-      breakpoints: [],
       classIds: [],
       createdAt: now,
     }
@@ -894,7 +893,6 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
           name: trimmedName,
           tree: clonedTree,
           params: [],
-          breakpoints: [],
           classIds: [...hoistedClassIds],
           createdAt: Date.now(),
         }

@@ -21,7 +21,9 @@ import { hashPassword } from '../../auth/tokens'
 import { createSite, getSetupStatus } from '../../repositories/setup'
 import { createUser } from '../../repositories/users'
 import { createAuditEvent } from '../../repositories/audit'
+import { createDataRow } from '../../repositories/data'
 import { createNode } from '@core/page-tree/mutations'
+import { pageToCells } from '../../../src/core/data/pageFromRow'
 import type { Page } from '@core/page-tree/schemas'
 import { badRequest, jsonResponse, methodNotAllowed, readJsonObject } from '../../http'
 import type { SiteRow } from '../../types'
@@ -74,39 +76,20 @@ export async function handleSetupRoutes(req: Request, db: DbClient): Promise<Res
         metadata: { roleId: 'owner', source: 'setup' },
         ...requestAuditContext(req),
       })
-      // Seed a starter homepage. SiteDocumentSchema requires pages.length >= 1
-      // — a freshly-set-up site without any pages would fail validation the
-      // moment the editor tried to load it.
+      // Seed a starter homepage as a data_row in the 'pages' system table.
       const rootNode = createNode('base.body')
       const homePage: Page = {
         id: nanoid(),
         title: 'Home',
         slug: 'index',
-        rootNodeId: rootNode.id,
         nodes: { [rootNode.id]: rootNode },
+        rootNodeId: rootNode.id,
       }
-      await tx`
-        insert into pages (
-          id,
-          title,
-          slug,
-          draft_document_json,
-          sort_order,
-          owner_user_id,
-          created_by_user_id,
-          updated_by_user_id
-        )
-        values (
-          ${homePage.id},
-          ${homePage.title},
-          ${homePage.slug},
-          ${homePage},
-          ${0},
-          ${owner.id},
-          ${owner.id},
-          ${owner.id}
-        )
-      `
+      await createDataRow(
+        tx,
+        { id: homePage.id, tableId: 'pages', cells: pageToCells(homePage), slug: homePage.slug },
+        owner.id,
+      )
       return jsonResponse({ ok: true }, { status: 201 })
     })
   }

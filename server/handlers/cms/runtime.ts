@@ -20,7 +20,8 @@ import { resolveSiteDependencyLock } from '../../publish/runtime/dependencyResol
 import { ensureRuntimeDependencyCache } from '../../publish/runtime/dependencyCache'
 import { buildRuntimePackageImportmap } from '../../publish/runtime/packageImportmap'
 import { buildRuntimePreviewDocument } from '../../publish/runtime/previewRuntime'
-import { validateSite, SiteValidationError } from '@core/persistence/validate'
+import { validateSite, validatePages, validateVisualComponents, SiteValidationError } from '@core/persistence/validate'
+import { parseVisualComponent } from '@core/visualComponents/schemas'
 import { isSafePackageName } from '@core/site-dependencies/packageNames'
 import type { SitePackageJson } from '@core/site-dependencies/manifest'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
@@ -30,7 +31,7 @@ import {
   flattenVCToVirtualPage,
   parseVirtualVCPageId,
 } from '@core/visualComponents/virtualPage'
-import type { Page, SiteDocument } from '@core/page-tree/schemas'
+import type { Page, SiteDocument, SiteShell } from '@core/page-tree/schemas'
 import { badRequest, jsonResponse, methodNotAllowed, readJsonObject } from '../../http'
 import { readObject, readString } from './shared'
 
@@ -63,7 +64,7 @@ function resolvePreviewPage(site: SiteDocument, pageId: string): Page | null {
   const vcId = parseVirtualVCPageId(pageId)
   if (vcId === null) return null
 
-  const vc = site.visualComponents?.find((candidate) => candidate.id === vcId)
+  const vc = site.visualComponents.find((candidate) => candidate.id === vcId)
   if (!vc) return null
 
   return flattenVCToVirtualPage(vc)
@@ -138,7 +139,19 @@ export async function handleRuntimeRoutes(req: Request, db: DbClient): Promise<R
     if (!pageId) return badRequest('Missing pageId')
 
     try {
-      const site = validateSite(body.site)
+      const shell: SiteShell = validateSite(body.site)
+      // The editor sends the full in-memory SiteDocument (shell + pages + VCs).
+      // Parse each component separately so validateVisualComponents can run.
+      const rawSite = body.site as Record<string, unknown> | null
+      const rawPages = Array.isArray(rawSite?.pages) ? rawSite.pages as unknown[] : []
+      const rawVCs = Array.isArray(rawSite?.visualComponents) ? rawSite.visualComponents as unknown[] : []
+      const parsedVCs = rawVCs.flatMap((raw) => {
+        const vc = parseVisualComponent(raw)
+        return vc ? [vc] : []
+      })
+      const visualComponents = validateVisualComponents(parsedVCs)
+      const pages = validatePages(shell, rawPages, visualComponents)
+      const site: SiteDocument = { ...shell, pages, visualComponents }
       const page = resolvePreviewPage(site, pageId)
       if (!page) return jsonResponse({ error: 'Page not found' }, { status: 404 })
 

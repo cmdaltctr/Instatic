@@ -38,9 +38,11 @@ export type DataRowStatus = Static<typeof DataRowStatusSchema>
 // DataTableKind
 // ---------------------------------------------------------------------------
 
-const DataTableKindSchema = Type.Union([
+export const DataTableKindSchema = Type.Union([
   Type.Literal('postType'),
   Type.Literal('data'),
+  Type.Literal('page'),
+  Type.Literal('component'),
 ])
 
 export type DataTableKind = Static<typeof DataTableKindSchema>
@@ -188,6 +190,30 @@ const RelationFieldSchema = Type.Object({
   allowMultiple: Type.Optional(Type.Boolean()),
 })
 
+/**
+ * PageTree field — stores a full page-node tree (`NodeTree<PageNode>`) in the
+ * cell. Used as the `body` field on `page` and `component` table rows.
+ *
+ * UI: cell renders an "Open editor →" button that navigates to the visual
+ * editor for that row.
+ */
+const PageTreeFieldSchema = Type.Object({
+  type: Type.Literal('pageTree'),
+  ...FieldCommonProps,
+})
+
+/**
+ * FieldSchema field — stores a `DataField[]` array in the cell. Used as the
+ * `params` field on `component` rows to define the component's parameter set.
+ *
+ * UI: cell renders an "Edit params (N)" button that opens the field-picker
+ * dialog (same UI as adding columns to a data table).
+ */
+const FieldSchemaFieldSchema = Type.Object({
+  type: Type.Literal('fieldSchema'),
+  ...FieldCommonProps,
+})
+
 export const DataFieldSchema = Type.Union([
   TextFieldSchema,
   LongTextFieldSchema,
@@ -202,6 +228,8 @@ export const DataFieldSchema = Type.Union([
   EmailFieldSchema,
   MediaFieldSchema,
   RelationFieldSchema,
+  PageTreeFieldSchema,
+  FieldSchemaFieldSchema,
 ])
 
 export type DataField = Static<typeof DataFieldSchema>
@@ -228,6 +256,8 @@ export const DATA_FIELD_TYPES = [
   'email',
   'media',
   'relation',
+  'pageTree',
+  'fieldSchema',
 ] as const
 
 export type DataFieldType = (typeof DATA_FIELD_TYPES)[number]
@@ -236,7 +266,7 @@ export type DataFieldType = (typeof DATA_FIELD_TYPES)[number]
 // DataTable
 // ---------------------------------------------------------------------------
 
-const DataTableSchema = Type.Object({
+export const DataTableSchema = Type.Object({
   id: Type.String(),
   name: Type.String(),
   slug: Type.String(),
@@ -248,6 +278,13 @@ const DataTableSchema = Type.Object({
   /** Field id used as the row's display name in grid / picker UIs. */
   primaryFieldId: Type.String(),
   fields: Type.Array(DataFieldSchema),
+  /**
+   * True for tables seeded at boot (`posts`, `pages`, `components`).
+   * System tables are protected from rename and delete; users can still add
+   * custom fields to them. Column added to `data_tables` in the Step 2
+   * migration; repositories default to `false` until then.
+   */
+  system: Type.Boolean(),
   createdByUserId: Type.Union([Type.String(), Type.Null()]),
   updatedByUserId: Type.Union([Type.String(), Type.Null()]),
   /** ISO datetime string from DB */
@@ -257,6 +294,20 @@ const DataTableSchema = Type.Object({
 })
 
 export type DataTable = Static<typeof DataTableSchema>
+
+/**
+ * DataTableListItem — `DataTable` enriched with a live row count.
+ *
+ * Returned by the `GET /admin/api/cms/data/tables` list endpoint.
+ * `rowCount` is computed server-side (subselect on `data_rows`) and is NOT
+ * persisted — do not add `rowCount` to `DataTableSchema` or the bundle schema.
+ */
+export const DataTableListItemSchema = Type.Composite([
+  DataTableSchema,
+  Type.Object({ rowCount: Type.Number() }),
+])
+
+export type DataTableListItem = Static<typeof DataTableListItemSchema>
 
 // ---------------------------------------------------------------------------
 // DataRowCells
@@ -287,7 +338,7 @@ const NullableUserIdSchema = Type.Union([Type.String(), Type.Null()])
 // DataRow — the live, mutable row state.
 // ---------------------------------------------------------------------------
 
-const DataRowSchema = Type.Object({
+export const DataRowSchema = Type.Object({
   id: Type.String(),
   tableId: Type.String(),
   cells: DataRowCellsSchema,
@@ -462,6 +513,8 @@ export type SaveDataRowDraftInput = Static<typeof SaveDataRowDraftInputSchema>
 const DataMetaFieldSchema = Type.Object({
   id: Type.String(),
   label: Type.String(),
+  // NOTE: pageTree and fieldSchema are intentionally excluded — they are
+  // structural types not surfaced in the page-builder binding catalog.
   type: Type.Union([
     Type.Literal('text'), Type.Literal('longText'), Type.Literal('richText'),
     Type.Literal('number'), Type.Literal('boolean'),
@@ -482,7 +535,12 @@ const DataMetaTableSchema = Type.Object({
   id: Type.String(),
   slug: Type.String(),
   name: Type.String(),
-  kind: Type.Union([Type.Literal('postType'), Type.Literal('data')]),
+  kind: Type.Union([
+    Type.Literal('postType'),
+    Type.Literal('data'),
+    Type.Literal('page'),
+    Type.Literal('component'),
+  ]),
   singularLabel: Type.String(),
   pluralLabel: Type.String(),
   primaryFieldId: Type.String(),

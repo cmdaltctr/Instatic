@@ -120,6 +120,8 @@ const FIELD_TYPE_LABELS: Record<DataFieldType, string> = {
   email: 'Email',
   media: 'Media',
   relation: 'Relation',
+  pageTree: 'Page tree',
+  fieldSchema: 'Field schema',
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +280,10 @@ function applyEditState(field: DataField, state: FieldEditState, labelLocked: bo
         targetTableId: field.targetTableId,
         ...(state.relationAllowMultiple ? { allowMultiple: true as const } : {}),
       }
+    case 'pageTree':
+      return { type: 'pageTree', ...common }
+    case 'fieldSchema':
+      return { type: 'fieldSchema', ...common }
     default: {
       const _exhaustive: never = field
       void _exhaustive

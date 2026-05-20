@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { makeSite } from '../fixtures'
-import { validateSite } from '@core/persistence/validate'
+import { validateSite, validatePages } from '@core/persistence/validate'
 import { useEditorStore } from '@site/store/store'
 
 describe('dynamic template model', () => {
@@ -22,13 +22,14 @@ describe('dynamic template model', () => {
       text: { source: 'currentEntry', field: 'title', format: 'plain', fallback: 'static' },
     }
 
-    const validated = validateSite(site)
+    const shell = validateSite(site)
+    const pages = validatePages(shell, site.pages)
 
     // Template metadata round-trips unchanged.
-    expect(validated.pages[0].template).toEqual(page.template)
+    expect(pages[0].template).toEqual(page.template)
     // The legacy binding has been migrated: `text` prop now contains a
     // `{currentEntry.title}` token, and `dynamicBindings.text` is gone.
-    const migrated = validated.pages[0].nodes[page.rootNodeId]
+    const migrated = pages[0].nodes[page.rootNodeId]
     expect(migrated.dynamicBindings?.text).toBeUndefined()
     expect(migrated.props.text).toBe('{currentEntry.title}')
   })

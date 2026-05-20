@@ -59,6 +59,8 @@ function tableToDraft(table: DataTable): SettingsDraft {
 const KIND_LABELS: Record<DataTable['kind'], string> = {
   postType: 'Post type',
   data: 'Data table',
+  page: 'Page',
+  component: 'Component',
 }
 
 // ---------------------------------------------------------------------------

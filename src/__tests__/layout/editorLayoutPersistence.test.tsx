@@ -16,6 +16,7 @@ import { StepUpProvider } from '@admin/shared/StepUp'
 import { useEditorStore } from '@site/store/store'
 import { makeNode, makePage, makeSite } from '../fixtures'
 import type { CmsCurrentUser } from '@core/persistence'
+import { pageToCells } from '@core/data/pageFromRow'
 import '@modules/base/index'
 
 const LAYOUT_STORAGE_KEY = 'pb-editor-layout-v1'
@@ -41,6 +42,12 @@ function installAmbientFetch() {
     }
     if (url.endsWith('/admin/api/cms/site')) {
       return new Response(JSON.stringify({ error: 'no draft site' }), { status: 404 })
+    }
+    if (url.endsWith('/admin/api/cms/pages')) {
+      return new Response(JSON.stringify({ rows: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
     }
     if (url.endsWith('/admin/api/cms/site/publish-status')) {
       return new Response(JSON.stringify({ ok: false }), { status: 404 })
@@ -189,9 +196,33 @@ describe('AdminCanvasLayout — CMS site hydration gate', () => {
   it('does not render editor chrome with an empty store while the CMS site hydrates', async () => {
     const loaded = makeSite({ name: 'Hydrated Site' })
     const originalFetch = globalThis.fetch
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ site: loaded }), { status: 200 })
-    ) as typeof fetch
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      const { pages, ...shell } = loaded
+      if (url.includes('/admin/api/cms/pages')) {
+        const rows = pages.map((page) => ({
+          id: page.id,
+          tableId: 'pages',
+          cells: pageToCells(page),
+          slug: page.slug,
+          status: 'draft',
+          authorUserId: null,
+          createdByUserId: null,
+          updatedByUserId: null,
+          publishedByUserId: null,
+          author: null,
+          createdBy: null,
+          updatedBy: null,
+          publishedBy: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          publishedAt: null,
+          deletedAt: null,
+        }))
+        return new Response(JSON.stringify({ rows }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ site: shell }), { status: 200 })
+    }) as typeof fetch
 
     try {
       renderEditorLayout({ preloadSite: false })

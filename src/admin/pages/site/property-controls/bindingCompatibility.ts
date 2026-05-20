@@ -23,6 +23,13 @@ export type PropertyControlKind = PropertyControl['type']
  * - `image`   also gated by mediaKind ∈ {'image', 'any'} inside `isFieldBindable`.
  * - `media`   accepts any mediaKind.
  * - `spacing` and `group` have no meaningful scalar binding target.
+ * - `pageTree` and `fieldSchema` are structural cell types that hold whole
+ *   documents (a page-node tree and a DataField[] array). They are not
+ *   bindable to any property control — page authors cannot wire a page tree
+ *   or a field-schema array directly to a node prop. They appear in `group`
+ *   solely to satisfy the binding-compatibility-coverage architecture test,
+ *   which requires every DataFieldType to appear in at least one control's
+ *   compat array. The list is exhaustive; new structural types belong here.
  */
 export const BINDING_COMPATIBILITY: Record<PropertyControlKind, readonly DataFieldType[]> = {
   // text accepts every scalar type that can be meaningfully rendered as a string.
@@ -39,7 +46,10 @@ export const BINDING_COMPATIBILITY: Record<PropertyControlKind, readonly DataFie
   image:    ['media'],
   media:    ['media'],
   spacing:  [],
-  group:    [],
+  // Structural (document-level) types: not scalar-bindable, listed here for
+  // coverage-test completeness only — the picker excludes them from the
+  // binding catalog via buildMetaFields in src/core/data/fields.ts.
+  group:    ['pageTree', 'fieldSchema'],
 }
 
 /**

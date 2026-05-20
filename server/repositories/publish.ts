@@ -1,3 +1,17 @@
+/**
+ * Publish pipeline repository.
+ *
+ * Pages are stored in `data_rows` (table_id = 'pages'). Each published
+ * version is a row in `data_row_versions` that carries `snapshot_json`
+ * containing the full `PublishedPageSnapshot` (site document + runtime
+ * assets). This replaces the old `page_versions` table.
+ *
+ * Public API:
+ *   publishDraftSite          — build + store snapshots for all draft pages
+ *   getPublishedPageBySlug    — look up a published page snapshot by slug
+ *   getLatestPublishedSiteSnapshot — first published page snapshot (for 404s etc.)
+ *   getDraftPublishStatus     — compare draft vs published state for the UI
+ */
 import { nanoid } from 'nanoid'
 import type { SiteDocument } from '@core/page-tree/schemas'
 import type { PublishedPageRuntimeAssets } from '@core/site-runtime'
@@ -5,6 +19,10 @@ import type { PublishedRuntimePackageImportmap } from '@core/publisher/render'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 import type { DbClient } from '../db/client'
 import { loadDraftSite } from './site'
+import { listDataRows } from './data'
+import { pageFromRow } from '../../src/core/data/pageFromRow'
+import { visualComponentFromRow } from '../../src/core/data/componentFromRow'
+import { validateVisualComponents } from '../../src/core/persistence/validate'
 import { buildSiteRuntimeScripts } from '../publish/runtime/bundleScripts'
 import { ensureRuntimeDependencyCache } from '../publish/runtime/dependencyCache'
 import {
@@ -13,9 +31,14 @@ import {
 } from '../publish/runtime/packageImportmap'
 import { savePublishedRuntimeAssets } from './runtimeAsset'
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 export interface PublishedPageSnapshot {
   cmsSnapshotVersion: 1
-  pageId: string
+  /** id of the `data_rows` row for this page (was `pageId` in the old schema). */
+  pageRowId: string
   site: SiteDocument
   runtimeAssets?: PublishedPageRuntimeAssets
   /**
@@ -40,10 +63,14 @@ interface DraftPublishStatus {
 }
 
 interface ActivePublishedRow {
-  page_id: string
+  row_id: string
   snapshot_json: PublishedPageSnapshot
   published_at: string | Date
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) {
@@ -60,22 +87,35 @@ function canonicalJson(value: unknown): string {
 
 function createSnapshot(
   site: SiteDocument,
-  pageId: string,
+  pageRowId: string,
   runtimeAssets?: PublishedPageRuntimeAssets,
   runtimePackageImportmap?: PublishedRuntimePackageImportmap,
 ): PublishedPageSnapshot {
   return {
     cmsSnapshotVersion: 1,
-    pageId,
+    pageRowId,
     site: structuredClone(site),
     ...(runtimeAssets && runtimeAssets.scripts.length > 0 ? { runtimeAssets } : {}),
     ...(runtimePackageImportmap ? { runtimePackageImportmap } : {}),
   }
 }
 
+async function nextVersionNumber(db: DbClient, rowId: string): Promise<number> {
+  const { rows } = await db<{ next_version: number }>`
+    select coalesce(max(version_number), 0) + 1 as next_version
+    from data_row_versions
+    where row_id = ${rowId}
+  `
+  return Number(rows[0]?.next_version ?? 1)
+}
+
+// ---------------------------------------------------------------------------
+// Public functions
+// ---------------------------------------------------------------------------
+
 export async function getDraftPublishStatus(db: DbClient): Promise<DraftPublishStatus> {
-  const site = await loadDraftSite(db)
-  if (!site) {
+  const shell = await loadDraftSite(db)
+  if (!shell) {
     return {
       hasPublishedVersion: false,
       draftMatchesPublished: false,
@@ -84,23 +124,37 @@ export async function getDraftPublishStatus(db: DbClient): Promise<DraftPublishS
     }
   }
 
+  const [pageRows, vcRows] = await Promise.all([
+    listDataRows(db, 'pages'),
+    listDataRows(db, 'components'),
+  ])
+  const visualComponents = validateVisualComponents(
+    vcRows.flatMap((r) => { const vc = visualComponentFromRow(r); return vc ? [vc] : [] })
+  )
+  const draftSite: SiteDocument = {
+    ...shell,
+    pages: pageRows.map(pageFromRow),
+    visualComponents,
+  }
+
   const { rows: publishedRows } = await db<ActivePublishedRow>`
-    select pages.id as page_id,
-           page_versions.snapshot_json,
-           page_versions.published_at
-    from pages
-    join page_versions on page_versions.id = pages.active_version_id
-    where pages.status = 'published'
-      and pages.active_version_id is not null
-    order by pages.sort_order asc, pages.created_at asc
+    select data_rows.id as row_id,
+           data_row_versions.snapshot_json,
+           data_row_versions.published_at
+    from data_rows
+    join data_row_versions on data_row_versions.id = data_rows.active_version_id
+    where data_rows.table_id = 'pages'
+      and data_rows.status = 'published'
+      and data_rows.deleted_at is null
+    order by data_rows.created_at asc
   `
 
-  const draftSiteJson = canonicalJson(site)
-  const draftPageIds = new Set(site.pages.map((page) => page.id))
+  const draftSiteJson = canonicalJson(draftSite)
+  const draftPageIds = new Set(draftSite.pages.map((page) => page.id))
   const draftMatchesPublished =
-    publishedRows.length === site.pages.length &&
+    publishedRows.length === draftSite.pages.length &&
     publishedRows.every((row) =>
-      draftPageIds.has(row.page_id) &&
+      draftPageIds.has(row.row_id) &&
       canonicalJson(row.snapshot_json.site) === draftSiteJson
     )
   const lastPublishedAt = publishedRows
@@ -111,7 +165,7 @@ export async function getDraftPublishStatus(db: DbClient): Promise<DraftPublishS
   return {
     hasPublishedVersion: publishedRows.length > 0,
     draftMatchesPublished,
-    draftPages: site.pages.length,
+    draftPages: draftSite.pages.length,
     publishedPages: publishedRows.length,
     ...(lastPublishedAt ? { lastPublishedAt: new Date(lastPublishedAt).toISOString() } : {}),
   }
@@ -122,8 +176,18 @@ export async function publishDraftSite(
   adminUserId: string,
 ): Promise<PublishResult> {
   return db.transaction(async (tx) => {
-    const site = await loadDraftSite(tx)
-    if (!site) throw new Error('draft site not found')
+    const shell = await loadDraftSite(tx)
+    if (!shell) throw new Error('draft site not found')
+
+    const [pageRows, vcRows] = await Promise.all([
+      listDataRows(tx, 'pages'),
+      listDataRows(tx, 'components'),
+    ])
+    const pages = pageRows.map(pageFromRow)
+    const visualComponents = validateVisualComponents(
+      vcRows.flatMap((r) => { const vc = visualComponentFromRow(r); return vc ? [vc] : [] })
+    )
+    const site: SiteDocument = { ...shell, pages, visualComponents }
 
     const runtime = normalizeSiteRuntimeConfig(site.runtime)
     const dependencyCache = Object.keys(runtime.dependencyLock.packages).length > 0
@@ -142,6 +206,7 @@ export async function publishDraftSite(
     const runtimePackageImportmap: PublishedRuntimePackageImportmap | undefined = serializedImportmap
       ? { body: serializedImportmap.body, sha256: serializedImportmap.sha256 }
       : undefined
+
     const publishedSite: SiteDocument = {
       ...site,
       pages: site.pages.map((page) => ({
@@ -151,12 +216,7 @@ export async function publishDraftSite(
     }
 
     for (const page of publishedSite.pages) {
-      const { rows: versionRows } = await tx<{ next_version: number }>`
-        select coalesce(max(version), 0) + 1 as next_version
-        from page_versions
-        where page_id = ${page.id}
-      `
-      const version = Number(versionRows[0]?.next_version ?? 1)
+      const version = await nextVersionNumber(tx, page.id)
       const versionId = nanoid()
       const runtimeBuild = await buildSiteRuntimeScripts({
         site: publishedSite,
@@ -165,29 +225,42 @@ export async function publishDraftSite(
         assetBasePath: `/_pb/assets/${versionId}/`,
         dependencyCache,
       })
-      const runtimeErrors = runtimeBuild.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')
+      const runtimeErrors = runtimeBuild.diagnostics.filter((d) => d.severity === 'error')
       if (runtimeErrors.length > 0) {
-        throw new Error(`runtime build failed: ${runtimeErrors.map((diagnostic) => diagnostic.message).join('; ')}`)
+        throw new Error(`runtime build failed: ${runtimeErrors.map((d) => d.message).join('; ')}`)
       }
 
+      const snapshot = createSnapshot(
+        publishedSite,
+        page.id,
+        runtimeBuild.runtimeAssets,
+        runtimePackageImportmap,
+      )
+
       await tx`
-        insert into page_versions (id, page_id, version, snapshot_json, published_by_user_id)
+        insert into data_row_versions
+          (id, row_id, version_number, cells_json, slug, snapshot_json, published_by_user_id)
         values (
           ${versionId},
           ${page.id},
           ${version},
-          ${createSnapshot(publishedSite, page.id, runtimeBuild.runtimeAssets, runtimePackageImportmap)},
+          ${{ title: page.title, slug: page.slug }},
+          ${page.slug},
+          ${snapshot},
           ${adminUserId}
         )
       `
       await savePublishedRuntimeAssets(tx, versionId, runtimeBuild.files)
       await tx`
-        update pages
+        update data_rows
         set active_version_id = ${versionId},
             status = 'published',
+            published_by_user_id = ${adminUserId},
+            published_at = current_timestamp,
             updated_by_user_id = ${adminUserId},
             updated_at = current_timestamp
         where id = ${page.id}
+          and deleted_at is null
       `
     }
 
@@ -200,11 +273,13 @@ export async function getPublishedPageBySlug(
   slug: string,
 ): Promise<PublishedPageSnapshot | null> {
   const { rows } = await db<{ snapshot_json: PublishedPageSnapshot }>`
-    select page_versions.snapshot_json
-    from pages
-    join page_versions on page_versions.id = pages.active_version_id
-    where pages.slug = ${slug}
-      and pages.status = 'published'
+    select data_row_versions.snapshot_json
+    from data_rows
+    join data_row_versions on data_row_versions.id = data_rows.active_version_id
+    where data_rows.table_id = 'pages'
+      and data_rows.slug = ${slug}
+      and data_rows.status = 'published'
+      and data_rows.deleted_at is null
     limit 1
   `
   return rows[0]?.snapshot_json ?? null
@@ -214,12 +289,13 @@ export async function getLatestPublishedSiteSnapshot(
   db: DbClient,
 ): Promise<PublishedPageSnapshot | null> {
   const { rows } = await db<{ snapshot_json: PublishedPageSnapshot }>`
-    select page_versions.snapshot_json
-    from pages
-    join page_versions on page_versions.id = pages.active_version_id
-    where pages.status = 'published'
-      and pages.active_version_id is not null
-    order by pages.sort_order asc, pages.created_at asc
+    select data_row_versions.snapshot_json
+    from data_rows
+    join data_row_versions on data_row_versions.id = data_rows.active_version_id
+    where data_rows.table_id = 'pages'
+      and data_rows.status = 'published'
+      and data_rows.deleted_at is null
+    order by data_rows.created_at asc
     limit 1
   `
   return rows[0]?.snapshot_json ?? null

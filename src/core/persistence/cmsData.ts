@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import type {
   DataTable,
+  DataTableListItem,
   DataRow,
   DataUserReference,
   DataRowStatus,
@@ -11,6 +12,8 @@ import type {
   DataMeta,
 } from '@core/data/schemas'
 import { DataMetaSchema } from '@core/data/schemas'
+import type { SiteBundle } from '@core/data/bundleSchema'
+import { SiteBundleSchema } from '@core/data/bundleSchema'
 import type { LoopItem } from '@core/loops/types'
 import { parseValue } from '@core/utils/typeboxHelpers'
 import { readEnvelope } from './httpJson'
@@ -59,13 +62,13 @@ const RowEnvelope = Type.Object(
 export async function listCmsDataTables(
   fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
   basePath = '/admin/api/cms',
-): Promise<DataTable[]> {
+): Promise<DataTableListItem[]> {
   const res = await fetchImpl(`${basePath}/data/tables`, {
     method: 'GET',
     credentials: 'include',
   })
   const body = await readEnvelope(res, TablesListEnvelope, `CMS data tables failed with ${res.status}`)
-  return (body.tables ?? []) as DataTable[]
+  return (body.tables ?? []) as DataTableListItem[]
 }
 
 export async function getCmsDataTable(
@@ -362,4 +365,70 @@ export async function getDataMeta(
   const res = await fetchImpl(`${basePath}/data/_meta`, { credentials: 'include' })
   const body = await readEnvelope(res, DataMetaEnvelope, `CMS data meta failed with ${res.status}`)
   return parseValue(DataMetaSchema, body.meta)
+}
+
+// ---------------------------------------------------------------------------
+// Bundle export / import
+// ---------------------------------------------------------------------------
+
+/**
+ * Download the full site bundle from the server.
+ * Pass `includeMedia: true` to embed media asset bytes in the bundle.
+ */
+export async function exportCmsBundle(
+  options: { includeMedia?: boolean; fetchImpl?: FetchLike; basePath?: string } = {},
+): Promise<SiteBundle> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const basePath = options.basePath ?? '/admin/api/cms'
+  const query = options.includeMedia ? '?media=1' : ''
+  const res = await fetchImpl(`${basePath}/export${query}`, {
+    method: 'GET',
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    throw new Error(`CMS export failed with ${res.status}`)
+  }
+  const raw: unknown = await res.json()
+  return parseValue(SiteBundleSchema, raw)
+}
+
+const ImportResultEnvelope = Type.Object(
+  {
+    ok: Type.Optional(Type.Boolean()),
+    tableCount: Type.Optional(Type.Number()),
+    rowCount: Type.Optional(Type.Number()),
+    mediaCount: Type.Optional(Type.Number()),
+  },
+  { additionalProperties: true },
+)
+
+export interface ImportBundleResult {
+  tableCount: number
+  rowCount: number
+  mediaCount: number
+}
+
+/**
+ * Upload a site bundle to the server and apply it, replacing all site data.
+ * This is a destructive operation — all existing rows and custom tables are
+ * wiped before the bundle is applied.
+ */
+export async function importCmsBundle(
+  bundle: SiteBundle,
+  options: { fetchImpl?: FetchLike; basePath?: string } = {},
+): Promise<ImportBundleResult> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const basePath = options.basePath ?? '/admin/api/cms'
+  const res = await fetchImpl(`${basePath}/import`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(bundle),
+  })
+  const body = await readEnvelope(res, ImportResultEnvelope, `CMS import failed with ${res.status}`)
+  return {
+    tableCount: body.tableCount ?? 0,
+    rowCount: body.rowCount ?? 0,
+    mediaCount: body.mediaCount ?? 0,
+  }
 }

@@ -41,6 +41,8 @@ const KIND_OPTIONS: ReadonlyArray<{ value: DataTableKind; label: string }> = [
 const KIND_DESCRIPTIONS: Record<DataTableKind, string> = {
   data: 'A grid of structured records — products, FAQs, team members, etc.',
   postType: 'Authored content with title, body, slug, and publish workflow.',
+  page: 'System table for page content (managed internally).',
+  component: 'System table for visual component definitions (managed internally).',
 }
 
 const FORM_ID = 'new-table-dialog-form'

@@ -16,14 +16,14 @@ interface RuntimeAssetRow {
 
 export async function savePublishedRuntimeAssets(
   db: DbClient,
-  pageVersionId: string,
+  dataRowVersionId: string,
   files: BuiltRuntimeAssetFile[],
 ): Promise<void> {
   for (const file of files) {
     await db`
       insert into published_runtime_assets
-        (id, page_version_id, asset_path, public_path, content_type, content_bytes)
-      values (${nanoid()}, ${pageVersionId}, ${file.path}, ${file.publicPath}, ${file.contentType}, ${Buffer.from(file.bytes)})
+        (id, data_row_version_id, asset_path, public_path, content_type, content_bytes)
+      values (${nanoid()}, ${dataRowVersionId}, ${file.path}, ${file.publicPath}, ${file.contentType}, ${Buffer.from(file.bytes)})
     `
   }
 }

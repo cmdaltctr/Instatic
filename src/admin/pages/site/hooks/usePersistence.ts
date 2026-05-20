@@ -34,7 +34,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { IPersistenceAdapter } from '@core/persistence/types'
 import { cmsAdapter } from '@core/persistence/cms'
-import { validateSite, SiteValidationError } from '@core/persistence/validate'
+import { SiteValidationError } from '@core/persistence/validate'
 import {
   readAutoSaveDelayMs,
   readAutoSavePreference,
@@ -148,12 +148,12 @@ export function usePersistence(
 
       if (idToTry) {
         try {
-          const raw = await adapterRef.current.loadSite(idToTry)
-          if (raw && !cancelled) {
-            // Constraint #230 — validate before hydrating the store
-            const validated = validateSite(raw)
-            loadSite(validated)
-            applyDefaultBreakpointPreference(validated.breakpoints)
+          // The adapter validates internally (validateSite + validatePages).
+          // Constraint #230 is satisfied at the adapter boundary.
+          const site = await adapterRef.current.loadSite(idToTry)
+          if (site && !cancelled) {
+            loadSite(site)
+            applyDefaultBreakpointPreference(site.breakpoints)
             loadedRef.current = true
             setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
             return
@@ -204,12 +204,12 @@ export function usePersistence(
     async function reload() {
       const idToTry = requestedSiteId || 'default'
       try {
-        const raw = await adapterRef.current.loadSite(idToTry)
-        if (!raw) return
-        const validated = validateSite(raw)
+        // Adapter validates internally (Constraint #230).
+        const site = await adapterRef.current.loadSite(idToTry)
+        if (!site) return
         const { loadSite, setHasUnsavedChanges } = useEditorStore.getState()
-        loadSite(validated)
-        applyDefaultBreakpointPreference(validated.breakpoints)
+        loadSite(site)
+        applyDefaultBreakpointPreference(site.breakpoints)
         // The site doc on disk is now authoritative; clear the unsaved flag so
         // the auto-save loop doesn't immediately overwrite it back.
         setHasUnsavedChanges(false)

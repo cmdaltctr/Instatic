@@ -1,8 +1,13 @@
-import type { SiteDocument } from '@core/page-tree/schemas'
+import type { SiteDocument, SiteShell } from '@core/page-tree/schemas'
 import type { IPersistenceAdapter } from './types'
 import { parseJsonResponse } from '@core/utils/jsonValidate'
 import { responseErrorMessage } from './httpErrors'
-import { CmsSiteEnvelopeSchema } from './responseSchemas'
+import { CmsSiteEnvelopeSchema, CmsPagesEnvelopeSchema, CmsComponentsEnvelopeSchema } from './responseSchemas'
+import { validateSite, validatePages, validateVisualComponents } from './validate'
+import { pageFromRow } from '@core/data/pageFromRow'
+import { visualComponentFromRow } from '@core/data/componentFromRow'
+import type { DataRow } from '@core/data/schemas'
+import type { VisualComponent } from '@core/visualComponents/schemas'
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
@@ -20,31 +25,114 @@ export class CmsAdapter implements IPersistenceAdapter {
     this.basePath = basePath
   }
 
+  /**
+   * Save the full site document:
+   *   1. PUT /admin/api/cms/site — the shell (no pages, no VCs)
+   *   2. PUT /admin/api/cms/pages — the pages array
+   *   3. PUT /admin/api/cms/components — the visual components array
+   *
+   * Shell is written first; pages and components can then be written in
+   * parallel since they do not depend on each other.
+   */
   async saveSite(site: SiteDocument): Promise<void> {
-    const res = await this.fetchImpl(`${this.basePath}/site`, {
+    // Extract shell (strip pages and visualComponents from the full SiteDocument)
+    const { pages, visualComponents, ...shell } = site
+
+    const shellRes = await this.fetchImpl(`${this.basePath}/site`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ site }),
+      body: JSON.stringify({ site: shell }),
     })
-    if (!res.ok) {
-      throw new Error(await responseErrorMessage(res, `CMS save failed with ${res.status}`))
+    if (!shellRes.ok) {
+      throw new Error(await responseErrorMessage(shellRes, `CMS shell save failed with ${shellRes.status}`))
+    }
+
+    // Pages and components can be written in parallel — neither depends on the other.
+    const [pagesRes, componentsRes] = await Promise.all([
+      this.fetchImpl(`${this.basePath}/pages`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ pages }),
+      }),
+      this.fetchImpl(`${this.basePath}/components`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ components: visualComponents }),
+      }),
+    ])
+
+    if (!pagesRes.ok) {
+      throw new Error(await responseErrorMessage(pagesRes, `CMS pages save failed with ${pagesRes.status}`))
+    }
+    if (!componentsRes.ok) {
+      throw new Error(await responseErrorMessage(componentsRes, `CMS components save failed with ${componentsRes.status}`))
     }
   }
 
+  /**
+   * Load the full site document:
+   *   1. GET /admin/api/cms/site — shell (validated by validateSite)
+   *   2. GET /admin/api/cms/pages — DataRow[] (converted via pageFromRow,
+   *      validated by validatePages with shell context)
+   *   3. GET /admin/api/cms/components — DataRow[] (converted via
+   *      visualComponentFromRow, validated by validateVisualComponents)
+   *
+   * Returns undefined when any endpoint returns 404 (before setup).
+   */
   async loadSite(_id: string): Promise<SiteDocument | undefined> {
-    const res = await this.fetchImpl(`${this.basePath}/site`, {
-      method: 'GET',
-      credentials: 'include',
-    })
-    if (res.status === 404) return undefined
-    if (!res.ok) {
-      throw new Error(await responseErrorMessage(res, `CMS load failed with ${res.status}`))
+    // Parallel fetch — all three are GETs with no dependency on each other
+    const [shellRes, pagesRes, componentsRes] = await Promise.all([
+      this.fetchImpl(`${this.basePath}/site`, {
+        method: 'GET',
+        credentials: 'include',
+      }),
+      this.fetchImpl(`${this.basePath}/pages`, {
+        method: 'GET',
+        credentials: 'include',
+      }),
+      this.fetchImpl(`${this.basePath}/components`, {
+        method: 'GET',
+        credentials: 'include',
+      }),
+    ])
+
+    if (shellRes.status === 404 || pagesRes.status === 404 || componentsRes.status === 404) return undefined
+    if (!shellRes.ok) {
+      throw new Error(await responseErrorMessage(shellRes, `CMS shell load failed with ${shellRes.status}`))
     }
-    // Envelope validated; SiteDocument is too deep to schema here (separate
-    // audit-types pass) — pass-through as unknown then cast back.
-    const body = await parseJsonResponse(res, CmsSiteEnvelopeSchema)
-    return body.site as SiteDocument | undefined
+    if (!pagesRes.ok) {
+      throw new Error(await responseErrorMessage(pagesRes, `CMS pages load failed with ${pagesRes.status}`))
+    }
+    if (!componentsRes.ok) {
+      throw new Error(await responseErrorMessage(componentsRes, `CMS components load failed with ${componentsRes.status}`))
+    }
+
+    const shellBody = await parseJsonResponse(shellRes, CmsSiteEnvelopeSchema)
+    const pagesBody = await parseJsonResponse(pagesRes, CmsPagesEnvelopeSchema)
+    const componentsBody = await parseJsonResponse(componentsRes, CmsComponentsEnvelopeSchema)
+
+    if (!shellBody.site) return undefined
+
+    // Validate shell
+    const shell: SiteShell = validateSite(shellBody.site)
+
+    // Convert DataRow[] → VisualComponent[] → validate
+    const rawVCRows = (componentsBody.rows ?? []) as DataRow[]
+    const rawVCs = rawVCRows.flatMap((row) => {
+      const vc = visualComponentFromRow(row)
+      return vc ? [vc] : []
+    })
+    const visualComponents: VisualComponent[] = validateVisualComponents(rawVCs)
+
+    // Convert DataRow[] → Page[] → validate (passes VCs for ref/slot checks)
+    const rawDataRows = (pagesBody.rows ?? []) as DataRow[]
+    const rawPages = rawDataRows.map(pageFromRow)
+    const pages = validatePages(shell, rawPages, visualComponents)
+
+    return { ...shell, pages, visualComponents }
   }
 }
 

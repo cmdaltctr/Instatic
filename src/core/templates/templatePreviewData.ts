@@ -82,6 +82,10 @@ function previewValueForField(field: DataField): unknown {
     // No synthetic media URL — modules that render a media field must handle null gracefully.
     case 'media': return null
     case 'relation': return null
+    // Structural types: pageTree and fieldSchema hold whole documents, not scalar values.
+    // Preview data generation has no meaningful value to produce for them.
+    case 'pageTree': return null
+    case 'fieldSchema': return []
     default: {
       // Exhaustive check: TypeScript will error here if a new field type
       // is added to the discriminated union without a case above.

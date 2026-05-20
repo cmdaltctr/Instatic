@@ -7,6 +7,8 @@ export {
   createCmsDataTable,
   deleteCmsDataRow,
   deleteCmsDataTable,
+  exportCmsBundle,
+  importCmsBundle,
   listCmsDataAuthors,
   listCmsDataRows,
   listCmsDataTables,
@@ -17,6 +19,7 @@ export {
   updateCmsDataRowTable,
   updateCmsDataTable,
 } from './cmsData'
+export type { ImportBundleResult } from './cmsData'
 export {
   inspectCmsPluginPackage,
   installCmsPluginPackage,

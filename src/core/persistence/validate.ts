@@ -1,24 +1,36 @@
 /**
- * validateSite — Constraint #230: ALL site data loaded from storage MUST be
- * validated before being passed to `store.loadSite()`.
+ * validateSite / validatePages / validateVisualComponents — Constraint #230:
+ * ALL site data loaded from storage MUST be validated before being passed to
+ * `store.loadSite()`.
  *
- * Structural validation is delegated to parseSiteDocument (TypeBox).
- * runDomainPostChecks() handles the nine cross-cutting rules that cannot be
- * expressed as per-field schema constraints:
- *   1. Page slug syntax
- *   2. Page slug uniqueness
- *   3. SiteFile path safety + deduplication
- *   4. VisualComponent name validation
- *   5. VisualComponent recursion prevention
- *   6. Richtext prop sanitization (XSS — Constraint #299)
- *   7. SitePackageJson name sanitization
- *   8. SiteRuntimeConfig normalization
- *   9. Framework color slug normalization + default dark color generation
+ * `validateSite(raw): SiteShell`
+ *   Structural validation is delegated to parseSiteDocument (TypeBox).
+ *   runShellPostChecks() handles cross-cutting rules for the shell:
+ *     1. SiteFile path safety + deduplication
+ *     2. SitePackageJson name sanitization
+ *     3. SiteRuntimeConfig normalization
+ *     4. Framework color slug normalization + default dark color generation
  *
- * Referential integrity: rootNodeId must exist in each page's nodes map.
+ * `validateVisualComponents(rawVCs): VisualComponent[]`
+ *   Parses each raw VC via `parseVisualComponent`, then runs VC-specific rules:
+ *     1. Name validation + deduplication (first-wins)
+ *     2. Cyclic dependency detection (cyclic VCs silently dropped)
+ *     3. Strip dangling VC refs in VC trees
+ *     4. Richtext prop sanitization in VC trees (XSS — Constraint #299)
+ *
+ * `validatePages(shell, rawPages, visualComponents?): Page[]`
+ *   Parses each raw page via `parsePage`, then runs page-specific rules:
+ *     1. Page slug syntax
+ *     2. Page slug uniqueness
+ *     3. rootNodeId must exist in each page's nodes map
+ *     4. VC slot sync (uses visualComponents for context)
+ *     5. Strip dangling VC refs in page trees
+ *     6. Richtext prop sanitization in page node trees
  */
 
-import { parseSiteDocument, type SiteDocument } from '@core/page-tree/schemas'
+import { parseSiteDocument, parsePage, parseVisualComponent, type SiteShell } from '@core/page-tree/schemas'
+import type { SiteDocument, Page } from '@core/page-tree/schemas'
+import type { VisualComponent } from '@core/visualComponents/schemas'
 import { isSafePath, normalizePath } from '@core/files/pathValidation'
 import { validateComponentName } from '@core/visualComponents/nameValidation'
 import { sanitizeRichtext, isRichtextPropKey } from '@core/sanitize'
@@ -66,25 +78,91 @@ function extractSiteErrorPath(message: string): string {
 }
 
 /**
- * Validate raw data from storage and return a typed SiteDocument, or throw
- * SiteValidationError describing exactly which field failed.
+ * Validate raw data from storage and return a typed `SiteShell`, or throw
+ * `SiteValidationError` describing exactly which field failed.
+ *
+ * Pages and Visual Components are NOT included in the return — they are stored
+ * in `data_rows` and validated separately via `validatePages` and
+ * `validateVisualComponents`. The adapter assembles the full `SiteDocument`
+ * from shell + pages + VCs after all three calls.
  *
  * Usage:
  * ```ts
- * const raw = await adapter.loadSite(id)
- * const site = validateSite(raw)   // throws if corrupt
- * store.loadSite(site)
+ * const shell = validateSite(raw)
+ * const vcs   = validateVisualComponents(rawVcRows)
+ * const pages = validatePages(shell, rawPageRows, vcs)
+ * store.loadSite({ ...shell, pages, visualComponents: vcs })
  * ```
  */
-export function validateSite(raw: unknown): SiteDocument {
-  let site: SiteDocument
+export function validateSite(raw: unknown): SiteShell {
+  let shell: SiteShell
   try {
-    site = parseSiteDocument(raw)
+    shell = parseSiteDocument(raw)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'invalid site'
     throw new SiteValidationError(message, extractSiteErrorPath(message))
   }
-  return runDomainPostChecks(site)
+  return runShellPostChecks(shell)
+}
+
+/**
+ * Parse and validate an array of raw page objects (loaded from `data_rows`).
+ * Uses `visualComponents` for VC slot-sync and dangling-ref checks. Pass the
+ * result of `validateVisualComponents` here for full context; omit (or pass [])
+ * to skip VC-dependent checks (dangling refs and slot sync).
+ *
+ * Returns the validated `Page[]` ready to assemble into a `SiteDocument`.
+ * Throws `SiteValidationError` on the first invalid page.
+ */
+export function validatePages(
+  _shell: SiteShell,
+  rawPages: unknown[],
+  visualComponents: VisualComponent[] = [],
+): Page[] {
+  const pages: Page[] = []
+  for (let i = 0; i < rawPages.length; i++) {
+    try {
+      pages.push(parsePage(rawPages[i], i))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `page ${i} is invalid`
+      throw new SiteValidationError(message, extractSiteErrorPath(message))
+    }
+  }
+  validatePageSlugList(pages)
+  validatePageRootNodesList(pages)
+  syncVCSlotInstancesInPages(pages, visualComponents)
+  stripDanglingVCRefsInPages(pages, visualComponents)
+  sanitizePageNodeRichtextProps(pages)
+  return pages
+}
+
+/**
+ * Parse and validate an array of raw VisualComponent objects (loaded via
+ * `visualComponentFromRow` from `data_rows where table_id = 'components'`).
+ *
+ * Steps:
+ *   1. Parse each via `parseVisualComponent` — silently drops malformed entries.
+ *   2. Deduplicate by name (first-wins; invalid names dropped).
+ *   3. Drop VCs that form dependency cycles (DFS detection).
+ *   4. Strip dangling VC refs within VC trees.
+ *   5. Sanitize richtext-keyed props in VC trees (XSS — Constraint #299).
+ *
+ * Returns the validated `VisualComponent[]` ready to assemble into a
+ * `SiteDocument`. Never throws — malformed data is silently dropped.
+ */
+export function validateVisualComponents(rawVCs: unknown[]): VisualComponent[] {
+  // Step 1: parse
+  const parsed: VisualComponent[] = rawVCs.flatMap((item) => {
+    const vc = parseVisualComponent(item)
+    return vc ? [vc] : []
+  })
+
+  // Steps 2–5: run the same post-checks that were in runShellPostChecks
+  const deduped = dedupeVCsByName(parsed)
+  const acyclic = filterCyclicVCs(deduped)
+  stripDanglingVCRefsInVCs(acyclic)
+  sanitizeVCNodeRichtextProps(acyclic)
+  return acyclic
 }
 
 /**
@@ -103,6 +181,13 @@ function sanitizeNodeProps(node: unknown): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// stripDanglingVCRefs — exported for unit tests and pack installer.
+// Strips dangling base.visual-component-ref nodes from both page trees AND
+// VC trees. Accepts a full SiteDocument so callers with assembled sites (tests,
+// pack installer) can use the one-shot form.
+// ---------------------------------------------------------------------------
+
 /**
  * Remove `base.visual-component-ref` nodes whose `componentId` does not resolve
  * to a known VC from the flat node map. Strips the entire subtree (ref +
@@ -110,55 +195,78 @@ function sanitizeNodeProps(node: unknown): void {
  * `children[]`. Self-heals sites corrupted by the old (pre-fix) delete behaviour
  * that left dangling refs behind.
  *
- * Exported for unit tests and called from `runDomainPostChecks` after the VC
- * list has been finalised (post-cycle-filter).
+ * Exported for unit tests. For server-side validation, the internal helpers
+ * `stripDanglingVCRefsInPages` and `stripDanglingVCRefsInVCs` are called
+ * directly by `validatePages` and `validateVisualComponents`.
  */
 export function stripDanglingVCRefs(site: SiteDocument): void {
   const knownVcIds = new Set(site.visualComponents.map((vc) => vc.id))
+  stripDanglingRefsFromNodeMaps(
+    site.pages.map((p) => p.nodes as Record<string, BaseNode>),
+    knownVcIds,
+  )
+  stripDanglingRefsFromNodeMaps(
+    site.visualComponents.map((vc) => vc.tree.nodes as Record<string, BaseNode>),
+    knownVcIds,
+  )
+}
 
-  const strip = (nodes: Record<string, BaseNode>): void => {
-    // Collect all top-level ref IDs pointing at an unknown VC
-    const danglingRefIds: string[] = []
-    for (const [nodeId, node] of Object.entries(nodes)) {
-      if (node.moduleId !== 'base.visual-component-ref') continue
-      const componentId = node.props.componentId
-      if (typeof componentId !== 'string' || !componentId) continue
-      if (!knownVcIds.has(componentId)) danglingRefIds.push(nodeId)
-    }
+/** Strip dangling VC refs from page node maps only. */
+function stripDanglingVCRefsInPages(pages: Page[], visualComponents: VisualComponent[]): void {
+  const knownVcIds = new Set(visualComponents.map((vc) => vc.id))
+  stripDanglingRefsFromNodeMaps(pages.map((p) => p.nodes as Record<string, BaseNode>), knownVcIds)
+}
 
-    for (const refNodeId of danglingRefIds) {
-      // DFS-collect entire subtree
-      const subtreeIds: string[] = []
-      const stack: string[] = [refNodeId]
-      while (stack.length > 0) {
-        const id = stack.pop()!
-        const node = nodes[id]
-        if (!node) continue
-        subtreeIds.push(id)
-        stack.push(...node.children)
-      }
+/** Strip dangling VC refs from VC tree node maps only. */
+function stripDanglingVCRefsInVCs(vcs: VisualComponent[]): void {
+  const knownVcIds = new Set(vcs.map((vc) => vc.id))
+  stripDanglingRefsFromNodeMaps(
+    vcs.map((vc) => vc.tree.nodes as Record<string, BaseNode>),
+    knownVcIds,
+  )
+}
 
-      // Remove ref from its parent's children[]
-      for (const node of Object.values(nodes)) {
-        const idx = node.children.indexOf(refNodeId)
-        if (idx !== -1) {
-          node.children.splice(idx, 1)
-          break
-        }
-      }
+function stripDanglingRefsFromNodeMaps(nodeMaps: Array<Record<string, BaseNode>>, knownVcIds: Set<string>): void {
+  for (const nodes of nodeMaps) {
+    stripOneNodeMap(nodes, knownVcIds)
+  }
+}
 
-      // Delete subtree nodes from the flat map
-      for (const id of subtreeIds) {
-        delete nodes[id]
-      }
-    }
+function stripOneNodeMap(nodes: Record<string, BaseNode>, knownVcIds: Set<string>): void {
+  // Collect all top-level ref IDs pointing at an unknown VC
+  const danglingRefIds: string[] = []
+  for (const [nodeId, node] of Object.entries(nodes)) {
+    if (node.moduleId !== 'base.visual-component-ref') continue
+    const componentId = node.props.componentId
+    if (typeof componentId !== 'string' || !componentId) continue
+    if (!knownVcIds.has(componentId)) danglingRefIds.push(nodeId)
   }
 
-  for (const page of site.pages) {
-    strip(page.nodes as Record<string, BaseNode>)
-  }
-  for (const vc of site.visualComponents) {
-    strip(vc.tree.nodes as Record<string, BaseNode>)
+  for (const refNodeId of danglingRefIds) {
+    // DFS-collect entire subtree
+    const subtreeIds: string[] = []
+    const stack: string[] = [refNodeId]
+    while (stack.length > 0) {
+      const id = stack.pop()!
+      const node = nodes[id]
+      if (!node) continue
+      subtreeIds.push(id)
+      stack.push(...node.children)
+    }
+
+    // Remove ref from its parent's children[]
+    for (const node of Object.values(nodes)) {
+      const idx = node.children.indexOf(refNodeId)
+      if (idx !== -1) {
+        node.children.splice(idx, 1)
+        break
+      }
+    }
+
+    // Delete subtree nodes from the flat map
+    for (const id of subtreeIds) {
+      delete nodes[id]
+    }
   }
 }
 
@@ -166,7 +274,7 @@ export function stripDanglingVCRefs(site: SiteDocument): void {
  * Drop VisualComponents that form dependency cycles.
  * Uses DFS cycle detection on the componentRef graph.
  */
-function filterCyclicVCs(vcs: SiteDocument['visualComponents']): SiteDocument['visualComponents'] {
+function filterCyclicVCs(vcs: VisualComponent[]): VisualComponent[] {
   const vcMap = new Map(vcs.map((vc) => [vc.id, vc]))
   const cyclic = new Set<string>()
   const visited = new Set<string>()
@@ -192,42 +300,91 @@ function filterCyclicVCs(vcs: SiteDocument['visualComponents']): SiteDocument['v
 }
 
 // ---------------------------------------------------------------------------
-// Domain post-checks
+// Shell post-checks (shell only — no pages, no VCs)
 // ---------------------------------------------------------------------------
-//
-// The driver below runs each rule in order. New rules: add a helper, add one
-// call line. Order matters where called out in the helper docstrings.
 
-function runDomainPostChecks(site: SiteDocument): SiteDocument {
-  validatePageSlugs(site)
-  validatePageRootNodes(site)
-  normalizeSiteFiles(site)
-  dedupeVisualComponentsByName(site)
-  dropCyclicVisualComponents(site)
-  syncVisualComponentSlots(site)
-  stripDanglingVCRefs(site)
-  sanitizeAllRichtextProps(site)
-  normalizeSitePackage(site)
-  normalizeSiteRuntimeBlock(site)
-  normalizeFrameworkColors(site)
-  return site
+function runShellPostChecks(shell: SiteShell): SiteShell {
+  normalizeSiteFiles(shell)
+  normalizeSitePackage(shell)
+  normalizeSiteRuntimeBlock(shell)
+  normalizeFrameworkColors(shell)
+  return shell
 }
 
+/** Rule 1: filter SiteFiles to safe, deduplicated, normalized paths (first-wins). */
+function normalizeSiteFiles(shell: SiteShell): void {
+  const seen = new Set<string>()
+  shell.files = shell.files.filter((file) => {
+    const normalized = normalizePath(file.path)
+    if (!isSafePath(normalized) || seen.has(normalized)) return false
+    seen.add(normalized)
+    file.path = normalized
+    return true
+  })
+}
+
+/** Rule 2: filter unsafe npm names out of the site's package.json. */
+function normalizeSitePackage(shell: SiteShell): void {
+  shell.packageJson = normalizeSitePackageJson(shell.packageJson)
+}
+
+/** Rule 3: normalize site runtime config (dep-lock safety, script shape). */
+function normalizeSiteRuntimeBlock(shell: SiteShell): void {
+  shell.runtime = normalizeSiteRuntimeConfig(shell.runtime)
+}
+
+/** Rule 4: normalize framework color slugs + generate default dark values. */
+function normalizeFrameworkColors(shell: SiteShell): void {
+  const colors = shell.settings.framework?.colors
+  if (!colors) return
+  colors.tokens = colors.tokens.map((token) => ({
+    ...token,
+    slug: normalizeFrameworkColorSlug(token.slug),
+    darkValue: token.darkValue || generateDefaultDarkColor(token.lightValue),
+  }))
+}
+
+// ---------------------------------------------------------------------------
+// VC post-checks (used by validateVisualComponents)
+// ---------------------------------------------------------------------------
+
+/** Deduplicate VCs by name (first-wins; invalid names dropped). */
+function dedupeVCsByName(vcs: VisualComponent[]): VisualComponent[] {
+  const seen = new Set<string>()
+  return vcs.filter((vc) => {
+    if (!validateComponentName(vc.name, []).ok) return false
+    if (seen.has(vc.name)) return false
+    seen.add(vc.name)
+    return true
+  })
+}
+
+/** Sanitize richtext-keyed props on every VC tree node. */
+function sanitizeVCNodeRichtextProps(vcs: VisualComponent[]): void {
+  for (const vc of vcs) {
+    for (const node of Object.values(vc.tree.nodes)) sanitizeNodeProps(node)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Page post-checks (used by validatePages)
+// ---------------------------------------------------------------------------
+
 /** Rule 1 & 2: every page slug parses + slugs are unique within the site. */
-function validatePageSlugs(site: SiteDocument): void {
-  for (let i = 0; i < site.pages.length; i++) {
-    const { slug, id } = site.pages[i]
+function validatePageSlugList(pages: Page[]): void {
+  for (let i = 0; i < pages.length; i++) {
+    const { slug, id } = pages[i]
     const slugErr = pageSlugError(slug)
     if (slugErr) throw new SiteValidationError(slugErr, `site.pages[${i}].slug`)
-    const dupErr = pageSlugDuplicateError(slug, site.pages, id)
+    const dupErr = pageSlugDuplicateError(slug, pages, id)
     if (dupErr) throw new SiteValidationError(`duplicate slug: ${dupErr}`, `site.pages[${i}].slug`)
   }
 }
 
-/** Referential integrity: every page.rootNodeId must resolve in its nodes map. */
-function validatePageRootNodes(site: SiteDocument): void {
-  for (let i = 0; i < site.pages.length; i++) {
-    const page = site.pages[i]
+/** Rule 3: every page.rootNodeId must resolve in its nodes map. */
+function validatePageRootNodesList(pages: Page[]): void {
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i]
     if (!page.nodes[page.rootNodeId]) {
       throw new SiteValidationError(
         `rootNodeId "${page.rootNodeId}" not found in nodes`,
@@ -237,44 +394,14 @@ function validatePageRootNodes(site: SiteDocument): void {
   }
 }
 
-/** Rule 3: filter SiteFiles to safe, deduplicated, normalized paths (first-wins). */
-function normalizeSiteFiles(site: SiteDocument): void {
-  const seen = new Set<string>()
-  site.files = site.files.filter((file) => {
-    const normalized = normalizePath(file.path)
-    if (!isSafePath(normalized) || seen.has(normalized)) return false
-    seen.add(normalized)
-    file.path = normalized
-    return true
-  })
-}
-
-/** Rule 4: drop VisualComponents with invalid or duplicate names (first-wins). */
-function dedupeVisualComponentsByName(site: SiteDocument): void {
-  const seen = new Set<string>()
-  site.visualComponents = site.visualComponents.filter((vc) => {
-    if (!validateComponentName(vc.name, []).ok) return false
-    if (seen.has(vc.name)) return false
-    seen.add(vc.name)
-    return true
-  })
-}
-
-/** Rule 5: drop VisualComponents that form dependency cycles. */
-function dropCyclicVisualComponents(site: SiteDocument): void {
-  site.visualComponents = filterCyclicVCs(site.visualComponents)
-}
-
 /**
- * Rule 5b: idempotently reconcile slot-instance children on every VC ref so the
+ * Rule 4: idempotently reconcile slot-instance children on every VC ref so the
  * page tree matches each VC's current slot params. Heals drift from data
  * predating the mutation-side slot sync.
- *
- * Runs after `dropCyclicVisualComponents` so refs to dropped VCs aren't synced.
  */
-function syncVisualComponentSlots(site: SiteDocument): void {
-  const vcById = new Map(site.visualComponents.map((vc) => [vc.id, vc]))
-  for (const page of site.pages) {
+function syncVCSlotInstancesInPages(pages: Page[], visualComponents: VisualComponent[]): void {
+  const vcById = new Map(visualComponents.map((vc) => [vc.id, vc]))
+  for (const page of pages) {
     for (const node of Object.values(page.nodes)) {
       if (node.moduleId !== 'base.visual-component-ref') continue
       const componentId = node.props.componentId
@@ -290,33 +417,9 @@ function syncVisualComponentSlots(site: SiteDocument): void {
   }
 }
 
-/** Rule 6: sanitize richtext-keyed props on every node in every page and VC tree. */
-function sanitizeAllRichtextProps(site: SiteDocument): void {
-  for (const page of site.pages) {
+/** Rule 5: sanitize richtext-keyed props on every page node tree. */
+function sanitizePageNodeRichtextProps(pages: Page[]): void {
+  for (const page of pages) {
     for (const node of Object.values(page.nodes)) sanitizeNodeProps(node)
   }
-  for (const vc of site.visualComponents) {
-    for (const node of Object.values(vc.tree.nodes)) sanitizeNodeProps(node)
-  }
-}
-
-/** Rule 7: filter unsafe npm names out of the site's package.json. */
-function normalizeSitePackage(site: SiteDocument): void {
-  site.packageJson = normalizeSitePackageJson(site.packageJson)
-}
-
-/** Rule 8: normalize site runtime config (dep-lock safety, script shape). */
-function normalizeSiteRuntimeBlock(site: SiteDocument): void {
-  site.runtime = normalizeSiteRuntimeConfig(site.runtime)
-}
-
-/** Rule 9: normalize framework color slugs + generate default dark values. */
-function normalizeFrameworkColors(site: SiteDocument): void {
-  const colors = site.settings.framework?.colors
-  if (!colors) return
-  colors.tokens = colors.tokens.map((token) => ({
-    ...token,
-    slug: normalizeFrameworkColorSlug(token.slug),
-    darkValue: token.darkValue || generateDefaultDarkColor(token.lightValue),
-  }))
 }

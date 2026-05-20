@@ -108,36 +108,6 @@ function parseVCParam(raw: unknown): VCParam | null {
 }
 
 // ---------------------------------------------------------------------------
-// VCBreakpoint — lightweight breakpoint descriptor stored per-VC
-// ---------------------------------------------------------------------------
-
-const VCBreakpointSchema = Type.Object({
-  id: Type.String({ minLength: 1 }),
-  label: Type.String(),
-  width: Type.Number(),
-  icon: Type.String(),
-})
-
-type VCBreakpoint = Static<typeof VCBreakpointSchema>
-
-/**
- * Tolerant parser for a single VCBreakpoint. Entries with empty/missing id are
- * dropped. Other fields fall back to their defaults (mirrors the original
- * Zod .default() behaviour for label, width, icon).
- */
-function parseVCBreakpoint(raw: unknown): VCBreakpoint | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const r = raw as Record<string, unknown>
-  if (typeof r.id !== 'string' || r.id.length === 0) return null
-  return {
-    id: r.id,
-    label: typeof r.label === 'string' ? r.label : '',
-    width: typeof r.width === 'number' ? r.width : 0,
-    icon: typeof r.icon === 'string' ? r.icon : 'monitor',
-  }
-}
-
-// ---------------------------------------------------------------------------
 // parseVCNode — tolerant flat VCNode parser
 //
 // Replicates the Zod .catch() fallback behaviour for fields that use
@@ -202,18 +172,27 @@ function parseVCNode(raw: unknown): VCNode | null {
 // ---------------------------------------------------------------------------
 
 /**
- * TypeBox schema for a VisualComponent stored in SiteDocument.visualComponents[].
+ * TypeBox schema for a VisualComponent in memory.
  *
  * The VC tree is stored as a flat NodeTree (same shape as Page.nodes) in the
  * `tree` field: { nodes: Record<string, VCNode>, rootNodeId: string }.
  *
- * For tolerant parsing (silently dropping invalid params/breakpoints and
- * providing timestamp fallbacks), use `parseVisualComponent` instead of
+ * Storage is in `data_rows` where `table_id = 'components'`. The adapter
+ * `visualComponentFromRow` / `visualComponentToCells` in
+ * `@core/data/componentFromRow` handles the round-trip.
+ *
+ * For tolerant parsing, use `parseVisualComponent` instead of
  * `parseValue(VisualComponentSchema, raw)`.
  *
  * Naming invariants (enforced by validateComponentName at write boundaries):
  *   - Non-empty (whitespace-only is rejected; trimmed before storage)
  *   - Unique within the site
+ *
+ * NOTE: `breakpoints` was removed — VCs always use the site's breakpoint set
+ * (`site.breakpoints`). Storing a duplicate per-VC was dead weight: nothing
+ * read `vc.breakpoints` — all publisher and editor breakpoint usage went
+ * through `site.breakpoints`. Dropped in the Step 4 unified-content-storage
+ * refactor (2026-05-19).
  */
 export const VisualComponentSchema = Type.Object({
   id: Type.String({ minLength: 1 }),
@@ -224,7 +203,6 @@ export const VisualComponentSchema = Type.Object({
     nodes: Type.Record(Type.String(), VCNodeSchema),
   }),
   params: Type.Array(VCParamSchema),
-  breakpoints: Type.Array(VCBreakpointSchema),
   classIds: Type.Array(Type.String()),
   /** Falls back to Date.now() for missing or non-numeric values — handled by parser */
   createdAt: Type.Number(),
@@ -242,9 +220,6 @@ export type VisualComponent = Static<typeof VisualComponentSchema>
  *
  * Returns null when required fields (id, name, tree.rootNodeId) are invalid or
  * when rootNodeId is not found in the parsed nodes map.
- *
- * NOTE: Legacy VC shape (rootNode + nested child objects) is converted to flat tree by
- * the `convertLegacyVCShape` function in `validate.ts` BEFORE this parser runs.
  */
 export function parseVisualComponent(raw: unknown): VisualComponent | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
@@ -275,13 +250,6 @@ export function parseVisualComponent(raw: unknown): VisualComponent | null {
       })
     : []
 
-  const breakpoints = Array.isArray(r.breakpoints)
-    ? r.breakpoints.flatMap((item) => {
-        const b = parseVCBreakpoint(item)
-        return b ? [b] : []
-      })
-    : []
-
   const classIds = Array.isArray(r.classIds)
     ? r.classIds.filter((x): x is string => typeof x === 'string')
     : []
@@ -293,7 +261,6 @@ export function parseVisualComponent(raw: unknown): VisualComponent | null {
     name: r.name,
     tree: { nodes, rootNodeId: rawTree.rootNodeId },
     params,
-    breakpoints,
     classIds,
     createdAt,
   }

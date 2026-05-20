@@ -46,7 +46,7 @@ import { describe, it, expect, beforeEach } from 'bun:test'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { useEditorStore } from '@site/store/store'
-import { validateSite } from '@core/persistence/validate'
+import { validateSite, validateVisualComponents } from '@core/persistence/validate'
 import type { SiteDocument } from '@core/page-tree/schemas'
 import { safeParseValue } from '@core/utils/typeboxHelpers'
 
@@ -874,23 +874,19 @@ describe('Gate SL-14 — addNodeToVc: succeeds when no cycle', () => {
 // Section 7 — validateSite extension
 // ============================================================================
 
-describe('Gate VP-2 — valid VC passes through validateSite cleanly', () => {
+describe('Gate VP-2 — valid VC passes through validateVisualComponents cleanly', () => {
   it('a properly-shaped VC is preserved in the output', () => {
-    const raw = rawSite({ visualComponents: [rawVC()] })
-    const site = validateSite(raw) as SiteDocument & { visualComponents: Array<{ name: string }> }
-    expect(site.visualComponents).toHaveLength(1)
-    expect(site.visualComponents[0].name).toBe('Card')
+    const vcs = validateVisualComponents([rawVC()])
+    expect(vcs).toHaveLength(1)
+    expect(vcs[0].name).toBe('Card')
   })
 })
 
 describe('Gate VP-3 — lenient: VC with invalid (empty) name is dropped', () => {
   it('a VC with a whitespace-only name is silently dropped (lenient per-item)', () => {
-    const raw = rawSite({ visualComponents: [rawVC({ name: '   ' })] })
-    const site = validateSite(raw) as SiteDocument & { visualComponents: Array<unknown> }
+    const vcs = validateVisualComponents([rawVC({ name: '   ' })])
     // Either an empty array or the bad entry is dropped — either way, no whitespace vc
-    const hasInvalid = site.visualComponents?.some(
-      (vc) => (vc as { name: string }).name.trim().length === 0
-    ) ?? false
+    const hasInvalid = vcs.some((vc) => vc.name.trim().length === 0)
     expect(hasInvalid).toBe(false)
   })
 })
@@ -899,11 +895,9 @@ describe('Gate VP-4 — lenient: VC with no name is dropped', () => {
   it('a VC with missing name field is silently dropped', () => {
     const badVC = rawVC()
     delete (badVC as Record<string, unknown>).name
-    const raw = rawSite({ visualComponents: [badVC] })
-    const site = validateSite(raw) as SiteDocument & { visualComponents: Array<unknown> }
+    const vcs = validateVisualComponents([badVC])
     // Invalid entry must not survive
-    const survivors = site.visualComponents ?? []
-    expect(survivors.some((vc) => !(vc as { name?: string }).name)).toBe(false)
+    expect(vcs.some((vc) => !vc.name)).toBe(false)
   })
 })
 
@@ -911,9 +905,8 @@ describe('Gate VP-5 — lenient: duplicate VC names are deduplicated (first-wins
   it('two VCs with the same name keep only the first one', () => {
     const vc1 = rawVC({ id: 'vc-card-1', name: 'Card' })
     const vc2 = rawVC({ id: 'vc-card-2', name: 'Card' })
-    const raw = rawSite({ visualComponents: [vc1, vc2] })
-    const site = validateSite(raw) as SiteDocument & { visualComponents: Array<{ id: string }> }
-    const cardVCs = site.visualComponents?.filter((v) => (v as { name: string }).name === 'Card') ?? []
+    const vcs = validateVisualComponents([vc1, vc2])
+    const cardVCs = vcs.filter((v) => v.name === 'Card')
     expect(cardVCs).toHaveLength(1)
     // First-wins — vc-card-1 should survive
     expect(cardVCs[0].id).toBe('vc-card-1')
@@ -921,23 +914,31 @@ describe('Gate VP-5 — lenient: duplicate VC names are deduplicated (first-wins
 })
 
 
-describe('Gate VP-7 — full site with valid VC still passes full validateSite', () => {
-  it('validateSite does not throw for a site with a well-formed VC', () => {
+describe('Gate VP-7 — site shell validates independently of VCs', () => {
+  it('validateSite does not throw (VCs are stored separately and ignored by the shell parser)', () => {
+    // The raw data may carry a visualComponents field from an older stored document —
+    // parseSiteDocument ignores it. validateSite must not throw.
     const raw = rawSite({ visualComponents: [rawVC()] })
     expect(() => validateSite(raw)).not.toThrow()
+  })
+
+  it('validateVisualComponents processes VCs correctly for a well-formed VC', () => {
+    const vcs = validateVisualComponents([rawVC()])
+    expect(vcs).toHaveLength(1)
+    expect(vcs[0].name).toBe('Card')
   })
 })
 
 // ── Round-trip gates (added post-#635 hot-fix — Coverage gaps surfaced by CR msg #1948) ──
 
-describe('Gate VP-8 — validateSite round-trips flat VC tree', () => {
+describe('Gate VP-8 — validateVisualComponents round-trips flat VC tree', () => {
   /**
    * VC tree shape: `vc.tree = { nodes: Record<string, VCNode>, rootNodeId }`.
    * The legacy `rootNode + childNodes` nested shape was a pre-release-only
    * shape; the migration shim that handled it has been deleted (no users,
    * no installed base, no need for backward compatibility).
    */
-  it('a VC with flat tree.nodes survives validateSite() with the full nodes map intact', () => {
+  it('a VC with flat tree.nodes survives validateVisualComponents() with the full nodes map intact', () => {
     const childNode = {
       id: 'child-heading',
       moduleId: 'base.text',
@@ -962,15 +963,10 @@ describe('Gate VP-8 — validateSite round-trips flat VC tree', () => {
         },
       },
     })
-    const raw = rawSite({ visualComponents: [flatVC] })
 
-    const site = validateSite(raw) as {
-      visualComponents: Array<{
-        tree: { rootNodeId: string; nodes: Record<string, { id: string }> }
-      }>
-    }
+    const vcs = validateVisualComponents([flatVC])
 
-    const vcResult = site.visualComponents[0]
+    const vcResult = vcs[0]
     expect(vcResult).toBeDefined()
     expect(vcResult.tree.rootNodeId).toBe('vc-root')
     // Both nodes must be present in the flat map
@@ -981,11 +977,11 @@ describe('Gate VP-8 — validateSite round-trips flat VC tree', () => {
 
 })
 
-describe('Gate VP-9 — validateSite preserves propBindings on VC nodes in flat tree', () => {
+describe('Gate VP-9 — validateVisualComponents preserves propBindings on VC nodes in flat tree', () => {
   /**
-   * propBindings on any node in the VC flat tree must survive validateSite().
-   * After the Task 3 migration, the VC tree is stored as tree.nodes (flat map),
-   * and parseVCNode() must preserve propBindings on each node.
+   * propBindings on any node in the VC flat tree must survive validateVisualComponents().
+   * The VC tree is stored as tree.nodes (flat map), and parseVCNode() must preserve
+   * propBindings on each node.
    */
   it('propBindings on the root node survive the round-trip', () => {
     const flatVC = rawVC({
@@ -1006,18 +1002,13 @@ describe('Gate VP-9 — validateSite preserves propBindings on VC nodes in flat 
         },
       },
     })
-    const raw = rawSite({ visualComponents: [flatVC] })
 
-    const site = validateSite(raw) as {
-      visualComponents: Array<{
-        tree: { rootNodeId: string; nodes: Record<string, { propBindings?: Record<string, { paramId: string }> }> }
-      }>
-    }
+    const vcs = validateVisualComponents([flatVC])
 
-    const vcResult = site.visualComponents[0]
+    const vcResult = vcs[0]
     expect(vcResult).toBeDefined()
     const rootNode = vcResult.tree.nodes[vcResult.tree.rootNodeId]
-    expect(rootNode?.propBindings?.text?.paramId).toBe('param-title-1')
+    expect((rootNode as { propBindings?: Record<string, { paramId: string }> })?.propBindings?.text?.paramId).toBe('param-title-1')
   })
 
   it('multiple propBindings on root node all survive the round-trip', () => {
@@ -1041,16 +1032,13 @@ describe('Gate VP-9 — validateSite preserves propBindings on VC nodes in flat 
         },
       },
     })
-    const raw = rawSite({ visualComponents: [flatVC] })
 
-    const site = validateSite(raw) as {
-      visualComponents: Array<{
-        tree: { rootNodeId: string; nodes: Record<string, { propBindings?: Record<string, { paramId: string }> }> }
-      }>
-    }
+    const vcs = validateVisualComponents([flatVC])
 
-    const vcResult = site.visualComponents[0]
-    const rootNode = vcResult?.tree.nodes[vcResult.tree.rootNodeId]
+    const vcResult = vcs[0]
+    const rootNode = vcResult?.tree.nodes[vcResult.tree.rootNodeId] as
+      | { propBindings?: Record<string, { paramId: string }> }
+      | undefined
     expect(rootNode?.propBindings?.title?.paramId).toBe('param-title-1')
     expect(rootNode?.propBindings?.subtitle?.paramId).toBe('param-subtitle-2')
     expect(rootNode?.propBindings?.backgroundColor?.paramId).toBe('param-bg-3')
@@ -1083,15 +1071,12 @@ describe('Gate VP-9 — validateSite preserves propBindings on VC nodes in flat 
         },
       },
     })
-    const raw = rawSite({ visualComponents: [flatVC] })
 
-    const site = validateSite(raw) as {
-      visualComponents: Array<{
-        tree: { nodes: Record<string, { id: string; propBindings?: Record<string, { paramId: string }> }> }
-      }>
-    }
+    const vcs = validateVisualComponents([flatVC])
 
-    const childNode = site.visualComponents[0]?.tree.nodes['heading-child']
+    const childNode = vcs[0]?.tree.nodes['heading-child'] as
+      | { id: string; propBindings?: Record<string, { paramId: string }> }
+      | undefined
     expect(childNode?.id).toBe('heading-child')
     expect(childNode?.propBindings?.text?.paramId).toBe('param-label-5')
   })
@@ -1101,8 +1086,8 @@ describe('Gate VP-9 — validateSite preserves propBindings on VC nodes in flat 
 // Section 8 — New VCParam types + description field (Phase 1 gate)
 // ============================================================================
 
-describe("Gate PT-1 — 'slot' param type round-trips through validateSite", () => {
-  it("a VC with a slot param survives validateSite with type preserved", () => {
+describe("Gate PT-1 — 'slot' param type round-trips through validateVisualComponents", () => {
+  it("a VC with a slot param survives validateVisualComponents with type preserved", () => {
     const vc = rawVC({
       params: [
         {
@@ -1114,18 +1099,15 @@ describe("Gate PT-1 — 'slot' param type round-trips through validateSite", () 
         },
       ],
     })
-    const raw = rawSite({ visualComponents: [vc] })
-    const site = validateSite(raw) as {
-      visualComponents: Array<{ params: Array<{ id: string; type: string }> }>
-    }
-    const param = site.visualComponents[0]?.params[0]
+    const vcs = validateVisualComponents([vc])
+    const param = vcs[0]?.params[0]
     expect(param?.id).toBe('p-slot-1')
     expect(param?.type).toBe('slot')
   })
 })
 
-describe("Gate PT-2 — 'image' param type round-trips through validateSite", () => {
-  it("a VC with an image param and null defaultValue survives validateSite", () => {
+describe("Gate PT-2 — 'image' param type round-trips through validateVisualComponents", () => {
+  it("a VC with an image param and null defaultValue survives validateVisualComponents", () => {
     const vc = rawVC({
       params: [
         {
@@ -1137,16 +1119,13 @@ describe("Gate PT-2 — 'image' param type round-trips through validateSite", ()
         },
       ],
     })
-    const raw = rawSite({ visualComponents: [vc] })
-    const site = validateSite(raw) as {
-      visualComponents: Array<{ params: Array<{ id: string; type: string; defaultValue: unknown }> }>
-    }
-    const param = site.visualComponents[0]?.params[0]
+    const vcs = validateVisualComponents([vc])
+    const param = vcs[0]?.params[0]
     expect(param?.id).toBe('p-img-1')
     expect(param?.type).toBe('image')
   })
 
-  it("a VC with an image param and URL defaultValue survives validateSite", () => {
+  it("a VC with an image param and URL defaultValue survives validateVisualComponents", () => {
     const vc = rawVC({
       params: [
         {
@@ -1158,19 +1137,16 @@ describe("Gate PT-2 — 'image' param type round-trips through validateSite", ()
         },
       ],
     })
-    const raw = rawSite({ visualComponents: [vc] })
-    const site = validateSite(raw) as {
-      visualComponents: Array<{ params: Array<{ id: string; type: string; defaultValue: unknown }> }>
-    }
-    const param = site.visualComponents[0]?.params[0]
+    const vcs = validateVisualComponents([vc])
+    const param = vcs[0]?.params[0]
     expect(param?.id).toBe('p-img-2')
     expect(param?.type).toBe('image')
     expect(param?.defaultValue).toBe('https://example.com/x.png')
   })
 })
 
-describe("Gate PT-3 — 'richText' param type round-trips through validateSite", () => {
-  it("a VC with a richText param and HTML defaultValue survives validateSite", () => {
+describe("Gate PT-3 — 'richText' param type round-trips through validateVisualComponents", () => {
+  it("a VC with a richText param and HTML defaultValue survives validateVisualComponents", () => {
     const vc = rawVC({
       params: [
         {
@@ -1182,19 +1158,16 @@ describe("Gate PT-3 — 'richText' param type round-trips through validateSite",
         },
       ],
     })
-    const raw = rawSite({ visualComponents: [vc] })
-    const site = validateSite(raw) as {
-      visualComponents: Array<{ params: Array<{ id: string; type: string; defaultValue: unknown }> }>
-    }
-    const param = site.visualComponents[0]?.params[0]
+    const vcs = validateVisualComponents([vc])
+    const param = vcs[0]?.params[0]
     expect(param?.id).toBe('p-rt-1')
     expect(param?.type).toBe('richText')
     expect(param?.defaultValue).toBe('<p>hello</p>')
   })
 })
 
-describe('Gate PT-4 — description field on VCParam survives validateSite round-trip', () => {
-  it('a VCParam with description is preserved after validateSite', () => {
+describe('Gate PT-4 — description field on VCParam survives validateVisualComponents round-trip', () => {
+  it('a VCParam with description is preserved after validateVisualComponents', () => {
     const vc = rawVC({
       params: [
         {
@@ -1207,11 +1180,8 @@ describe('Gate PT-4 — description field on VCParam survives validateSite round
         },
       ],
     })
-    const raw = rawSite({ visualComponents: [vc] })
-    const site = validateSite(raw) as {
-      visualComponents: Array<{ params: Array<{ id: string; description?: string }> }>
-    }
-    const param = site.visualComponents[0]?.params[0]
+    const vcs = validateVisualComponents([vc])
+    const param = vcs[0]?.params[0]
     expect(param?.id).toBe('p-desc-1')
     expect(param?.description).toBe('Card heading text')
   })
@@ -1228,11 +1198,8 @@ describe('Gate PT-4 — description field on VCParam survives validateSite round
         },
       ],
     })
-    const raw = rawSite({ visualComponents: [vc] })
-    const site = validateSite(raw) as {
-      visualComponents: Array<{ params: Array<{ id: string; description?: unknown }> }>
-    }
-    const param = site.visualComponents[0]?.params[0]
+    const vcs = validateVisualComponents([vc])
+    const param = vcs[0]?.params[0]
     expect(param?.id).toBe('p-nodesc-1')
     expect(param?.description).toBeUndefined()
   })

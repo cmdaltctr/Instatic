@@ -20,7 +20,7 @@ import {
   GeneratedClassMetadataSchema,
 } from '@core/framework/schemas'
 import { SiteFileSchema, type SiteFile, type SiteFileType } from '@core/files/schemas'
-import { parseVisualComponent, VisualComponentSchema } from '@core/visualComponents/schemas'
+import { parseVisualComponent, type VisualComponent } from '@core/visualComponents/schemas'
 import { SiteRuntimeConfigSchema, type SiteRuntimeConfig } from '@core/site-runtime/schemas'
 import { SitePackageJsonSchema, type SitePackageJson } from '@core/site-dependencies/manifest'
 import { SiteFontsSettingsSchema, parseSiteFontsSettings } from '@core/fonts/schemas'
@@ -459,20 +459,24 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
 }
 
 // ---------------------------------------------------------------------------
-// SiteDocumentSchema — top-level persisted site document
+// SiteDocumentSchema — top-level persisted site shell (pages and VCs stored separately)
 // ---------------------------------------------------------------------------
 
 /**
- * The top-level site document stored in the CMS database.
+ * The top-level site shell stored in the CMS `site` table.
  *
- * This schema defines the validated output shape. For tolerant loading of
- * persisted data (with per-entry filtering of classes/files/visualComponents
- * and fallbacks for settings/packageJson/runtime), use `parseSiteDocument`.
+ * Pages live in `data_rows` where `table_id = 'pages'`.
+ * Visual Components live in `data_rows` where `table_id = 'components'`.
+ *
+ * Neither pages nor VCs are embedded in the shell. The adapter assembles the
+ * full `SiteDocument` (shell + pages + visualComponents) on load; the shell is
+ * saved independently on each PUT /admin/api/cms/site call.
+ *
+ * This schema defines the validated output shape for `parseSiteDocument`.
  *
  * Resilience semantics:
  *   THROWS (no fallback) if missing / wrong type:
- *     id, name, pages (also ≥ 1 item), breakpoints, classes, files,
- *     visualComponents, createdAt, updatedAt
+ *     id, name, breakpoints, createdAt, updatedAt
  *
  *   RESILIENT (fallback to default) via parseSiteDocument:
  *     settings → DEFAULT_SITE_SETTINGS
@@ -482,28 +486,36 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
  * Per-entry leniency via parseSiteDocument:
  *   classes — entries missing id/name are silently dropped
  *   files — invalid entries are silently dropped
- *   visualComponents — invalid entries are silently dropped
  */
 const SiteDocumentSchema = Type.Object({
   id: Type.String(),
   name: Type.String(),
-  /** At least one page is required */
-  pages: Type.Array(PageSchema, { minItems: 1 }),
   breakpoints: Type.Array(BreakpointSchema),
   settings: SiteSettingsSchema,
   /** Class registry — required object */
   classes: Type.Record(Type.String(), CSSClassSchema),
   /** Site files — required array */
   files: Type.Array(SiteFileSchema),
-  /** Visual components — required array */
-  visualComponents: Type.Array(VisualComponentSchema),
   packageJson: SitePackageJsonSchema,
   runtime: SiteRuntimeConfigSchema,
   createdAt: Type.Number(),
   updatedAt: Type.Number(),
 })
 
-export type SiteDocument = Static<typeof SiteDocumentSchema>
+/**
+ * The persisted site shell: everything except pages and visual components.
+ * Pages live in `data_rows` (table_id = 'pages').
+ * Visual Components live in `data_rows` (table_id = 'components').
+ * Both are loaded separately and assembled into `SiteDocument`.
+ */
+export const SiteShellSchema = SiteDocumentSchema
+export type SiteShell = Static<typeof SiteShellSchema>
+
+/**
+ * In-memory site document: the full shell plus pages and visual components.
+ * Assembled by the adapter on load; never stored directly.
+ */
+export type SiteDocument = SiteShell & { pages: Page[]; visualComponents: VisualComponent[] }
 
 // ---------------------------------------------------------------------------
 // Tolerant parsing helpers
@@ -857,8 +869,11 @@ function parseSiteSettings(raw: unknown): SiteSettings {
  * Parse a Page. Throws Error('<path>: <message>') for required-field failures
  * using path segments relative to the page's position (e.g. 'nodes.heading-1.id').
  * Invalid optional fields (template) silently become absent.
+ *
+ * Exported so `validatePages` in `@core/persistence/validate` can parse
+ * individual pages (loaded from `data_rows`) with the same resilient semantics.
  */
-function parsePage(raw: unknown, pageIndex: number): Page {
+export function parsePage(raw: unknown, pageIndex: number): Page {
   const pagePathPrefix = `pages[${pageIndex}]`
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error(`${pagePathPrefix}: not an object`)
@@ -906,17 +921,23 @@ const DEFAULT_RUNTIME: SiteRuntimeConfig = {
 const DEFAULT_PACKAGE_JSON: SitePackageJson = { dependencies: {}, devDependencies: {} }
 
 /**
- * Tolerant parser for a SiteDocument loaded from persistent storage.
+ * Tolerant parser for a site shell loaded from the `site` table.
  *
- * Throws if required fields (id, name, pages, breakpoints, createdAt,
- * updatedAt) are missing or of the wrong type. Silently drops/defaults
- * invalid entries in classes, files, visualComponents, settings, etc.
+ * Throws if required fields (id, name, breakpoints, createdAt, updatedAt)
+ * are missing or of the wrong type. Silently drops/defaults invalid entries
+ * in classes, files, settings, etc.
+ *
+ * Pages and Visual Components are NOT parsed here — they live in `data_rows`
+ * and are loaded separately:
+ *   - pages: via `parsePage` + `validatePages` in `@core/persistence/validate`
+ *   - VCs: via `visualComponentFromRow` + `validateVisualComponents` in
+ *          `@core/persistence/validate`
  *
  * Use this in place of `parseValue(SiteDocumentSchema, raw)` when reading
- * persisted site data. After this returns, run `runDomainPostChecks` in
+ * persisted site shells. After this returns, run `runShellPostChecks` in
  * `persistence/validate.ts` for cross-cutting invariants.
  */
-export function parseSiteDocument(raw: unknown): SiteDocument {
+export function parseSiteDocument(raw: unknown): SiteShell {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('not an object')
   }
@@ -926,14 +947,6 @@ export function parseSiteDocument(raw: unknown): SiteDocument {
   if (typeof r.name !== 'string') throw new Error('name must be a string')
   if (typeof r.createdAt !== 'number') throw new Error('createdAt must be a number')
   if (typeof r.updatedAt !== 'number') throw new Error('updatedAt must be a number')
-
-  // Pages — required, must have ≥ 1
-  if (!Array.isArray(r.pages)) throw new Error('pages must be an array')
-  if (r.pages.length < 1) throw new Error('pages must have at least one page')
-  const pages: Page[] = []
-  for (let i = 0; i < r.pages.length; i++) {
-    pages.push(parsePage(r.pages[i], i))
-  }
 
   // Breakpoints — required array, per-item has icon fallback
   if (!Array.isArray(r.breakpoints)) throw new Error('breakpoints must be an array')
@@ -955,14 +968,6 @@ export function parseSiteDocument(raw: unknown): SiteDocument {
       })
     : []
 
-  // Visual components — required array, per-entry leniency
-  const visualComponents = Array.isArray(r.visualComponents)
-    ? r.visualComponents.flatMap((item) => {
-        const vc = parseVisualComponent(item)
-        return vc ? [vc] : []
-      })
-    : []
-
   // Settings — resilient, falls back to DEFAULT_SITE_SETTINGS
   const settings = parseSiteSettings(r.settings)
 
@@ -979,15 +984,17 @@ export function parseSiteDocument(raw: unknown): SiteDocument {
   return {
     id: r.id,
     name: r.name,
-    pages,
     breakpoints,
     settings,
     classes,
     files,
-    visualComponents,
     packageJson,
     runtime,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   }
 }
+
+// parseVisualComponent is re-exported so callers in validate.ts and elsewhere
+// can parse raw VC shapes without importing from visualComponents/schemas directly.
+export { parseVisualComponent }

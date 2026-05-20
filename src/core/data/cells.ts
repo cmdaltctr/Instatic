@@ -7,7 +7,10 @@
  * a sensible default when the cell is missing or malformed.
  */
 
-import type { DataRowCells } from './schemas'
+import { NodeTreeSchema, type NodeTree } from '@core/page-tree/treeSchema'
+import type { BaseNode } from '@core/page-tree/baseNode'
+import { DataFieldSchema, type DataField, type DataRowCells } from './schemas'
+import { safeParseValue } from '@core/utils/typeboxHelpers'
 
 export function readStringCell(cells: DataRowCells, fieldId: string, fallback = ''): string {
   const value = cells[fieldId]
@@ -61,4 +64,40 @@ export function readSeoTitleCell(cells: DataRowCells): string {
 
 export function readSeoDescriptionCell(cells: DataRowCells): string {
   return readStringCell(cells, 'seoDescription')
+}
+
+/**
+ * Read a `pageTree` cell value. Returns the validated `NodeTree` or null if
+ * the cell is missing or does not conform to the expected shape.
+ *
+ * The generic parameter is `BaseNode` (the persistence-level node shape).
+ * Callers that work with richer node types (e.g. `PageNode`) may cast the
+ * result — the schema validates the base shape which is structurally
+ * compatible.
+ */
+export function readNodeTreeCell(
+  cells: DataRowCells,
+  fieldId: string,
+): NodeTree<BaseNode> | null {
+  const raw = cells[fieldId]
+  if (!raw) return null
+  const result = safeParseValue(NodeTreeSchema, raw)
+  return result.ok ? result.value : null
+}
+
+/**
+ * Read a `fieldSchema` cell value. Returns the array of `DataField` items,
+ * silently dropping any that fail validation. Returns an empty array when the
+ * cell is missing or not an array.
+ */
+export function readFieldSchemaCell(
+  cells: DataRowCells,
+  fieldId: string,
+): DataField[] {
+  const raw = cells[fieldId]
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    const result = safeParseValue(DataFieldSchema, item)
+    return result.ok ? [result.value] : []
+  })
 }

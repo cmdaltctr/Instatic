@@ -12,6 +12,8 @@ import { ListBoxSolidIcon } from 'pixel-art-icons/icons/list-box-solid'
 import { BulletlistSolidIcon } from 'pixel-art-icons/icons/bulletlist-solid'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
 import { LinkIcon } from 'pixel-art-icons/icons/link'
+import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
+import { BracesIcon } from 'pixel-art-icons/icons/braces'
 
 const FIELD_ICONS: Record<DataFieldType, IconComponent> = {
   text: TextStartTIcon,
@@ -27,6 +29,9 @@ const FIELD_ICONS: Record<DataFieldType, IconComponent> = {
   multiSelect: BulletlistSolidIcon,
   media: ImageSolidIcon,
   relation: LinkIcon,
+  // Structural field types: visual page-node tree and component parameter schema.
+  pageTree: LayoutSolidIcon,
+  fieldSchema: BracesIcon,
 }
 
 export function getFieldIcon(type: DataFieldType): IconComponent {

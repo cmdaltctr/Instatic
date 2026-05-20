@@ -22,6 +22,8 @@
  */
 
 import { Type, type Static } from '@sinclair/typebox'
+export { BundlePreviewSchema, ImportResultSchema } from '@core/data/bundleSchema'
+export type { BundlePreview, ImportResult } from '@core/data/bundleSchema'
 
 // Re-exported types are inferred from the schemas below — these schemas are
 // the source of truth, the types follow. Removes the previous duplication
@@ -196,11 +198,31 @@ export const CmsRuntimePreviewResponseSchema = Type.Object(
 )
 
 // ---------------------------------------------------------------------------
-// cms.ts — envelope only; SiteDocument is too deep to schema here
+// cms.ts — envelopes only; inner types are deep
 // ---------------------------------------------------------------------------
 
 export const CmsSiteEnvelopeSchema = Type.Object(
   { site: Type.Optional(Type.Unknown()) },
+  { additionalProperties: true },
+)
+
+/**
+ * Envelope for GET /admin/api/cms/pages.
+ * Inner items are DataRow objects; validated shallowly here — deep validation
+ * runs via pageFromRow + validatePages in the adapter.
+ */
+export const CmsPagesEnvelopeSchema = Type.Object(
+  { rows: Type.Optional(Type.Array(Type.Unknown())) },
+  { additionalProperties: true },
+)
+
+/**
+ * Envelope for GET /admin/api/cms/components.
+ * Inner items are DataRow objects; validated shallowly here — deep validation
+ * runs via visualComponentFromRow + validateVisualComponents in the adapter.
+ */
+export const CmsComponentsEnvelopeSchema = Type.Object(
+  { rows: Type.Optional(Type.Array(Type.Unknown())) },
   { additionalProperties: true },
 )
 

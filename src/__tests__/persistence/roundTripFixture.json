@@ -113,9 +113,6 @@
           "required": false
         }
       ],
-      "breakpoints": [
-        { "id": "mobile", "label": "Mobile", "width": 375, "icon": "smartphone" }
-      ],
       "classIds": [],
       "createdAt": 1700000000000
     }

@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import type { DataField, DataRowCells } from '@core/data/schemas'
 
 /**
@@ -24,6 +25,26 @@ export function emptyCellValue(field: DataField): unknown {
       return field.allowMultiple ? [] : null
     case 'relation':
       return field.allowMultiple ? [] : null
+
+    case 'pageTree': {
+      // Minimal valid NodeTree with a single root `base.body` node.
+      const rootId = nanoid()
+      return {
+        nodes: {
+          [rootId]: {
+            id: rootId,
+            moduleId: 'base.body',
+            props: {},
+            children: [],
+            classIds: [],
+          },
+        },
+        rootNodeId: rootId,
+      }
+    }
+
+    case 'fieldSchema':
+      return []
 
     default: {
       const _exhaustive: never = field

@@ -16,6 +16,7 @@
 
 export {
   listDataTables,
+  listDataTablesWithCounts,
   getDataTable,
   createDataTable,
   updateDataTable,

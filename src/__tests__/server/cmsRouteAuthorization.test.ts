@@ -6,7 +6,9 @@ import type { DbClient } from '../../../server/db'
 import { handleCmsRequest } from '../../../server/handlers/cms'
 import { findUserByEmail } from '../../../server/repositories/users'
 import { createTestDb } from '../helpers/createTestDb'
-import type { SiteDocument } from '@core/page-tree/schemas'
+import type { SiteDocument, SiteShell } from '@core/page-tree/schemas'
+import { pageFromRow } from '../../../src/core/data/pageFromRow'
+import type { DataRow } from '../../../src/core/data/schemas'
 
 const password = 'long-enough-password'
 
@@ -97,10 +99,14 @@ async function createUser(
 }
 
 async function currentSiteDocument(db: DbClient, cookie: string): Promise<SiteDocument> {
-  const res = await request(db, '/admin/api/cms/site', { method: 'GET', cookie })
-  expect(res.status).toBe(200)
-  const payload = await readBody<{ site: SiteDocument }>(res)
-  return payload.site
+  const shellRes = await request(db, '/admin/api/cms/site', { method: 'GET', cookie })
+  expect(shellRes.status).toBe(200)
+  const shellPayload = await readBody<{ site: SiteShell }>(shellRes)
+  const pagesRes = await request(db, '/admin/api/cms/pages', { method: 'GET', cookie })
+  expect(pagesRes.status).toBe(200)
+  const pagesPayload = await readBody<{ rows: DataRow[] }>(pagesRes)
+  const pages = (pagesPayload.rows ?? []).map(pageFromRow)
+  return { ...shellPayload.site, pages }
 }
 
 describe('CMS route authorization', () => {

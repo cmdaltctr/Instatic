@@ -2,6 +2,7 @@ export type {
   CSSClass,
   Page,
   PageNode,
+  SiteShell,
   SiteDocument,
   Breakpoint,
   SiteSettings,

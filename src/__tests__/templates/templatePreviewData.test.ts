@@ -34,6 +34,7 @@ function makeTable(overrides: Partial<DataTable> = {}): DataTable {
         builtIn: true,
       },
     ],
+    system: overrides.system ?? false,
     createdByUserId: null,
     updatedByUserId: null,
     createdAt: '2026-05-01T10:00:00.000Z',

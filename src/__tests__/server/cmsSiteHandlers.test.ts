@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import type { SiteDocument } from '@core/page-tree/schemas'
+import type { SiteShell } from '@core/page-tree/schemas'
 import { SESSION_COOKIE_NAME, hashSessionToken } from '../../../server/auth/tokens'
 import type { DbClient, DbResult } from '../../../server/db'
 import { handleCmsRequest } from '../../../server/handlers/cms'
@@ -15,7 +15,6 @@ function makeFakeDb() {
     },
   ]
   const sessions: Record<string, unknown>[] = []
-  let pages: Record<string, unknown>[] = []
 
   const handle = async <Row extends Record<string, unknown> = Record<string, unknown>>(
     strings: TemplateStringsArray,
@@ -44,6 +43,8 @@ function makeFakeDb() {
           role_description: '',
           role_is_system: true,
           role_capabilities_json: ['site.read', 'site.structure.edit','site.content.edit','site.style.edit', 'pages.edit'],
+          session_mfa_passed_at: null,
+          avatar_public_path: null,
         } as Row] : [],
         rowCount: admin ? 1 : 0,
       }
@@ -51,7 +52,7 @@ function makeFakeDb() {
     if (normalized.includes('update sessions') && normalized.includes('last_seen_at')) {
       return { rows: [], rowCount: 1 }
     }
-    // saveDraftSite insert into site (via transaction) — values[0]=name, values[1]=siteShell
+    // saveDraftSite — insert into site
     if (normalized.includes('insert into site')) {
       siteRow = {
         id: 'default',
@@ -62,39 +63,9 @@ function makeFakeDb() {
       }
       return { rows: [], rowCount: 1 }
     }
-    // saveDraftSite insert into pages (via transaction) — values[0..4]=id, title, slug, page, index
-    if (normalized.includes('insert into pages')) {
-      const page = {
-        id: values[0],
-        title: values[1],
-        slug: values[2],
-        draft_document_json: values[3],
-        sort_order: values[4],
-      }
-      const index = pages.findIndex((p) => p.id === page.id)
-      if (index >= 0) pages[index] = page
-      else pages.push(page)
-      return { rows: [], rowCount: 1 }
-    }
-    // saveDraftSite select existing page IDs for stale-page diffing
-    if (normalized === 'select id from pages') {
-      return { rows: pages.map((p) => ({ id: p.id })) as Row[], rowCount: pages.length }
-    }
-    // saveDraftSite delete a single stale page — values[0]=pageId
-    if (normalized.includes('delete from pages where id =')) {
-      pages = pages.filter((p) => String(p.id) !== String(values[0]))
-      return { rows: [], rowCount: 1 }
-    }
-    // loadDraftSite: select site — no interpolated values
+    // loadDraftSite: select site
     if (normalized.includes('select id, name, settings_json')) {
       return { rows: siteRow ? [siteRow as Row] : [], rowCount: siteRow ? 1 : 0 }
-    }
-    // loadDraftSite: select pages — no interpolated values
-    if (normalized.includes('select id, title, slug, draft_document_json')) {
-      return {
-        rows: [...pages].sort((a, b) => Number(a.sort_order) - Number(b.sort_order)) as Row[],
-        rowCount: pages.length,
-      }
     }
     throw new Error(`Unhandled SQL: ${sql}`)
   }
@@ -102,8 +73,6 @@ function makeFakeDb() {
   handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
     cb(handle as unknown as DbClient)
 
-  // Test fake: `unsafe()` forwards directly to the SQL handler. The same
-  // pattern-matching logic as the tagged-template entry path.
   handle.unsafe = async <Row extends Record<string, unknown> = Record<string, unknown>>(
     sql: string,
     params?: unknown[],
@@ -116,41 +85,24 @@ function makeFakeDb() {
     get site() { return siteRow },
     admins,
     sessions,
-    get pages() { return pages },
   })
 }
 
-function site(): SiteDocument {
+function shell(): SiteShell {
   return {
     id: 'project_1',
     name: 'CMS Site',
-    pages: [
-      {
-        id: 'page_home',
-        title: 'Home',
-        slug: 'index',
-        rootNodeId: 'root',
-        nodes: {
-          root: {
-            id: 'root',
-            moduleId: 'base.body',
-            props: {},
-            breakpointOverrides: {},
-            children: [],
-          },
-        },
-      },
-    ],
     files: [],
     visualComponents: [],
     breakpoints: [
       { id: 'desktop', label: 'Desktop', width: 1440, icon: 'monitor' },
     ],
     settings: {
-      colorTokens: {},
       shortcuts: {},
     },
     classes: {},
+    packageJson: { dependencies: {}, devDependencies: {} },
+    runtime: { dependencyLock: { version: 1, packages: {}, updatedAt: 0 }, scripts: {} },
     createdAt: 1000,
     updatedAt: 2000,
   }
@@ -195,13 +147,13 @@ describe('cms site handlers', () => {
     expect(res.status).toBe(401)
   })
 
-  it('saves and loads the draft site for an authenticated admin', async () => {
+  it('saves and loads the draft site shell for an authenticated admin', async () => {
     const db = makeFakeDb()
     const cookie = await createCookie(db)
 
     const save = await handleCmsRequest(cmsRequest('http://localhost/admin/api/cms/site', {
       method: 'PUT',
-      body: JSON.stringify({ site: site() }),
+      body: JSON.stringify({ site: shell() }),
       headers: {
         'content-type': 'application/json',
         cookie,
@@ -213,12 +165,13 @@ describe('cms site handlers', () => {
       headers: { cookie },
     }), db)
     expect(load.status).toBe(200)
-    expect(await load.json()).toMatchObject({
-      site: {
-        id: 'project_1',
-        name: 'CMS Site',
-        pages: [{ id: 'page_home', slug: 'index' }],
-      },
+    // The site endpoint returns the shell (without pages — pages are in data_rows)
+    const body = await load.json() as { site: Record<string, unknown> }
+    expect(body.site).toMatchObject({
+      id: 'project_1',
+      name: 'CMS Site',
     })
+    // No pages field in the shell response
+    expect(body.site.pages).toBeUndefined()
   })
 })

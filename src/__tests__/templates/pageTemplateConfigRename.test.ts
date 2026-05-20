@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'bun:test'
 import { makeSite, makePage, makeNode } from '../fixtures'
-import { validateSite } from '@core/persistence/validate'
+import { validateSite, validatePages } from '@core/persistence/validate'
 import { selectEntryTemplate } from '@core/templates/templateMatching'
 
 describe('pageTemplateConfig tableSlug rename', () => {
@@ -24,9 +24,10 @@ describe('pageTemplateConfig tableSlug rename', () => {
       conditions: [],
     }
 
-    const validated = validateSite(site)
+    const shell = validateSite(site)
+    const pages = validatePages(shell, site.pages)
 
-    expect(validated.pages[0].template).toEqual({
+    expect(pages[0].template).toEqual({
       enabled: true,
       context: 'entry',
       tableSlug: 'posts',
@@ -87,9 +88,10 @@ describe('pageTemplateConfig tableSlug rename', () => {
       conditions: [],
     }
 
-    const validated = validateSite(site)
+    const shell = validateSite(site)
+    const pages = validatePages(shell, site.pages)
 
     // parsePageTemplate returns null for missing tableSlug → template is dropped.
-    expect(validated.pages[0].template).toBeUndefined()
+    expect(pages[0].template).toBeUndefined()
   })
 })

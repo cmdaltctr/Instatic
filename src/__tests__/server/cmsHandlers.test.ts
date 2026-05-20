@@ -166,29 +166,53 @@ function makeFakeDb() {
       })
       return { rows: [], rowCount: 1 }
     }
-    // saveDraftSite pages (siteRepository.ts, via transaction) — values[0..4]=id, title, slug, page, index
-    if (normalized.includes('insert into pages')) {
-      const page = {
+    // setup.ts seeds the homepage via createDataRow (insert into data_rows)
+    if (normalized.includes('insert into data_rows')) {
+      const row = {
         id: values[0],
-        title: values[1],
-        slug: values[2],
-        draft_document_json: values[3],
-        sort_order: values[4],
+        table_id: values[1],
+        cells_json: values[2],
+        slug: values[3],
+        status: values[4],
+        author_user_id: values[5],
+        created_by_user_id: values[6],
+        updated_by_user_id: values[7],
       }
-      const index = pages.findIndex((p) => p.id === page.id)
-      if (index >= 0) pages[index] = page
-      else pages.push(page)
-      return { rows: [], rowCount: 1 }
+      const index = pages.findIndex((p) => p.id === row.id)
+      if (index >= 0) pages[index] = row
+      else pages.push(row)
+      return { rows: [{ id: row.id } as Row], rowCount: 1 }
     }
-    // saveDraftSite: select existing page IDs for stale-page diffing
-    if (normalized.trim() === 'select id from pages') {
-      return { rows: pages.map((p) => ({ id: p.id })) as Row[], rowCount: pages.length }
-    }
-    // saveDraftSite: delete a single stale page — values[0]=pageId
-    if (normalized.includes('delete from pages where id =')) {
-      const index = pages.findIndex((p) => String(p.id) === String(values[0]))
-      if (index >= 0) pages.splice(index, 1)
-      return { rows: [], rowCount: 1 }
+    // listDataRows for pages — select from data_rows where table_id = 'pages'
+    if (normalized.includes('from data_rows') && normalized.includes('left join users')) {
+      return {
+        rows: pages.map((p) => ({
+          ...p,
+          author_email: null,
+          author_display_name: null,
+          author_role_slug: null,
+          author_role_name: null,
+          creator_users: null,
+          created_by_email: null,
+          created_by_display_name: null,
+          created_by_role_slug: null,
+          created_by_role_name: null,
+          updated_by_email: null,
+          updated_by_display_name: null,
+          updated_by_role_slug: null,
+          updated_by_role_name: null,
+          publisher_users: null,
+          published_by_email: null,
+          published_by_display_name: null,
+          published_by_role_slug: null,
+          published_by_role_name: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          published_at: null,
+          deleted_at: null,
+        })) as Row[],
+        rowCount: pages.length,
+      }
     }
     if (normalized.includes('from users') && normalized.includes('join roles') && normalized.includes('where users.email_normalized')) {
       const rows = users
@@ -381,7 +405,10 @@ describe('CMS handlers', () => {
     expect(await json(res)).toEqual({ hasSite: false, hasAdmin: false, hasOwner: false, needsSetup: true })
   })
 
-  it('creates the first site, owner account, and a starter homepage', async () => {
+  it('creates the first site and owner account', async () => {
+    // Step 2 of unified-content-storage: the legacy pages table is gone; the
+    // home page seed will be added back in Step 3 as a data_row in the
+    // seeded 'pages' data table. For now setup creates the site + owner only.
     const db = makeFakeDb()
     const res = await handleCmsRequest(new Request('http://localhost/admin/api/cms/setup', {
       method: 'POST',
@@ -393,12 +420,6 @@ describe('CMS handlers', () => {
     expect(db.site).toHaveLength(1)
     expect(db.users).toHaveLength(1)
     expect(db.users[0]).toMatchObject({ email_normalized: 'owner@example.com', role_id: 'owner', status: 'active' })
-    // A starter homepage MUST be seeded — SiteDocumentSchema requires
-    // pages.length >= 1, otherwise the editor errors on first load.
-    expect(db.pages).toHaveLength(1)
-    expect(db.pages[0]).toMatchObject({ title: 'Home', slug: 'index', sort_order: 0 })
-    const doc = db.pages[0].draft_document_json as { rootNodeId: string; nodes: Record<string, { moduleId: string }> }
-    expect(doc.nodes[doc.rootNodeId].moduleId).toBe('base.body')
     expect(db.auditEvents[0]?.ip_address).toBeNull()
   })
 

@@ -2,6 +2,8 @@ import type { ReactElement } from 'react'
 import type { DataField } from '@core/data/schemas'
 import type { CellEditorProps } from '@admin/pages/data/types'
 import type { RelationCellProps } from './RelationCell'
+import type { PageTreeCellProps } from './PageTreeCell'
+import type { FieldSchemaCellProps } from './FieldSchemaCell'
 import { TextCell } from './TextCell'
 import { LongTextCell } from './LongTextCell'
 import { RichTextCell } from './RichTextCell'
@@ -15,6 +17,8 @@ import { UrlCell } from './UrlCell'
 import { EmailCell } from './EmailCell'
 import { MediaCell } from './MediaCell'
 import { RelationCell } from './RelationCell'
+import { PageTreeCell } from './PageTreeCell'
+import { FieldSchemaCell } from './FieldSchemaCell'
 
 
 /**
@@ -24,6 +28,10 @@ import { RelationCell } from './RelationCell'
 interface CellEditorRendererExtras {
   /** Forwarded to RelationCell — opens the relation picker dialog. */
   onOpenPicker?: RelationCellProps['onOpenPicker']
+  /** Forwarded to PageTreeCell — opens the visual editor for this row. */
+  onOpenEditor?: PageTreeCellProps['onOpenEditor']
+  /** Forwarded to FieldSchemaCell — opens the field-editor dialog. */
+  onOpenFieldEditor?: FieldSchemaCellProps['onOpenFieldEditor']
 }
 
 type CellEditorRendererProps = CellEditorProps<DataField> & CellEditorRendererExtras
@@ -36,6 +44,8 @@ type CellEditorRendererProps = CellEditorProps<DataField> & CellEditorRendererEx
 export function CellEditorRenderer({
   field,
   onOpenPicker,
+  onOpenEditor,
+  onOpenFieldEditor,
   ...rest
 }: CellEditorRendererProps): ReactElement {
   switch (field.type) {
@@ -77,6 +87,12 @@ export function CellEditorRenderer({
 
     case 'relation':
       return <RelationCell field={field} {...rest} onOpenPicker={onOpenPicker} />
+
+    case 'pageTree':
+      return <PageTreeCell field={field} {...rest} onOpenEditor={onOpenEditor} />
+
+    case 'fieldSchema':
+      return <FieldSchemaCell field={field} {...rest} onOpenFieldEditor={onOpenFieldEditor} />
 
     default: {
       // Exhaustive check: TypeScript will error here if a new field type

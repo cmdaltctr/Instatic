@@ -11,29 +11,35 @@ describe('CMS migrations', () => {
     expect(sql).toContain('create table if not exists roles')
     expect(sql).toContain('create table if not exists sessions')
     expect(sql).toContain('create table if not exists audit_events')
-    expect(sql).toContain('create table if not exists pages')
-    expect(sql).toContain('create table if not exists page_versions')
+    // Unified content store — pages and components live in data_tables/data_rows
+    expect(sql).toContain('create table if not exists data_tables')
+    expect(sql).toContain('create table if not exists data_rows')
+    expect(sql).toContain('create table if not exists data_row_versions')
     expect(sql).toContain('create table if not exists media_assets')
     expect(sql).toContain('create table if not exists published_runtime_assets')
+    // Legacy page-specific tables must NOT be present
+    expect(sql).not.toContain('create table if not exists pages ')
+    expect(sql).not.toContain('create table if not exists page_versions')
   })
 
-  it('stores draft and published page documents as jsonb', () => {
+  it('stores row content and field definitions as jsonb', () => {
     const sql = pgMigrations.map((m) => m.sql).join('\n')
-    expect(sql).toContain('draft_document_json jsonb not null')
-    expect(sql).toContain('snapshot_json jsonb not null')
+    // data_rows stores all cell values in cells_json
+    expect(sql).toContain('cells_json jsonb not null')
+    // data_tables stores field definitions in fields_json
+    expect(sql).toContain('fields_json jsonb not null')
   })
 
-  it('stores page sort order for reconstructing the editor draft', () => {
+  it('stores folder sort order for media folders', () => {
     const sql = pgMigrations.map((m) => m.sql).join('\n')
     expect(sql).toContain('sort_order integer not null default 0')
   })
 
-  it('stores ownership metadata for pages, content, media, and published versions', () => {
+  it('stores ownership metadata for content, media, and published versions', () => {
     const pgSql = pgMigrations.map((m) => m.sql).join('\n')
     const sqliteSql = sqliteMigrations.map((m) => m.sql).join('\n')
 
     for (const sql of [pgSql, sqliteSql]) {
-      expect(sql).toContain('owner_user_id text references users(id) on delete set null')
       expect(sql).toContain('created_by_user_id text references users(id) on delete set null')
       expect(sql).toContain('updated_by_user_id text references users(id) on delete set null')
       expect(sql).toContain('author_user_id text references users(id) on delete set null')

@@ -4,6 +4,7 @@
  * Composes the DataSidebar, DataCanvas, and DataInspector through
  * AdminCanvasLayout. Capability resolution mirrors ContentPage.
  */
+import { useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
 import { AdminCanvasLayout } from '@admin/layouts/AdminCanvasLayout'
@@ -22,8 +23,22 @@ import { DataSidebar } from './components/DataSidebar/DataSidebar'
 import { DataCanvas } from './components/DataCanvas/DataCanvas'
 import { DataInspector } from './components/DataInspector/DataInspector'
 import { NewTableDialog } from './components/NewTableDialog/NewTableDialog'
-import { useState } from 'react'
+import { ExportDialog } from './components/ExportDialog/ExportDialog'
+import { ImportDialog } from './components/ImportDialog/ImportDialog'
 import styles from './DataPage.module.css'
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ExportDialogOpenState {
+  kind: 'open'
+  initialScope: 'all' | 'selected'
+  selectedRowIds: string[]
+  activeTableId: string | null
+}
+
+type ExportDialogState = { kind: 'closed' } | ExportDialogOpenState
 
 // ---------------------------------------------------------------------------
 // DataPage
@@ -50,6 +65,8 @@ export function DataPage() {
   const confirmDelete = useConfirmDelete()
 
   const [newTableDialogOpen, setNewTableDialogOpen] = useState(false)
+  const [exportDialog, setExportDialog] = useState<ExportDialogState>({ kind: 'closed' })
+  const [importDialog, setImportDialog] = useState(false)
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -190,11 +207,13 @@ export function DataPage() {
             selectedTableId={workspace.selectedTableId}
             onSelectTable={workspace.selectTable}
             onCreateTable={() => setNewTableDialogOpen(true)}
-            onImportComplete={() => {
-              workspace.refreshTables().catch((err) => {
-                console.error('[DataPage] Table refresh after import failed:', err)
-              })
-            }}
+            onOpenExport={() => setExportDialog({
+              kind: 'open',
+              initialScope: 'all',
+              selectedRowIds: [],
+              activeTableId: workspace.selectedTableId,
+            })}
+            onOpenImport={() => setImportDialog(true)}
             canCreate={canCreate}
           />
         )}
@@ -212,6 +231,12 @@ export function DataPage() {
             onEditInContent={handleEditInContent}
             onOpenRow={handleOpenRow}
             onSetRowStatus={handleSetRowStatus}
+            onExportRows={(rowIds) => setExportDialog({
+              kind: 'open',
+              initialScope: 'selected',
+              selectedRowIds: rowIds,
+              activeTableId: workspace.selectedTableId,
+            })}
             canEdit={canEdit}
             canDelete={canDelete}
           />
@@ -226,6 +251,30 @@ export function DataPage() {
           onCreate={async (input) => {
             await workspace.createTable(input)
             setNewTableDialogOpen(false)
+          }}
+        />
+      )}
+
+      {exportDialog.kind === 'open' && (
+        <ExportDialog
+          open={true}
+          onClose={() => setExportDialog({ kind: 'closed' })}
+          tables={workspace.tables}
+          activeTableId={exportDialog.activeTableId}
+          selectedRowIds={exportDialog.selectedRowIds}
+          initialScope={exportDialog.initialScope}
+        />
+      )}
+
+      {importDialog && (
+        <ImportDialog
+          open={importDialog}
+          onClose={() => setImportDialog(false)}
+          onImportComplete={() => {
+            void Promise.all([workspace.refreshTables(), workspace.refreshRows()])
+              .catch((err) => {
+                console.error('[DataPage] Refresh after import failed:', err)
+              })
           }}
         />
       )}

@@ -83,6 +83,11 @@ function buildMetaFields(
       }
       if (field.allowMultiple !== undefined) entry.allowMultiple = field.allowMultiple
       result.push(entry)
+    } else if (field.type === 'pageTree' || field.type === 'fieldSchema') {
+      // Structural types — not part of the page-builder binding catalog.
+      // pageTree and fieldSchema cells hold whole documents (tree/field array),
+      // not scalar values that can be bound to a property control.
+      continue
     } else {
       result.push({ id: field.id, label: field.label, type: field.type })
     }

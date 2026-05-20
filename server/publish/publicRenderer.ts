@@ -33,9 +33,9 @@ export async function renderPublishedSnapshot(
   snapshot: PublishedPageSnapshot,
   ctx: RenderPublishedSnapshotContext,
 ): Promise<string> {
-  const page = snapshot.site.pages.find((candidate) => candidate.id === snapshot.pageId)
-  if (!page) throw new Error(`Published page "${snapshot.pageId}" not found in snapshot`)
-  await hookBus.emit('publish.before', { siteId: snapshot.site.id, pageId: snapshot.pageId })
+  const page = snapshot.site.pages.find((candidate) => candidate.id === snapshot.pageRowId)
+  if (!page) throw new Error(`Published page "${snapshot.pageRowId}" not found in snapshot`)
+  await hookBus.emit('publish.before', { siteId: snapshot.site.id, pageId: snapshot.pageRowId })
   const cssBundle = buildSiteCssBundle(snapshot.site, registry)
   // Pre-fetches run in parallel — none depends on the others and each hits
   // the DB independently. `collectFrontendInjections` is folded in here
@@ -65,7 +65,7 @@ export async function renderPublishedSnapshot(
   }).html
   const withInjections = injectFrontendAssets(baseHtml, frontendInjections)
   const filtered = await hookBus.applyFilter('publish.html', withInjections)
-  await hookBus.emit('publish.after', { siteId: snapshot.site.id, pageId: snapshot.pageId })
+  await hookBus.emit('publish.after', { siteId: snapshot.site.id, pageId: snapshot.pageRowId })
   return filtered
 }
 

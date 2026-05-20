@@ -23,6 +23,13 @@ import {
   PluginPackError,
 } from '../../../plugins/pack'
 import { loadDraftSite, saveDraftSite } from '../../../repositories/site'
+import {
+  listDataRows,
+  createDataRow,
+  saveDataRowDraft,
+} from '../../../repositories/data'
+import { pageFromRow, pageToCells } from '../../../../src/core/data/pageFromRow'
+import { visualComponentToCells, vcSlugFromName } from '../../../../src/core/data/componentFromRow'
 import { badRequest, jsonResponse, methodNotAllowed } from '../../../http'
 import { type CmsHandlerOptions, requestAuditContext } from '../shared'
 import { pluginNotFound } from './shared'
@@ -54,10 +61,56 @@ async function installPluginPackToSite(
   if (!plugin.manifest.assetBasePath) return null
   const raw = await loadPluginPackFile(uploadsDir, plugin.manifest.assetBasePath, plugin.manifest.pack.path)
   const pack = parsePluginPack(plugin.id, raw)
-  const site = await loadDraftSite(db)
-  if (!site) return null
-  const { site: nextSite, replaced } = applyPluginPackToSite(site, pack)
-  await saveDraftSite(db, nextSite, actorUserId)
+
+  const shell = await loadDraftSite(db)
+  if (!shell) return null
+
+  // Assemble a temporary SiteDocument for the pack merge function.
+  // VCs are included so applyPluginPackToSite can detect replaced ids.
+  const [pageRows, vcRows] = await Promise.all([
+    listDataRows(db, 'pages'),
+    listDataRows(db, 'components'),
+  ])
+  const { visualComponentFromRow } = await import('../../../../src/core/data/componentFromRow')
+  const existingVCs = vcRows.flatMap((r) => {
+    const vc = visualComponentFromRow(r)
+    return vc ? [vc] : []
+  })
+  const tempSiteDoc = {
+    ...shell,
+    pages: pageRows.map(pageFromRow),
+    visualComponents: existingVCs,
+  }
+
+  const { site: nextSiteDoc, replaced } = applyPluginPackToSite(tempSiteDoc, pack)
+
+  // Extract shell (strip pages and visualComponents) and save
+  const { pages: packPages, visualComponents: _vcs, ...nextShell } = nextSiteDoc
+  await saveDraftSite(db, nextShell, actorUserId)
+
+  // Upsert pack pages as data_rows
+  const existingPagesById = new Map(pageRows.map((r) => [r.id, r]))
+  for (const page of packPages) {
+    const cells = pageToCells(page)
+    if (existingPagesById.has(page.id)) {
+      await saveDataRowDraft(db, page.id, { cells, slug: page.slug }, actorUserId)
+    } else {
+      await createDataRow(db, { id: page.id, tableId: 'pages', cells, slug: page.slug }, actorUserId)
+    }
+  }
+
+  // Upsert pack VCs as data_rows
+  const existingVCsById = new Map(vcRows.map((r) => [r.id, r]))
+  for (const vc of pack.visualComponents) {
+    const cells = visualComponentToCells(vc)
+    const slug = vcSlugFromName(vc.name)
+    if (existingVCsById.has(vc.id)) {
+      await saveDataRowDraft(db, vc.id, { cells, slug }, actorUserId)
+    } else {
+      await createDataRow(db, { id: vc.id, tableId: 'components', cells, slug }, actorUserId)
+    }
+  }
+
   await createAuditEvent(db, {
     actorUserId,
     action: 'plugin.pack.install',

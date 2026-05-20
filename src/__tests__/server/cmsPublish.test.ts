@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import type { SiteDocument } from '@core/page-tree/schemas'
+import type { SiteDocument, SiteShell } from '@core/page-tree/schemas'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 import type { DbResult } from '../../../server/db'
 import { saveDraftSite } from '../../../server/repositories/site'
@@ -8,19 +8,22 @@ import {
   getPublishedPageBySlug,
   publishDraftSite,
 } from '../../../server/repositories/publish'
+import { createDataRow, saveDataRowDraft } from '../../../server/repositories/data'
+import { pageToCells } from '../../../src/core/data/pageFromRow'
 import { createFakeDb } from './dbTestFake'
 
 function createPublishFakeDb() {
   const state = {
     site: null as Record<string, unknown> | null,
-    pages: [] as Record<string, unknown>[],
-    versions: [] as Record<string, unknown>[],
+    dataRows: [] as Record<string, unknown>[],
+    dataRowVersions: [] as Record<string, unknown>[],
     runtimeAssets: [] as Record<string, unknown>[],
   }
 
   const db = createFakeDb(async (rawSql, params): Promise<DbResult> => {
     const sql = rawSql.replace(/\s+/g, ' ').trim().toLowerCase()
 
+    // saveDraftSite — insert or update site row
     if (sql.startsWith('insert into site')) {
       state.site = {
         id: 'default',
@@ -31,52 +34,90 @@ function createPublishFakeDb() {
       }
       return { rows: [], rowCount: 1 }
     }
-    if (sql.startsWith('insert into pages')) {
-      const patch = {
-        id: params[0],
-        title: params[1],
-        slug: params[2],
-        draft_document_json: params[3],
-        sort_order: params[4],
-      }
-      const index = state.pages.findIndex((p) => p.id === patch.id)
-      if (index >= 0) state.pages[index] = { ...state.pages[index], ...patch }
-      else state.pages.push({ ...patch, status: 'draft', active_version_id: null })
-      return { rows: [], rowCount: 1 }
-    }
-    if (sql === 'select id from pages') {
-      return { rows: state.pages.map((p) => ({ id: p.id })), rowCount: state.pages.length }
-    }
-    if (sql.startsWith('delete from pages where id =')) {
-      const id = params[0] as string
-      state.pages = state.pages.filter((p) => p.id !== id)
-      return { rows: [], rowCount: 1 }
-    }
+    // loadDraftSite — select site row
     if (sql.startsWith('select id, name, settings_json')) {
       return { rows: state.site ? [state.site] : [], rowCount: state.site ? 1 : 0 }
     }
-    if (sql.startsWith('select id, title, slug, draft_document_json')) {
-      return {
-        rows: [...state.pages].sort((a, b) => Number(a.sort_order) - Number(b.sort_order)),
-        rowCount: state.pages.length,
+    // createDataRow — insert into data_rows returning id
+    if (sql.startsWith('insert into data_rows')) {
+      const row = {
+        id: params[0],
+        table_id: params[1],
+        cells_json: params[2],
+        slug: params[3],
+        status: params[4],
+        author_user_id: params[5],
+        created_by_user_id: params[6],
+        updated_by_user_id: params[7],
+        active_version_id: null,
+        published_by_user_id: null,
+        published_at: null,
+        created_at: new Date('2026-01-01').toISOString(),
+        updated_at: new Date('2026-01-01').toISOString(),
+        deleted_at: null,
       }
+      const idx = state.dataRows.findIndex((r) => r.id === row.id)
+      if (idx >= 0) state.dataRows[idx] = row
+      else state.dataRows.push(row)
+      return { rows: [{ id: row.id }], rowCount: 1 }
     }
-    if (sql.startsWith('select coalesce(max(version), 0)')) {
-      const pageId = params[0]
-      const pageVersions = state.versions.filter((v) => v.page_id === pageId)
-      const nextVersion = Math.max(0, ...pageVersions.map((v) => Number(v.version))) + 1
+    // saveDataRowDraft — update data_rows set cells_json, slug, updated_by_user_id
+    if (sql.startsWith('update data_rows set cells_json')) {
+      const row = state.dataRows.find((r) => r.id === params[3])
+      if (row) {
+        row.cells_json = params[0]
+        row.slug = params[1]
+        row.updated_by_user_id = params[2]
+      }
+      return { rows: [], rowCount: row ? 1 : 0 }
+    }
+    // listDataRows for pages — select from data_rows where table_id = 'pages'
+    if (sql.includes('from data_rows') && sql.includes('left join users')) {
+      const rows = state.dataRows
+        .filter((r) => r.deleted_at == null)
+        .map((r) => ({
+          ...r,
+          author_email: null,
+          author_display_name: null,
+          author_role_slug: null,
+          author_role_name: null,
+          created_by_email: null,
+          created_by_display_name: null,
+          created_by_role_slug: null,
+          created_by_role_name: null,
+          updated_by_email: null,
+          updated_by_display_name: null,
+          updated_by_role_slug: null,
+          updated_by_role_name: null,
+          published_by_email: null,
+          published_by_display_name: null,
+          published_by_role_slug: null,
+          published_by_role_name: null,
+        }))
+      return { rows, rowCount: rows.length }
+    }
+    // nextVersionNumber — max(version_number) + 1
+    if (sql.startsWith('select coalesce(max(version_number)')) {
+      const rowId = params[0] as string
+      const rowVersions = state.dataRowVersions.filter((v) => v.row_id === rowId)
+      const nextVersion = Math.max(0, ...rowVersions.map((v) => Number(v.version_number))) + 1
       return { rows: [{ next_version: nextVersion }], rowCount: 1 }
     }
-    if (sql.startsWith('insert into page_versions')) {
-      state.versions.push({
+    // insert into data_row_versions
+    if (sql.startsWith('insert into data_row_versions')) {
+      state.dataRowVersions.push({
         id: params[0],
-        page_id: params[1],
-        version: params[2],
-        snapshot_json: params[3],
-        published_by_user_id: params[4],
+        row_id: params[1],
+        version_number: params[2],
+        cells_json: params[3],
+        slug: params[4],
+        snapshot_json: params[5],
+        published_by_user_id: params[6],
+        published_at: new Date('2026-01-03').toISOString(),
       })
       return { rows: [], rowCount: 1 }
     }
+    // savePublishedRuntimeAssets — insert into published_runtime_assets
     if (sql.startsWith('insert into published_runtime_assets')) {
       state.runtimeAssets.push({
         id: params[0],
@@ -88,37 +129,42 @@ function createPublishFakeDb() {
       })
       return { rows: [], rowCount: 1 }
     }
-    if (sql.startsWith('update pages set active_version_id')) {
-      const page = state.pages.find((p) => p.id === params[2])
-      if (page) {
-        page.active_version_id = params[0]
-        page.status = 'published'
-        page.updated_by_user_id = params[1]
+    // update data_rows set active_version_id = $1 ... (after publish)
+    // SQL params: $1=versionId, $2=publishedByUserId, $3=updatedByUserId, $4=rowId
+    if (sql.startsWith('update data_rows') && sql.includes('active_version_id')) {
+      const versionId = params[0] as string
+      const publishedBy = params[1] as string
+      const rowId = params[3] as string
+      const row = state.dataRows.find((r) => r.id === rowId)
+      if (row) {
+        row.active_version_id = versionId
+        row.status = 'published'
+        row.published_by_user_id = publishedBy
+        row.published_at = new Date('2026-01-03').toISOString()
       }
-      return { rows: [], rowCount: page ? 1 : 0 }
+      return { rows: [], rowCount: row ? 1 : 0 }
     }
-    if (sql.startsWith('select page_versions.snapshot_json')) {
-      const page = state.pages.find((p) => p.slug === params[0] && p.status === 'published')
-      const version = page
-        ? state.versions.find((v) => v.id === page.active_version_id)
-        : undefined
+    // getPublishedPageBySlug — join data_rows + data_row_versions
+    if (sql.includes('select data_row_versions.snapshot_json') && sql.includes('data_rows.slug')) {
+      const slug = params[0] as string
+      const row = state.dataRows.find((r) => r.slug === slug && r.status === 'published')
+      const version = row ? state.dataRowVersions.find((v) => v.id === row.active_version_id) : null
       return {
         rows: version ? [{ snapshot_json: version.snapshot_json }] : [],
         rowCount: version ? 1 : 0,
       }
     }
-    if (sql.startsWith('select pages.id as page_id')) {
-      const rows = state.pages
-        .filter((page) => page.status === 'published' && page.active_version_id)
-        .map((page) => {
-          const version = state.versions.find((v) => v.id === page.active_version_id)
-          return version
-            ? {
-                page_id: page.id,
-                snapshot_json: version.snapshot_json,
-                published_at: version.published_at ?? new Date('2026-01-03').toISOString(),
-              }
-            : null
+    // getDraftPublishStatus — published rows join
+    if (sql.includes('from data_rows') && sql.includes('join data_row_versions') && sql.includes('created_at asc')) {
+      const rows = state.dataRows
+        .filter((r) => r.status === 'published' && r.active_version_id && !r.deleted_at)
+        .map((r) => {
+          const ver = state.dataRowVersions.find((v) => v.id === r.active_version_id)
+          return ver ? {
+            row_id: r.id,
+            snapshot_json: ver.snapshot_json,
+            published_at: ver.published_at,
+          } : null
         })
         .filter(Boolean)
       return { rows, rowCount: rows.length }
@@ -129,68 +175,88 @@ function createPublishFakeDb() {
   return { state, db }
 }
 
-function site(text: string): SiteDocument {
+function makeSiteShell(overrides: Partial<SiteShell> = {}): SiteShell {
   return {
     id: 'project_1',
     name: 'Published Site',
-    pages: [
-      {
-        id: 'page_home',
-        title: 'Home',
-        slug: 'index',
-        rootNodeId: 'root',
-        nodes: {
-          root: {
-            id: 'root',
-            moduleId: 'base.body',
-            props: {},
-            breakpointOverrides: {},
-            children: ['text_1'],
-          },
-          text_1: {
-            id: 'text_1',
-            moduleId: 'base.text',
-            props: { text, tag: 'h1' },
-            breakpointOverrides: {},
-            children: [],
-          },
-        },
-      },
-    ],
-    files: [],
+    files: overrides.files ?? [],
     visualComponents: [],
-    breakpoints: [
-      { id: 'desktop', label: 'Desktop', width: 1440, icon: 'monitor' },
-    ],
-    settings: {
-      colorTokens: {},
-      shortcuts: {},
-    },
+    breakpoints: [{ id: 'desktop', label: 'Desktop', width: 1440, icon: 'monitor' }],
+    settings: { shortcuts: {} },
     classes: {},
+    packageJson: { dependencies: {}, devDependencies: {} },
+    runtime: normalizeSiteRuntimeConfig(overrides.runtime),
     createdAt: 1000,
     updatedAt: 2000,
+    ...overrides,
   }
+}
+
+function makeHomePage(text: string) {
+  return {
+    id: 'page_home',
+    title: 'Home',
+    slug: 'index',
+    rootNodeId: 'root',
+    nodes: {
+      root: {
+        id: 'root',
+        moduleId: 'base.body',
+        props: {},
+        breakpointOverrides: {},
+        children: ['text_1'],
+        classIds: [],
+      },
+      text_1: {
+        id: 'text_1',
+        moduleId: 'base.text',
+        props: { text, tag: 'h1' },
+        breakpointOverrides: {},
+        children: [],
+        classIds: [],
+      },
+    },
+  }
+}
+
+async function seedSiteAndPage(
+  db: ReturnType<typeof createPublishFakeDb>['db'],
+  text: string,
+) {
+  const shell = makeSiteShell()
+  await saveDraftSite(db, shell)
+  const page = makeHomePage(text)
+  await createDataRow(db, {
+    id: page.id,
+    tableId: 'pages',
+    cells: pageToCells(page),
+    slug: page.slug,
+  }, 'admin_1')
 }
 
 describe('CMS publishing', () => {
   it('publishes draft pages as immutable active snapshots', async () => {
     const { state, db } = createPublishFakeDb()
-    await saveDraftSite(db, site('Published headline'))
+    await seedSiteAndPage(db, 'Published headline')
 
     const result = await publishDraftSite(db, 'admin_1')
     const published = await getPublishedPageBySlug(db, 'index')
 
     expect(result).toMatchObject({ publishedPages: 1 })
-    expect(state.versions).toHaveLength(1)
+    expect(state.dataRowVersions).toHaveLength(1)
     expect(published?.site.pages[0].nodes.text_1.props.text).toBe('Published headline')
   })
 
   it('does not expose later draft changes until another publish occurs', async () => {
     const { db } = createPublishFakeDb()
-    await saveDraftSite(db, site('Public version'))
+    await seedSiteAndPage(db, 'Public version')
     await publishDraftSite(db, 'admin_1')
 
-    await saveDraftSite(db, site('Draft only'))
+    // Update the draft page text
+    await saveDataRowDraft(db, 'page_home', {
+      cells: pageToCells({ ...makeHomePage('Draft only') }),
+      slug: 'index',
+    }, 'admin_1')
     const published = await getPublishedPageBySlug(db, 'index')
 
     expect(published?.site.pages[0].nodes.text_1.props.text).toBe('Public version')
@@ -198,7 +264,7 @@ describe('CMS publishing', () => {
 
   it('reports that the current draft matches the active published snapshots after publishing', async () => {
     const { db } = createPublishFakeDb()
-    await saveDraftSite(db, site('Public version'))
+    await seedSiteAndPage(db, 'Public version')
     await publishDraftSite(db, 'admin_1')
 
     const status = await getDraftPublishStatus(db)
@@ -214,9 +280,14 @@ describe('CMS publishing', () => {
 
   it('reports that the current draft no longer matches after a later draft save', async () => {
     const { db } = createPublishFakeDb()
-    await saveDraftSite(db, site('Public version'))
+    await seedSiteAndPage(db, 'Public version')
     await publishDraftSite(db, 'admin_1')
-    await saveDraftSite(db, site('Draft only'))
+
+    // Update the draft to create mismatch
+    await saveDataRowDraft(db, 'page_home', {
+      cells: pageToCells({ ...makeHomePage('Draft only') }),
+      slug: 'index',
+    }, 'admin_1')
 
     const status = await getDraftPublishStatus(db)
 
@@ -230,27 +301,34 @@ describe('CMS publishing', () => {
 
   it('stores built runtime assets with the published page version', async () => {
     const { state, db } = createPublishFakeDb()
-    const draft = site('Runtime page')
-    draft.files = [
-      {
-        id: 'entry',
-        path: 'src/scripts/entry.ts',
-        type: 'script',
-        content: `window.__publishedRuntime = 'ok'`,
-        createdAt: 1,
-        updatedAt: 1,
-      },
-    ]
-    draft.packageJson = { dependencies: {}, devDependencies: {} }
-    draft.runtime = normalizeSiteRuntimeConfig({
-      scripts: {
-        entry: {
-          placement: 'body-end',
-          priority: 10,
+    const shell = makeSiteShell({
+      files: [
+        {
+          id: 'entry',
+          path: 'src/scripts/entry.ts',
+          type: 'script',
+          content: `window.__publishedRuntime = 'ok'`,
+          createdAt: 1,
+          updatedAt: 1,
         },
-      },
+      ],
+      runtime: normalizeSiteRuntimeConfig({
+        scripts: {
+          entry: {
+            placement: 'body-end',
+            priority: 10,
+          },
+        },
+      }),
     })
-    await saveDraftSite(db, draft)
+    await saveDraftSite(db, shell)
+    const page = makeHomePage('Runtime page')
+    await createDataRow(db, {
+      id: page.id,
+      tableId: 'pages',
+      cells: pageToCells(page),
+      slug: page.slug,
+    }, 'admin_1')
 
     await publishDraftSite(db, 'admin_1')
     const published = await getPublishedPageBySlug(db, 'index')

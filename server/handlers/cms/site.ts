@@ -1,20 +1,18 @@
 /**
- * Draft-site read/write endpoint.
+ * Draft-site shell read/write endpoint.
  *
- *   GET /admin/api/cms/site — load the entire draft `SiteDocument` (gated
- *                              by `site.read`). Used by the editor to
- *                              hydrate the in-memory store on boot.
- *   PUT /admin/api/cms/site — replace the broad draft `SiteDocument`. The
- *                              caller needs *at least one* of the three
- *                              site-write capabilities
- *                              (`site.structure.edit` / `site.content.edit` /
- *                              `site.style.edit`); a granular diff between
- *                              the existing draft and the incoming one then
- *                              rejects categories of change the caller is
- *                              not allowed to make. This is what lets a
- *                              "Client" role (`site.content.edit` only) save
- *                              copy edits without smuggling structural or
- *                              style changes through.
+ *   GET /admin/api/cms/site — load the draft site shell (gated by `site.read`).
+ *                              Returns the SiteShell without pages; the client
+ *                              adapter fetches pages separately via GET /pages.
+ *   PUT /admin/api/cms/site — replace the draft site shell. Requires at least
+ *                              one of the three site-write capabilities. A
+ *                              granular diff between the existing shell and the
+ *                              incoming one rejects change categories the caller
+ *                              is not allowed to make.
+ *
+ * Pages are intentionally excluded from this endpoint. They are managed by
+ * the `/admin/api/cms/pages` endpoint so they can be reconciled atomically
+ * without the shell round-trip.
  */
 import type { DbClient } from '../../db/client'
 import { requireAnyCapability, requireCapability } from '../../auth/authz'
@@ -37,22 +35,21 @@ export async function handleSiteRoutes(req: Request, db: DbClient): Promise<Resp
   if (user instanceof Response) return user
 
   if (req.method === 'GET') {
-    const site = await loadDraftSite(db)
-    if (!site) return jsonResponse({ error: 'draft site not found' }, { status: 404 })
-    return jsonResponse({ site })
+    const shell = await loadDraftSite(db)
+    if (!shell) return jsonResponse({ error: 'draft site not found' }, { status: 404 })
+    return jsonResponse({ site: shell })
   }
 
   if (req.method === 'PUT') {
     const body = await readJsonObject(req)
     try {
-      const nextSite = validateSite(body.site)
-      // Granular diff gate: walk the changes between the saved draft and the
-      // incoming one, and reject if any change category isn't covered by the
-      // caller's capabilities. A full editor (all three caps) sails through
-      // without inspection — the diff walk is short-circuited.
-      const previousSite = await loadDraftSite(db)
+      const nextShell = validateSite(body.site)
+      // Granular diff gate: walk the changes between the saved draft shell and
+      // the incoming one, and reject if any change category isn't covered by
+      // the caller's capabilities.
+      const previousShell = await loadDraftSite(db)
       try {
-        validateSiteWriteDiff(previousSite, nextSite, user.capabilities)
+        validateSiteWriteDiff(previousShell, nextShell, user.capabilities)
       } catch (err) {
         if (err instanceof ForbiddenSiteChangeError) {
           return jsonResponse(
@@ -62,7 +59,7 @@ export async function handleSiteRoutes(req: Request, db: DbClient): Promise<Resp
         }
         throw err
       }
-      await saveDraftSite(db, nextSite, user.id)
+      await saveDraftSite(db, nextShell, user.id)
       return jsonResponse({ ok: true })
     } catch (err) {
       if (err instanceof SiteValidationError) return badRequest(err.message)

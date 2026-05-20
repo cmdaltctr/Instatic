@@ -12,6 +12,9 @@
  *                              conflict); was updateContentEntryCollection
  *   updateDataRowStatus      — flip between draft / unpublished
  *   updateDataRowAuthor      — reassign the author user id
+ *   upsertDataRow            — id-preserving upsert for merge-overwrite / replace
+ *   insertDataRowIfAbsent    — insert only if id absent; used by merge-add
+ *   replaceDataRow           — plain insert after wipe; used by replace strategy
  *
  * Mutations (other than soft-delete) always RETURN id only, then re-read the
  * hydrated row through `getDataRow` so callers receive consistently populated
@@ -530,4 +533,103 @@ export async function updateDataRowAuthor(
     returning id
   `
   return rows[0] ? getDataRow(db, rows[0].id) : null
+}
+
+// ---------------------------------------------------------------------------
+// Bundle import helpers
+// ---------------------------------------------------------------------------
+
+export interface DataRowImportInput {
+  id: string
+  tableId: string
+  cells: DataRowCells
+  slug: string
+  status: DataRowStatus
+  publishedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+/**
+ * Upsert a row preserving its original id, status, and timestamps. Used by
+ * the `merge-overwrite` and `replace` import strategies.
+ *
+ * User reference columns (author, createdBy, etc.) are intentionally dropped
+ * on import: the user ids from the source instance will not exist in the target.
+ */
+export async function upsertDataRow(
+  db: DbClient,
+  input: DataRowImportInput,
+): Promise<void> {
+  const createdAt = input.createdAt ?? new Date().toISOString()
+  const updatedAt = input.updatedAt ?? new Date().toISOString()
+  await db`
+    insert into data_rows (
+      id, table_id, cells_json, slug, status,
+      published_at, created_at, updated_at
+    )
+    values (
+      ${input.id}, ${input.tableId}, ${input.cells}, ${input.slug}, ${input.status},
+      ${input.publishedAt}, ${createdAt}, ${updatedAt}
+    )
+    on conflict (id) do update
+      set table_id    = excluded.table_id,
+          cells_json  = excluded.cells_json,
+          slug        = excluded.slug,
+          status      = excluded.status,
+          published_at = excluded.published_at,
+          updated_at  = excluded.updated_at
+  `
+}
+
+/**
+ * Insert a row only if its id does not already exist. Returns `true` when the
+ * row was inserted, `false` when it was skipped (id conflict). Used by the
+ * `merge-add` import strategy.
+ *
+ * RETURNING id is supported by both Postgres and SQLite, making this dialect-
+ * neutral while still reporting whether an insert actually happened.
+ */
+export async function insertDataRowIfAbsent(
+  db: DbClient,
+  input: DataRowImportInput,
+): Promise<boolean> {
+  const createdAt = input.createdAt ?? new Date().toISOString()
+  const updatedAt = input.updatedAt ?? new Date().toISOString()
+  const { rows } = await db<{ id: string }>`
+    insert into data_rows (
+      id, table_id, cells_json, slug, status,
+      published_at, created_at, updated_at
+    )
+    values (
+      ${input.id}, ${input.tableId}, ${input.cells}, ${input.slug}, ${input.status},
+      ${input.publishedAt}, ${createdAt}, ${updatedAt}
+    )
+    on conflict (id) do nothing
+    returning id
+  `
+  return rows.length > 0
+}
+
+/**
+ * Plain INSERT with no conflict handling. Assumes the caller has already wiped
+ * the table (as the `replace` strategy does). Returns void — the caller does
+ * not need the inserted row shape.
+ */
+export async function replaceDataRow(
+  db: DbClient,
+  input: DataRowImportInput,
+): Promise<void> {
+  const createdAt = input.createdAt ?? new Date().toISOString()
+  const updatedAt = input.updatedAt ?? new Date().toISOString()
+  await db`
+    insert into data_rows (
+      id, table_id, cells_json, slug, status,
+      published_at, created_at, updated_at
+    )
+    values (
+      ${input.id}, ${input.tableId}, ${input.cells}, ${input.slug}, ${input.status},
+      ${input.publishedAt}, ${createdAt}, ${updatedAt}
+    )
+  `
 }

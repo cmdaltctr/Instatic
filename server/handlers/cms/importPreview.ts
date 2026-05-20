@@ -1,0 +1,105 @@
+/**
+ * Import preview endpoint.
+ *
+ *   POST /admin/api/cms/import/preview
+ *
+ * Accepts a `SiteBundle` body and returns a read-only diff (`BundlePreview`)
+ * that describes what a subsequent import would do — without actually changing
+ * any data. The operator uses this to review the bundle contents before
+ * committing an import.
+ *
+ * For each table in the bundle the preview reports:
+ *   - `inBundle`     — how many rows the bundle carries for this table
+ *   - `willReplace`  — bundle rows whose id already exists locally
+ *   - `willAdd`      — bundle rows whose id does not exist locally
+ *   - `currentLocal` — how many rows the local table currently has
+ *
+ * Requires `site.read` capability (read-only operation).
+ */
+import type { DbClient } from '../../db/client'
+import { requireCapability } from '../../auth/authz'
+import { listDataRows } from '../../repositories/data/rows'
+import { listDataTables } from '../../repositories/data/tables'
+import { jsonResponse, readJsonObject } from '../../http'
+import { parseValue } from '@core/utils/typeboxHelpers'
+import {
+  SiteBundleSchema,
+  BundlePreviewSchema,
+  type BundlePreview,
+} from '@core/data/bundleSchema'
+import { CMS_API_PREFIX } from './shared'
+
+export async function handleImportPreviewRoute(
+  req: Request,
+  db: DbClient,
+): Promise<Response | null> {
+  const url = new URL(req.url)
+  if (url.pathname !== `${CMS_API_PREFIX}/import/preview`) return null
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, { status: 405 })
+
+  const user = await requireCapability(req, db, 'site.read')
+  if (user instanceof Response) return user
+
+  const raw = await readJsonObject(req)
+  let bundle
+  try {
+    bundle = parseValue(SiteBundleSchema, raw)
+  } catch {
+    return jsonResponse({ error: 'Invalid bundle: body does not conform to SiteBundleSchema' }, { status: 400 })
+  }
+
+  // Fetch current local tables to know which ones exist
+  const localTables = await listDataTables(db)
+  const localTableIds = new Set(localTables.map((t) => t.id))
+
+  // For each bundle table, compute the diff against local row ids
+  const tableEntries = await Promise.all(
+    bundle.tables.map(async (table) => {
+      // Rows in the bundle for this table
+      const bundleRowIdsForTable = bundle.rows
+        .filter((r) => r.tableId === table.id)
+        .map((r) => r.id)
+
+      // Local rows for this table (0 if the table doesn't exist locally yet)
+      let localRowIds: Set<string>
+      if (localTableIds.has(table.id)) {
+        const localRows = await listDataRows(db, table.id)
+        localRowIds = new Set(localRows.map((r) => r.id))
+      } else {
+        localRowIds = new Set()
+      }
+
+      const willReplace = bundleRowIdsForTable.filter((id) => localRowIds.has(id)).length
+      const willAdd = bundleRowIdsForTable.filter((id) => !localRowIds.has(id)).length
+
+      return {
+        id: table.id,
+        name: table.name,
+        kind: table.kind,
+        inBundle: bundleRowIdsForTable.length,
+        willReplace,
+        willAdd,
+        currentLocal: localRowIds.size,
+      }
+    }),
+  )
+
+  const preview: BundlePreview = {
+    meta: {
+      exportedAt: bundle.exportedAt,
+      sourceSiteName: bundle.sourceSiteName ?? null,
+      schemaVersion: bundle.schemaVersion,
+    },
+    tables: tableEntries,
+    totals: {
+      rows: bundle.rows.length,
+      mediaFiles: bundle.media?.length ?? 0,
+      mediaEmbedded: (bundle.media?.length ?? 0) > 0,
+    },
+  }
+
+  // Paranoia: validate the shape before returning
+  parseValue(BundlePreviewSchema, preview)
+
+  return jsonResponse(preview)
+}

@@ -13,6 +13,7 @@ import {
 } from '@core/persistence'
 import type {
   DataTable,
+  DataTableListItem,
   DataRow,
   DataRowCells,
   CreateDataTableInput,
@@ -29,11 +30,11 @@ function updateRowList(rows: DataRow[], row: DataRow): DataRow[] {
 }
 
 export interface DataWorkspace {
-  tables: DataTable[]
+  tables: DataTableListItem[]
   loadingTables: boolean
   tablesError: string | null
   selectedTableId: string | null
-  selectedTable: DataTable | null
+  selectedTable: DataTableListItem | null
   selectTable: (tableId: string | null) => void
   refreshTables: () => Promise<void>
   createTable: (input: CreateDataTableInput) => Promise<DataTable>
@@ -54,7 +55,7 @@ export interface DataWorkspace {
 }
 
 export function useDataWorkspace(initialTableSlug?: string): DataWorkspace {
-  const [tables, setTables] = useState<DataTable[]>([])
+  const [tables, setTables] = useState<DataTableListItem[]>([])
   // Initialize to true — the on-mount effect starts a fetch immediately, so
   // the loading state is already correct with no synchronous setState needed.
   const [loadingTables, setLoadingTables] = useState(true)
@@ -190,7 +191,8 @@ export function useDataWorkspace(initialTableSlug?: string): DataWorkspace {
   const createTable = useCallback(async (input: CreateDataTableInput): Promise<DataTable> => {
     setTablesError(null)
     const table = await createCmsDataTable({ ...input, kind: 'data' })
-    setTables((current) => [...current, table])
+    // Newly created table has no rows yet.
+    setTables((current) => [...current, { ...table, rowCount: 0 }])
     setSelectedTableId(table.id)
     setRows([])
     setSelectedRowId(null)
@@ -203,7 +205,11 @@ export function useDataWorkspace(initialTableSlug?: string): DataWorkspace {
   ): Promise<DataTable> => {
     setTablesError(null)
     const table = await updateCmsDataTable(tableId, input)
-    setTables((current) => current.map((t) => (t.id === tableId ? table : t)))
+    // Preserve the existing rowCount — the update endpoint returns a plain
+    // DataTable (no rowCount), so we carry it forward from the current entry.
+    setTables((current) => current.map((t) =>
+      t.id === tableId ? { ...table, rowCount: t.rowCount } : t,
+    ))
     return table
   }, [])
 
