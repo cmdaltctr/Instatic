@@ -22,7 +22,8 @@
  * SSR / test-friendly: pure functions, no globals beyond the `WeakMap`
  * caches, which are GC'd automatically when the underlying arrays are.
  */
-import type { Page, SiteDocument } from './schemas'
+import type { Page } from './page'
+import type { SiteDocument } from './siteDocument'
 import type { VisualComponent } from '@core/visualComponents/schemas'
 
 // ---------------------------------------------------------------------------

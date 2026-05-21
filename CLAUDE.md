@@ -228,6 +228,24 @@ The 11 named tree-mutation store actions (`insertNode`, `deleteNode`, `updateNod
 
 ---
 
+## Barrel imports
+
+Modules that publish a public API (an `index.ts` in a folder under `src/core/`, `src/ui/components/<Component>/`, etc.) own that barrel as their canonical entrypoint. **Everything outside the module imports through the barrel; internal files within the module import from each other via relative paths.**
+
+Examples:
+- ✅ Outside `src/core/page-tree/`: `import { Page, PageNode } from '@core/page-tree'`
+- ✅ Inside `src/core/page-tree/`: `import type { Page } from './page'` (relative, NEVER `from '@core/page-tree'`)
+- ❌ Outside the module: `import { Page } from '@core/page-tree/page'` — bypasses the barrel
+
+Why barrel-only:
+- **Refactor friendliness.** Splitting, merging, or renaming files inside a module is an implementation detail that should not ripple to callers.
+- **One canonical public API.** `index.ts` is the contract. If something isn't re-exported there, it isn't part of the module's public surface — fix the barrel rather than reaching past it.
+- **Cycle hygiene.** Internal files going through the barrel (`@core/<self>`) creates import cycles. The relative-import rule for in-module cross-references avoids that landmine entirely.
+
+This is currently a convention, not a gated rule. If you see direct deep imports (`@core/<module>/<file>`) from outside the module, treat them as drift and migrate them to the barrel as part of whatever change you're making.
+
+---
+
 ## Code quality bar
 
 - **Clear logic over clever logic.** Straight-line code beats a generic abstraction with two callers.

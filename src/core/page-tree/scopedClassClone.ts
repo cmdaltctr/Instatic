@@ -18,7 +18,7 @@
  */
 
 import { nanoid } from 'nanoid'
-import type { CSSClass } from './schemas'
+import type { CSSClass } from './cssClass'
 
 /**
  * For a set of nodes being cloned (oldId → newId), produce:

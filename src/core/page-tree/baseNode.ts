@@ -102,7 +102,7 @@ export type BaseNode = Static<typeof BaseNodeSchema>
  * Parse and filter a raw propBindings map. Invalid entries are silently
  * dropped; returns `undefined` when no valid entries remain.
  *
- * Use this at the raw-data parsing layer (page-tree/schemas and
+ * Use this at the raw-data parsing layer (page-tree/pageNode and
  * visualComponents/schemas) instead of relying on schema-level transforms.
  */
 export function parsePropBindings(

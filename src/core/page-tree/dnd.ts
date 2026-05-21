@@ -1,4 +1,4 @@
-import type { PageNode } from './schemas'
+import type { PageNode } from './pageNode'
 import type { NodeTree } from './treeSchema'
 import { getParent, isAncestor } from './selectors'
 

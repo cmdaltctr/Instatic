@@ -23,7 +23,7 @@
  * automatically updates every ref in the tree (no per-ref node label sync).
  */
 
-import type { PageNode } from './schemas'
+import type { PageNode } from './pageNode'
 import type { VisualComponent } from '@core/visualComponents/schemas'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
 import { classNamesForClassIds, type ClassRegistry } from './classNames'

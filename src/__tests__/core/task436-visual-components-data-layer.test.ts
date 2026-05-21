@@ -47,7 +47,7 @@ import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { useEditorStore } from '@site/store/store'
 import { validateSite, validateVisualComponents } from '@core/persistence/validate'
-import type { SiteDocument } from '@core/page-tree/schemas'
+import type { SiteDocument } from '@core/page-tree'
 import { safeParseValue } from '@core/utils/typeboxHelpers'
 
 // ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ const VC_SCHEMAS_TS    = join(ROOT, 'src/core/visualComponents/schemas.ts')
 const NAME_VALIDATION  = join(ROOT, 'src/core/visualComponents/nameValidation.ts')
 const RECURSION_GUARD  = join(ROOT, 'src/core/visualComponents/recursionGuard.ts')
 const VC_SLICE_TS      = join(ROOT, 'src/admin/pages/site/store/slices/visualComponentsSlice.ts')
-const PAGE_TREE_SCHEMAS = join(ROOT, 'src/core/page-tree/schemas.ts')
+const PAGE_TREE_SCHEMAS = join(ROOT, 'src/core/page-tree/siteDocument.ts')
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded functional modules (fail gracefully if not yet implemented)

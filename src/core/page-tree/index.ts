@@ -1,15 +1,44 @@
-export type {
-  CSSClass,
-  Page,
-  PageNode,
-  SiteShell,
-  SiteDocument,
-  Breakpoint,
-  SiteSettings,
-  PageTemplateConfig,
-  DynamicPropBinding,
-} from './schemas'
+// ---------------------------------------------------------------------------
+// Barrel — the canonical public API for the page-tree module.
+//
+// Everything outside `src/core/page-tree/` MUST import from `@core/page-tree`.
+// Direct deep imports (`@core/page-tree/<file>`) are reserved for internal
+// cross-references within the module itself — they exist so internal files
+// don't go through the barrel and create import cycles. CLAUDE.md documents
+// this pattern.
+// ---------------------------------------------------------------------------
 
+// Schemas — exported as both runtime constants (for `parseValue` / `Value.Check`)
+// and types (via Static<typeof X>).
+export { PageNodeSchema } from './pageNode'
+export { PageSchema } from './page'
+export { CSSClassSchema } from './cssClass'
+export { SiteShellSchema } from './siteDocument'
+
+// Types — derived from schemas. Schemas are the source of truth.
+export type { Breakpoint } from './breakpoint'
+export type { DynamicPropBinding } from './dynamicBinding'
+export type { PageTemplateConfig } from './pageTemplate'
+export type { PageNode } from './pageNode'
+export type { Page } from './page'
+export type { CSSPropertyBag } from './cssPropertyBag'
+export type { CSSClass } from './cssClass'
+export type { SiteSettings } from './siteSettings'
+export type { SiteShell, SiteDocument } from './siteDocument'
+
+// Defaults
+export { DEFAULT_BREAKPOINTS } from './breakpoint'
+export { DEFAULT_SITE_SETTINGS } from './siteSettings'
+
+// Tolerant parsers — boundary helpers for persisted data.
+export { parsePage } from './page'
+export { parseSiteDocument } from './siteDocument'
+
+// Re-export visualComponent parser for the persistence layer.
+// (Single canonical location: `@core/visualComponents/schemas`.)
+export { parseVisualComponent } from '@core/visualComponents/schemas'
+
+// Other re-exports unrelated to the schemas split
 export type { FontEntry } from '@core/fonts/schemas'
 
 export type { BaseNode } from './baseNode'
@@ -27,11 +56,6 @@ export type {
   FrameworkTypographyClassGenerator,
   FrameworkTypographyGroup,
 } from '@core/framework/schemas'
-
-export {
-  DEFAULT_BREAKPOINTS,
-  DEFAULT_SITE_SETTINGS,
-} from './schemas'
 
 export {
   createNode,

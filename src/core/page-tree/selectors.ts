@@ -1,6 +1,6 @@
 import type { BaseNode } from './baseNode'
 import type { NodeTree } from './treeSchema'
-import type { PageNode } from './schemas'
+import type { PageNode } from './pageNode'
 
 /**
  * Pure selector functions for the page tree.

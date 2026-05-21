@@ -1,4 +1,4 @@
-import type { Page } from './schemas'
+import type { Page } from './page'
 
 const RESERVED_PUBLIC_SLUGS = new Set(['admin', 'api', 'assets', 'health'])
 

@@ -16,7 +16,7 @@
  *      repo (`NodeTree<TNode>`). The three schema files that define node shapes
  *      must NOT contain the string `childNodes`:
  *        - `src/core/page-tree/baseNode.ts`
- *        - `src/core/page-tree/schemas.ts`
+ *        - `src/core/page-tree/pageNode.ts`
  *        - `src/core/visualComponents/schemas.ts`
  *
  * Failure references:
@@ -159,7 +159,7 @@ describe('Gate 2 — named tree-mutation actions in site/nodeActions.ts have no 
 
 const SCHEMA_FILES: Array<[string, string]> = [
   ['src/core/page-tree/baseNode.ts', 'BaseNode — shared structural base'],
-  ['src/core/page-tree/schemas.ts', 'Page + PageNode schemas'],
+  ['src/core/page-tree/pageNode.ts', 'PageNode schema'],
   ['src/core/visualComponents/schemas.ts', 'VisualComponent + VCNode schemas'],
 ]
 

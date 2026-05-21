@@ -1,5 +1,7 @@
 import { nanoid } from 'nanoid'
-import type { Page, PageNode, SiteDocument } from './schemas'
+import type { Page } from './page'
+import type { PageNode } from './pageNode'
+import type { SiteDocument } from './siteDocument'
 import type { NodeTree } from './treeSchema'
 import { getParent, isAncestor } from './selectors'
 import { normalizePageSlug } from './slugs'
