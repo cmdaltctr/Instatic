@@ -38,6 +38,7 @@ import { CanvasModeToggle } from './CanvasModeToggle'
 import { CanvasBreakpointSelector } from './CanvasBreakpointSelector'
 import { CanvasSelectionContext, CanvasViewportActionsContext } from './CanvasContexts'
 import { ClassStyleInjector } from './ClassStyleInjector'
+import { UserStylesheetInjector } from './UserStylesheetInjector'
 import { PluginCanvasOverlayLayer } from './PluginCanvasOverlayLayer'
 import { CanvasRenameDialog } from './CanvasRenameDialog'
 import { useCanvasRenameDialog } from './useCanvasRenameDialog'
@@ -352,8 +353,13 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
           }
         `}</style>
 
-          {/* Phase C — CSS class styles injected into document.head */}
+          {/* Phase C — CSS class styles injected into document.head.
+            ClassStyleInjector emits class-registry CSS first; the user-authored
+            stylesheets injector mounts after so user CSS wins specificity
+            ties — same source-order behaviour as the published `<link>` tags
+            (reset → framework → style → userStyles). */}
           <ClassStyleInjector />
+          <UserStylesheetInjector />
 
           {/* Insert toolbar and breakpoint context selector are design-only —
             preview has its own chrome inside CanvasModeToggle. */}

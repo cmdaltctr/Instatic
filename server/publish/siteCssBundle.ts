@@ -28,7 +28,12 @@ import { PUBLISHER_RESET_CSS } from '@core/publisher/reset'
 import { collectClassCSS } from '@core/publisher/cssCollector'
 import { buildSiteFrameworkCss } from '@core/publisher/frameworkCss'
 import { renderNode, type RenderContext } from '@core/publisher/render'
-import type { CssBundleFile, SiteCssBundle } from '@core/publisher/siteCssBundle'
+import { collectUserStylesheetCss } from '@core/publisher/userStylesheets'
+import type {
+  CssBundleFile,
+  SiteCssBundle,
+  SiteCssBundleId,
+} from '@core/publisher/siteCssBundle'
 
 /**
  * Build the three site CSS files from a `SiteDocument`.
@@ -45,6 +50,7 @@ export function buildSiteCssBundle(
     reset: makeBundleFile('reset', PUBLISHER_RESET_CSS),
     framework: makeBundleFile('framework', buildFrameworkCss(site, registry)),
     style: makeBundleFile('style', collectClassCSS(site)),
+    userStyles: makeBundleFile('userStyles', collectUserStylesheetCss(site)),
   }
 }
 
@@ -96,7 +102,7 @@ function collectAllModuleCss(site: SiteDocument, registry: IModuleRegistry): str
  * Collision-free for any realistic CMS site count.
  */
 function makeBundleFile(
-  bundle: 'reset' | 'framework' | 'style',
+  bundle: SiteCssBundleId,
   content: string,
 ): CssBundleFile {
   const hash = createHash('sha256').update(content).digest('hex').slice(0, 12)

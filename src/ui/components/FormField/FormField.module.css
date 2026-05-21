@@ -1,0 +1,42 @@
+/* FormField — shared labelled form-control shell. */
+
+.stacked {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.inlineEnd {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.inlineStart {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.labelStack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--editor-text);
+}
+
+.description {
+    font-size: 11px;
+    color: var(--editor-text-muted);
+    line-height: 1.4;
+    margin: 0;
+}

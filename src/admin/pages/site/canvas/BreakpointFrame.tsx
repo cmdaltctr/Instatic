@@ -61,6 +61,7 @@ export function BreakpointFrame({
     <div
       className={cn(styles.frameWrapper, isDimmed && styles.frameWrapperDimmed)}
       data-breakpoint-dimmed={isDimmed ? 'true' : undefined}
+      data-testid={`canvas-frame-${breakpoint.id}`}
       style={bpStyle}
     >
       {/* Frame chrome row — breakpoint label.
@@ -76,6 +77,8 @@ export function BreakpointFrame({
             onClick={() => onActivate(breakpoint.id)}
             className={styles.labelBtn}
             aria-label={`Switch to ${breakpoint.label} breakpoint`}
+            data-testid={`canvas-frame-activate-${breakpoint.id}`}
+            aria-pressed={isActive}
           >
             {breakpoint.label}
             <span className={styles.pxBadge}>{breakpoint.width}px</span>

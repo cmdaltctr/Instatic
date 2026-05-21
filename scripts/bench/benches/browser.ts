@@ -241,6 +241,49 @@ async function scenarioIdleFrames(session: BrowserSession, durationMs: number): 
   })
 }
 
+/**
+ * Authenticated cold-load measurement. Opens a fresh browser context (no
+ * disk cache, no warm JIT cache) with the session cookie pre-installed,
+ * then measures the cold load of the heavy `/admin/site` route.
+ *
+ * This simulates the realistic scenario "user reloads the editor tab
+ * while logged in" — the most common workflow path. Unlike the other
+ * load rows (which measure same-session warm navigations), this one
+ * actually shows what the user feels when their workday begins.
+ */
+async function measureAuthenticatedColdLoad(
+  baseUrl: string,
+  sessionCookieValue: string,
+  executablePath: string | undefined,
+  url: string,
+  label: string,
+): Promise<LoadScenario> {
+  const fresh = await launchBrowser({ executablePath })
+  try {
+    // Set the session cookie before the very first request so the
+    // server's serveAdminApp picks the authenticated shell path.
+    const target = new URL(baseUrl)
+    await fresh.context.addCookies([
+      {
+        name: 'pb_admin_session',
+        value: sessionCookieValue,
+        domain: target.hostname,
+        path: '/admin',
+        httpOnly: true,
+        secure: false,
+        sameSite: 'Lax',
+      },
+    ])
+    await fresh.cdp.send('Network.setCacheDisabled', { cacheDisabled: true })
+    await installMetricsHarness(fresh.page)
+    const metrics = await loadPageWithMetrics(fresh.page, `${baseUrl}${url}`)
+    const heapBytes = await readHeapBytes(fresh.page)
+    return { label, url: `${baseUrl}${url}`, metrics, heapBytes }
+  } finally {
+    await fresh.close()
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Bench module
 // ─────────────────────────────────────────────────────────────────────────────
@@ -324,9 +367,47 @@ export const browserBench: BenchModule = {
           return false
         })
 
+      // Capture the session cookie so we can spawn a *fresh* browser
+      // context with cache disabled but already authenticated — the only
+      // honest way to measure what an editor user feels when they reload
+      // the tab in the middle of a workday.
+      let sessionCookieValue: string | null = null
+      if (authOk && session) {
+        const cookies = await session.context.cookies()
+        const sessionCookie = cookies.find((c) => c.name === 'pb_admin_session')
+        sessionCookieValue = sessionCookie?.value ?? null
+      }
+
       if (authOk) {
-        loadScenarios.push(await runLoadScenario(session, baseUrl, 'authenticated /admin/dashboard', '/admin/dashboard'))
-        loadScenarios.push(await runLoadScenario(session, baseUrl, 'authenticated /admin/site', '/admin/site'))
+        loadScenarios.push(await runLoadScenario(session, baseUrl, 'warm /admin/dashboard (same context)', '/admin/dashboard'))
+        loadScenarios.push(await runLoadScenario(session, baseUrl, 'warm /admin/site (same context)', '/admin/site'))
+      }
+
+      // ── 1b. Authenticated COLD-LOAD scenarios ───────────────────────────
+      // Fresh browser context, no HTTP cache, no warm JIT cache — but
+      // session cookie pre-installed. This is the realistic "user reloads
+      // /admin/site after their morning coffee" measurement.
+      if (authOk && sessionCookieValue) {
+        log.step('Authenticated cold-load (fresh context, cache disabled)')
+        const overrideChromeForCold = readArg('chrome-path')
+        loadScenarios.push(
+          await measureAuthenticatedColdLoad(
+            baseUrl,
+            sessionCookieValue,
+            overrideChromeForCold ?? findSystemChrome() ?? undefined,
+            '/admin/site',
+            'AUTHENTICATED COLD /admin/site (fresh context)',
+          ),
+        )
+        loadScenarios.push(
+          await measureAuthenticatedColdLoad(
+            baseUrl,
+            sessionCookieValue,
+            overrideChromeForCold ?? findSystemChrome() ?? undefined,
+            '/admin/dashboard',
+            'AUTHENTICATED COLD /admin/dashboard (fresh context)',
+          ),
+        )
       }
 
       // ── 2. Admin-route navigation cycle ─────────────────────────────────
@@ -473,25 +554,21 @@ export const browserBench: BenchModule = {
         notes: `Open with \`bunx playwright show-trace ${t.path.replace(REPO_ROOT + '/', '')}\``,
       }))
 
-      // Cold /admin is the most meaningful paint metric — it's a fresh
-      // document with no cached resources. Subsequent in-session
-      // navigations DCL in ~10ms, well below the threshold where the
-      // browser fires a new FCP entry.
-      const coldLcp = loadScenarios[0]?.metrics.lcpMs
+      const coldLogin = loadScenarios.find((s) => s.label.startsWith('cold /admin (login'))
+      const authedColdSite = loadScenarios.find((s) => s.label.includes('AUTHENTICATED COLD /admin/site'))
       const totalTbt = loadScenarios.reduce((sum, s) => sum + s.metrics.totalBlockingMs, 0)
-      const siteLoad = loadScenarios.find((s) => s.url.endsWith('/admin/site'))
 
       return {
         name: this.name,
         title: this.title,
         headline: {
           chromium: 'playwright-core ' + (await session.browser.version()),
-          'cold /admin LCP': coldLcp != null ? fmtMs(coldLcp) : '—',
-          '/admin/site DCL': siteLoad?.metrics.domContentLoadedMs != null ? fmtMs(siteLoad.metrics.domContentLoadedMs) : '—',
+          'login LCP (cold)': coldLogin?.metrics.lcpMs != null ? fmtMs(coldLogin.metrics.lcpMs) : '—',
+          'editor LCP (auth cold)': authedColdSite?.metrics.lcpMs != null ? fmtMs(authedColdSite.metrics.lcpMs) : '—',
+          'editor FCP (auth cold)': authedColdSite?.metrics.fcpMs != null ? fmtMs(authedColdSite.metrics.fcpMs) : '—',
           total_blocking_time: fmtMs(totalTbt),
           idle_fps: idleFrames.meanFps.toFixed(1),
           spotlight_open: spotlight ? fmtMs(spotlight.meanOpenMs) : '—',
-          class_create_via_UI: classCreation ? fmtMs(classCreation.meanCreateMs) : '—',
         },
         sections: [
           {

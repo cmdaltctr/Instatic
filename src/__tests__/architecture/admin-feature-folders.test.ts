@@ -21,15 +21,20 @@ describe('admin feature folders', () => {
   })
 
   it('uses page names instead of admin-specific component names', () => {
-    const adminEntry = read('src/admin/AdminEntry.tsx')
+    // The per-workspace page components live in `AuthenticatedAdmin.tsx`
+    // (split out of `AdminEntry.tsx` as a lazy boundary so the cold login
+    // screen doesn't compile / evaluate them). `AdminEntry` itself only
+    // owns the boot probe + the login form; nothing workspace-specific
+    // belongs there.
+    const authenticatedAdmin = read('src/admin/AuthenticatedAdmin.tsx')
 
-    expect(adminEntry).toContain('<SitePage />')
-    expect(adminEntry).toContain('<ContentPage />')
-    expect(adminEntry).toContain('<PluginsPage />')
-    expect(adminEntry).toContain('<PluginPage />')
-    expect(adminEntry).not.toContain('ContentAdmin')
-    expect(adminEntry).not.toContain('PluginsAdmin')
-    expect(adminEntry).not.toContain('PluginPageAdmin')
+    expect(authenticatedAdmin).toContain('<SitePage />')
+    expect(authenticatedAdmin).toContain('<ContentPage />')
+    expect(authenticatedAdmin).toContain('<PluginsPage />')
+    expect(authenticatedAdmin).toContain('<PluginPage />')
+    expect(authenticatedAdmin).not.toContain('ContentAdmin')
+    expect(authenticatedAdmin).not.toContain('PluginsAdmin')
+    expect(authenticatedAdmin).not.toContain('PluginPageAdmin')
   })
 
   it('keeps reusable markdown utilities outside admin pages', () => {

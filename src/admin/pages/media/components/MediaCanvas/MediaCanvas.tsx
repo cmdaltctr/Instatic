@@ -261,6 +261,20 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
             placeholder: 'Search media',
             ariaLabel: 'Search media',
           }}
+          searchLeading={!trashView && (
+            <FileUpload
+              multiple
+              onChange={(e) => void handleUpload(e)}
+              buttonProps={{
+                variant: 'primary',
+                size: 'sm',
+                'aria-label': 'Upload media',
+              }}
+            >
+              <UploadIcon size={13} />
+              <span>Upload</span>
+            </FileUpload>
+          )}
           groupLabel="Filter media type"
           trailing={(
             <div role="group" aria-label="Media view" className={styles.viewGroup}>
@@ -291,20 +305,6 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
                 <Grid2x22SolidIcon size={13} />
               </Button>
             </div>
-          )}
-          inlineActions={!trashView && (
-            <FileUpload
-              multiple
-              onChange={(e) => void handleUpload(e)}
-              buttonProps={{
-                variant: 'primary',
-                size: 'sm',
-                'aria-label': 'Upload media',
-              }}
-            >
-              <UploadIcon size={13} />
-              <span>Upload</span>
-            </FileUpload>
           )}
         />
       </header>

@@ -15,7 +15,7 @@ import { isRuntimePackagePath, tryServeRuntimePackage } from './publish/runtime/
 import { jsonResponse } from './http'
 import { hardenUploadResponse, serveAdminApp, serveStaticFile } from './static'
 import { registry } from '@core/module-engine/registry'
-import type { CssBundleFile } from '@core/publisher/siteCssBundle'
+import type { CssBundleFile, SiteCssBundleId } from '@core/publisher/siteCssBundle'
 import { buildSiteCssBundle } from './publish/siteCssBundle'
 import { mediaStorageRegistry } from '@core/plugins/mediaStorageRegistry'
 
@@ -462,7 +462,7 @@ function adminUiNotBuiltResponse(pathname: string): Response {
  */
 async function serveSiteCss(db: DbClient, pathname: string): Promise<Response | null> {
   const filename = pathname.slice('/_pb/css/'.length)
-  const match = filename.match(/^(reset|framework|style)-([a-f0-9]{12})\.css$/)
+  const match = filename.match(/^(reset|framework|style|userStyles)-([a-f0-9]{12})\.css$/)
   if (!match) return null
 
   const [, requestedBundle, requestedHash] = match
@@ -470,7 +470,7 @@ async function serveSiteCss(db: DbClient, pathname: string): Promise<Response | 
   if (!snapshot) return new Response('Not found', { status: 404 })
 
   const bundle = buildSiteCssBundle(snapshot.site, registry)
-  const file: CssBundleFile = bundle[requestedBundle as 'reset' | 'framework' | 'style']
+  const file: CssBundleFile = bundle[requestedBundle as SiteCssBundleId]
   if (file.hash !== requestedHash) {
     return new Response('Not found', { status: 404 })
   }

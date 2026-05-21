@@ -69,6 +69,8 @@ function ModuleRailButton({
       aria-label={`Module settings — ${definition.name}`}
       tooltip={`${definition.name} settings`}
       className={styles.categoryRailButton}
+      data-testid="style-category-module"
+      aria-pressed={isActive}
     >
       <ModuleIcon size={14} aria-hidden="true" />
     </Button>
@@ -90,7 +92,12 @@ export function StyleCategoryRail({
   const disabledTooltip = 'Add a class to unlock styles'
 
   return (
-    <div className={styles.categoryRail} role="toolbar" aria-label="Style categories">
+    <div
+      className={styles.categoryRail}
+      role="toolbar"
+      aria-label="Style categories"
+      data-testid="style-category-rail"
+    >
 
       {/* ── Module button — first, always enabled ─────────────────────── */}
       {definition != null && (
@@ -119,6 +126,8 @@ export function StyleCategoryRail({
             tooltip={stylesLocked ? disabledTooltip : section.title}
             className={styles.categoryRailButton}
             data-has-set-styles={hasSetStyles ? 'true' : undefined}
+            data-testid={`style-category-${section.id}`}
+            aria-pressed={activeAnchorId === section.id}
           >
             <span className={styles.categoryRailIconWrap}>
               <SectionIcon size={14} aria-hidden="true" />

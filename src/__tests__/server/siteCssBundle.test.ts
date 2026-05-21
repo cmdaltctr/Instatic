@@ -2,9 +2,10 @@
  * siteCssBundle — unit tests for the server-side CSS bundle builder.
  *
  * Verifies:
- * - The three layered files are produced (reset / framework / style).
+ * - The four layered files are produced (reset / framework / style / userStyles).
  * - Each file's content is correctly populated from the corresponding source
- *   (reset constant, framework root + module CSS, user class CSS).
+ *   (reset constant, framework root + module CSS, user class CSS,
+ *   user-authored stylesheets from `site.files`).
  * - Filenames embed a content hash so cache busting works.
  * - Identical sites produce identical hashes (deterministic).
  * - Different sites produce different hashes for the layer that changed.
@@ -48,7 +49,7 @@ describe('buildSiteCssBundle', () => {
     ],
   }
 
-  it('builds three files with sensible filenames + hashes', () => {
+  it('builds four files with sensible filenames + hashes', () => {
     const site = makeSite()
     const page = makePage({
       root: { moduleId: 'base.text', props: { text: 'Hi' } },
@@ -60,10 +61,12 @@ describe('buildSiteCssBundle', () => {
     expect(bundle.reset.bundle).toBe('reset')
     expect(bundle.framework.bundle).toBe('framework')
     expect(bundle.style.bundle).toBe('style')
+    expect(bundle.userStyles.bundle).toBe('userStyles')
 
     expect(bundle.reset.filename).toMatch(/^reset-[a-f0-9]{12}\.css$/)
     expect(bundle.framework.filename).toMatch(/^framework-[a-f0-9]{12}\.css$/)
     expect(bundle.style.filename).toMatch(/^style-[a-f0-9]{12}\.css$/)
+    expect(bundle.userStyles.filename).toMatch(/^userStyles-[a-f0-9]{12}\.css$/)
   })
 
   it('reset.css carries the publisher reset content', () => {
@@ -156,6 +159,59 @@ describe('buildSiteCssBundle', () => {
     expect(bundle.style.content).not.toContain('.text-primary')
   })
 
+  it('userStyles.css carries user-authored stylesheet files concatenated in path order', () => {
+    const site = makeSite()
+    const now = Date.now()
+    site.files = [
+      {
+        id: 'b',
+        path: 'src/styles/b-second.css',
+        type: 'style',
+        content: 'body > nav { background: black; }',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'a',
+        path: 'src/styles/a-first.css',
+        type: 'style',
+        content: ':root { --brand: tomato; }',
+        createdAt: now,
+        updatedAt: now,
+      },
+      // Non-style files are ignored — proves the type filter works.
+      {
+        id: 'config',
+        path: 'package.json',
+        type: 'config',
+        content: '{}',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]
+    site.pages = [makePage({ root: { moduleId: 'base.text', props: { text: 'Hi' } } })]
+
+    const bundle = buildSiteCssBundle(site, registry)
+
+    // Sorted by path ascending: a-first.css before b-second.css.
+    const firstIdx = bundle.userStyles.content.indexOf(':root { --brand: tomato; }')
+    const secondIdx = bundle.userStyles.content.indexOf('body > nav { background: black; }')
+    expect(firstIdx).toBeGreaterThanOrEqual(0)
+    expect(secondIdx).toBeGreaterThan(firstIdx)
+    // Non-style files are excluded entirely.
+    expect(bundle.userStyles.content).not.toContain('package.json')
+    // Each file is wrapped with a source-path comment so DevTools shows origin.
+    expect(bundle.userStyles.content).toContain('/* src/styles/a-first.css */')
+    expect(bundle.userStyles.content).toContain('/* src/styles/b-second.css */')
+  })
+
+  it('userStyles.css is empty when no user stylesheets exist', () => {
+    const site = makeSite()
+    site.pages = [makePage({ root: { moduleId: 'base.text', props: { text: 'X' } } })]
+    const bundle = buildSiteCssBundle(site, registry)
+    expect(bundle.userStyles.content).toBe('')
+  })
+
   it('is deterministic: identical sites produce identical hashes', () => {
     const site1 = makeSite()
     const site2 = makeSite()
@@ -168,6 +224,33 @@ describe('buildSiteCssBundle', () => {
     expect(bundle1.reset.hash).toBe(bundle2.reset.hash)
     expect(bundle1.framework.hash).toBe(bundle2.framework.hash)
     expect(bundle1.style.hash).toBe(bundle2.style.hash)
+    expect(bundle1.userStyles.hash).toBe(bundle2.userStyles.hash)
+  })
+
+  it('rotates the userStyles hash when user stylesheets change (the others stay)', () => {
+    const baseSite = makeSite()
+    baseSite.pages = [makePage({ root: { moduleId: 'base.text', props: { text: 'X' } } })]
+    const before = buildSiteCssBundle(baseSite, registry)
+
+    const editedSite = makeSite()
+    editedSite.pages = baseSite.pages
+    const now = Date.now()
+    editedSite.files = [
+      {
+        id: 's1',
+        path: 'src/styles/site.css',
+        type: 'style',
+        content: 'body { background: tomato; }',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]
+    const after = buildSiteCssBundle(editedSite, registry)
+
+    expect(after.reset.hash).toBe(before.reset.hash)
+    expect(after.framework.hash).toBe(before.framework.hash)
+    expect(after.style.hash).toBe(before.style.hash)
+    expect(after.userStyles.hash).not.toBe(before.userStyles.hash)
   })
 
   it('rotates the style hash when user classes change (the others stay)', () => {

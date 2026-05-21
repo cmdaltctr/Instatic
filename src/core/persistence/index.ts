@@ -92,5 +92,5 @@ export type {
   CmsLoginActivityResult,
   CmsSession,
 } from './cmsAuth'
-export type { CmsPublicSite } from './responseSchemas'
+export type { CmsPublicSite, CmsSetupStatus } from './responseSchemas'
 // usePersistence moved to src/editor/hooks/usePersistence.ts (Constraint #179 — no React in core)

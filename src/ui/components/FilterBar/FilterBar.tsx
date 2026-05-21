@@ -42,6 +42,9 @@ export interface FilterBarProps<TValue = string> {
   onValueChange: (value: TValue) => void;
   /** Optional search bar rendered above the chip row. */
   search?: FilterBarSearchProps;
+  /** Element rendered to the LEFT of the search bar (same row). Use for
+   *  primary actions like "Upload" that belong next to the search field. */
+  searchLeading?: ReactNode;
   /** Inline action(s) appended after the chips (same row, e.g. "Add category"). */
   inlineActions?: ReactNode;
   /** Trailing slot pinned to the right of the row (e.g. view-mode toggles). */
@@ -56,6 +59,7 @@ export function FilterBar<TValue = string>({
   value,
   onValueChange,
   search,
+  searchLeading,
   inlineActions,
   trailing,
   groupLabel,
@@ -64,14 +68,28 @@ export function FilterBar<TValue = string>({
   return (
     <div className={cn(styles.bar, className)}>
       {search && (
-        <SearchBar
-          value={search.value}
-          onValueChange={search.onValueChange}
-          onClear={search.onClear}
-          placeholder={search.placeholder}
-          aria-label={search.ariaLabel}
-          className={styles.search}
-        />
+        searchLeading ? (
+          <div className={styles.searchRow}>
+            {searchLeading}
+            <SearchBar
+              value={search.value}
+              onValueChange={search.onValueChange}
+              onClear={search.onClear}
+              placeholder={search.placeholder}
+              aria-label={search.ariaLabel}
+              className={styles.searchFill}
+            />
+          </div>
+        ) : (
+          <SearchBar
+            value={search.value}
+            onValueChange={search.onValueChange}
+            onClear={search.onClear}
+            placeholder={search.placeholder}
+            aria-label={search.ariaLabel}
+            className={styles.search}
+          />
+        )
       )}
 
       <div className={styles.row}>

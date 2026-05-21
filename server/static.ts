@@ -1,5 +1,6 @@
 import { extname, resolve, sep } from 'node:path'
 import { brotliCompressSync, constants as zlibConstants } from 'node:zlib'
+import { readdirSync } from 'node:fs'
 import { SESSION_COOKIE_NAME } from './auth/tokens'
 
 const MIME_TYPES: Record<string, string> = {
@@ -310,21 +311,177 @@ const LOGIN_SKELETON_HTML = `<div class="login-skeleton" data-initial-login-skel
   </div>
 </div>`
 
+// Boot-API kickoff. The three endpoints `useAdminBoot` reads are fired
+// from an inline `<script>` at HTML parse time. This is much faster than
+// the React-driven `useEffect → fetch` path because:
+//
+//   - React 19's concurrent scheduler defers `useEffect` callbacks until
+//     after the first commit + browser paint, AND it yields the main
+//     thread for browser work. Empirically that gap is 250-350 ms on a
+//     cold load even though the actual JS work is tiny.
+//   - The inline script runs synchronously during HTML parse — before
+//     any module script downloads or evaluates. The fetches start at
+//     ~5 ms instead of ~350 ms.
+//
+// The fetches' result promises live on `window.__pbBootPromises` so
+// `useAdminBoot` can consume them inside its `useEffect` and skip the
+// network entirely (the response is already in hand).
+//
+// `<link rel="preload">` would also work but ONLY warms the HTTP cache —
+// the JS code still has to fire the actual fetch later. The inline-
+// script approach actually carries the result into the React layer.
+const BOOT_API_KICKOFF = `
+    <script>
+      (function () {
+        var json = function (url) {
+          return fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } })
+            .then(function (r) {
+              if (!r.ok) throw new Error('HTTP ' + r.status);
+              return r.json();
+            });
+        };
+        window.__pbBootPromises = {
+          setupStatus: json('/admin/api/cms/setup/status'),
+          // /me is allowed to fail (401 when unauthenticated) — swallow
+          // here so the await in useAdminBoot doesn't see a rejected
+          // promise it can't handle. The server returns an envelope shape
+          // { user: CmsCurrentUser }; mirror what getCurrentCmsUser does
+          // and hand the consumer the unwrapped user object.
+          me: json('/admin/api/cms/me').then(
+            function (body) {
+              if (!body || !body.user || typeof body.user !== 'object') {
+                throw new Error('missing user');
+              }
+              return { ok: true, user: body.user };
+            },
+            function () { return { ok: false }; }
+          ),
+          publicSite: json('/admin/api/cms/public-site').catch(function () { return null; }),
+        };
+      })();
+    </script>`
+
+// Chunks to prefetch in browser idle time after the initial paint. These
+// are the chunks the user is statistically likely to need within the next
+// few seconds — every admin workspace page, the editor store, and the
+// vendor chunks the editor depends on. Prefetching them means that when
+// the user clicks the Site / Content / Data / Media nav link, the chunk
+// is already on disk and the route transition is instant — no Suspense
+// fallback flashes the loading screen.
+//
+// Uses `rel="prefetch"` (lowest browser priority — downloads during idle
+// network) so it doesn't compete with the eager paint chunks. The
+// `crossorigin` flag must match the modulepreload entries in index.html
+// or the browser will fetch a duplicate copy when the real module loads.
+//
+// The chunk filenames are content-hashed so we can't hardcode them —
+// resolve them once per server boot by globbing `dist/assets/`. If a
+// chunk isn't found (mid-rebuild, dev mode, etc.) we skip the hint
+// rather than emitting a broken URL.
+//
+// Trade-off: this downloads ~600 KB raw / ~200 KB gz of extra bytes that
+// the user might not need. On the M-class Macs / typical broadband
+// targets the CMS is designed for, this is negligible and the
+// "every navigation feels instant" UX win is worth it. If we ever care
+// about constrained-bandwidth users, this list can shrink to just the
+// most-likely-next pages.
+const POST_LOGIN_CHUNK_PREFIXES: readonly string[] = [
+  // Shell + state. `dnd-vendor` is also a modulepreload entry — we
+  // re-list it here defensively in case a future build splits it from
+  // the eager-paint set.
+  'AuthenticatedAdmin-',
+  'store-',
+  'dnd-vendor-',
+  'validation-vendor-',
+  // The 9 workspace pages — each is its own React.lazy chunk in
+  // AuthenticatedAdmin.tsx. Order matches frequency of use (dashboard is
+  // the default landing route). Prefetching all of them means that
+  // clicking any nav link from any workspace is instant; no Suspense
+  // loading screen flash.
+  'DashboardPage-',
+  'SitePage-',
+  'ContentPage-',
+  'DataPage-',
+  'MediaPage-',
+  'PluginsPage-',
+  'PluginPage-',
+  'UsersPage-',
+  'AccountPage-',
+  // Heavy editor chunks pulled in by SitePage's downstream lazy imports.
+  // Prefetching now means the visual editor first-paint is sub-100 ms
+  // after the click.
+  'AdminCanvasLayout-',
+  'CodeMirrorEditor-',
+]
+
+let postLoginPrefetchCache: { staticDir: string; html: string } | null = null
+function buildPostLoginPrefetchHints(staticDir: string): string {
+  if (postLoginPrefetchCache && postLoginPrefetchCache.staticDir === staticDir) {
+    return postLoginPrefetchCache.html
+  }
+  const assetsDir = resolve(staticDir, 'assets')
+  let entries: string[]
+  try {
+    // Sync readdir is fine here — it runs at most once per server boot
+    // (result cached on `postLoginPrefetchCache`) and the assets/ directory
+    // is small (a few hundred entries).
+    entries = readdirSync(assetsDir) as string[]
+  } catch {
+    postLoginPrefetchCache = { staticDir, html: '' }
+    return ''
+  }
+  const lines: string[] = []
+  for (const prefix of POST_LOGIN_CHUNK_PREFIXES) {
+    const match = entries.find((name) => name.startsWith(prefix) && name.endsWith('.js'))
+    if (!match) continue
+    lines.push(
+      `    <link rel="prefetch" href="/assets/${match}" as="script" crossorigin>`,
+    )
+  }
+  const html = lines.join('\n')
+  postLoginPrefetchCache = { staticDir, html }
+  return html
+}
+
+// Authenticated path: keep the spinner shell but ALSO embed the
+// `BOOT_API_KICKOFF` inline script + prefetch hints. The user still sees
+// the spinner until React mounts, but:
+//   - The boot fetches fire at HTML-parse time (BOOT_API_KICKOFF), so
+//     useAdminBoot's `useEffect` consumes already-resolved promises.
+//   - Workspace page chunks prefetch in browser idle time, so clicking
+//     between Site / Content / Data / etc. in the nav is instant — no
+//     Suspense loading screen flash.
+function injectAuthenticatedHints(html: string, staticDir: string): string {
+  const prefetchHints = buildPostLoginPrefetchHints(staticDir)
+  // Use `</head>` as the anchor — it's guaranteed to be in the document
+  // and is unique. The earlier `/<\/style>\s*<\/head>/` regex missed
+  // when the build emitted the importmap `<script>` between the loader
+  // `<style>` block and `</head>`.
+  return html.replace(
+    '</head>',
+    `${BOOT_API_KICKOFF}\n${prefetchHints}\n  </head>`,
+  )
+}
+
 // Build the admin shell HTML with the login skeleton injected. We avoid
 // repeating the heavy index.html template by patching the served body
 // in-place: replace the inner contents of `<div id="root">` (which the
 // build pipeline always emits with the loader spinner) with our skeleton.
-function injectLoginSkeleton(html: string): string {
+function injectLoginSkeleton(html: string, staticDir: string): string {
   // 1. Inject the skeleton CSS right after the loader CSS block so the
-  //    critical styles are sent in the first response packet.
+  //    critical styles are sent in the first response packet. Also add
+  //    preload hints for the API endpoints `useAdminBoot` will call, and
+  //    prefetch hints for the chunks the user will need post-login.
   const styleTag = `<style data-initial-login>${LOGIN_SKELETON_STYLES}</style>`
+  const prefetchHints = buildPostLoginPrefetchHints(staticDir)
+  const injected = `</style>\n    ${styleTag}${BOOT_API_KICKOFF}\n${prefetchHints}`
   let next = html.replace(
     /<\/style>\s*<\/head>/,
-    (m) => m.replace('</style>', `</style>\n    ${styleTag}`),
+    (m) => m.replace('</style>', injected),
   )
-  // Fallback if the marker pattern shifts: append the style at the end of <head>.
+  // Fallback if the marker pattern shifts: append at the end of <head>.
   if (!next.includes('data-initial-login')) {
-    next = next.replace('</head>', `  ${styleTag}\n  </head>`)
+    next = next.replace('</head>', `  ${styleTag}${BOOT_API_KICKOFF}\n${prefetchHints}\n  </head>`)
   }
 
   // 2. Replace the inner contents of `<div id="root">…</div>` with the
@@ -349,23 +506,25 @@ function injectLoginSkeleton(html: string): string {
 
 export async function serveAdminApp(staticDir: string, req?: Request): Promise<Response | null> {
   // Authenticated visitors keep the existing spinner shell — they're about
-  // to be redirected to /admin/dashboard or another section anyway, and
-  // their first React commit is the lazy-loaded authenticated layout, not
-  // a login form. Pre-rendering the login form here would create a
-  // jarring login-form-flash before the editor mounts.
-  if (requestHasSessionCookie(req)) {
-    return serveStaticFile(staticDir, '/index.html', req)
-  }
-
-  // Unauthenticated path: ship a pre-rendered login form so FCP lands at
-  // DCL time instead of after the React bundle parses + mounts.
+  // Both authenticated and unauthenticated paths now pass through the
+  // dynamic HTML pipeline so we can inject the `BOOT_API_KICKOFF` inline
+  // script (which fires the boot fetches at HTML-parse time, shaving the
+  // 300+ ms React useEffect deferral). The two paths differ in what they
+  // put inside `<div id="root">`:
+  //
+  //   - Unauthenticated: a styled login form so FCP fires at DCL time.
+  //   - Authenticated:   keep the existing spinner (the user is about to
+  //                      see the authenticated editor, not a login form,
+  //                      so a styled login skeleton would flash badly).
   const filePath = resolveStaticPath(staticDir, '/index.html')
   if (!filePath) return null
   const file = Bun.file(filePath)
   if (!(await file.exists())) return null
 
   const html = await file.text()
-  const transformed = injectLoginSkeleton(html)
+  const transformed = requestHasSessionCookie(req)
+    ? injectAuthenticatedHints(html, staticDir)
+    : injectLoginSkeleton(html, staticDir)
   const bytes = new TextEncoder().encode(transformed) as ResponseBytes
   const acceptEncoding = req?.headers.get('accept-encoding') ?? null
   const encoding = selectEncoding(acceptEncoding)

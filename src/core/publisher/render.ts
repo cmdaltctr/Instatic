@@ -31,6 +31,7 @@ import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { buildPageFrame, buildSiteFrame, buildRouteFrame } from '@core/templates/contextFrames'
 import { classNamesForClassIds } from '@core/page-tree/classNames'
 import { collectClassCSS } from './cssCollector'
+import { collectUserStylesheetCss } from './userStylesheets'
 import { PUBLISHER_RESET_CSS } from './reset'
 import { buildSiteFrameworkCss } from './frameworkCss'
 import type { SiteCssBundle } from './siteCssBundle'
@@ -166,10 +167,19 @@ function buildStyleHead(
       throw new Error('publishPage: cssEmission "external" requires options.cssBundle')
     }
     const baseUrl = options.cssAssetBaseUrl ?? '/_pb/css/'
-    const links = [options.cssBundle.reset, options.cssBundle.framework, options.cssBundle.style]
+    // Order matters — source order resolves specificity ties. User-authored
+    // global stylesheets load LAST so they win against the class registry,
+    // and the class registry wins against framework utilities.
+    const links = [
+      options.cssBundle.reset,
+      options.cssBundle.framework,
+      options.cssBundle.style,
+      options.cssBundle.userStyles,
+    ]
       // Skip empty bundles — emitting `<link>` to a 0-byte file is a wasted
-      // request. `framework.css` and `style.css` are routinely empty on a
-      // fresh site (no framework configured, no classes defined).
+      // request. `framework.css`, `style.css`, and `userStyles.css` are
+      // routinely empty on a fresh site (no framework configured, no
+      // classes defined, no user-authored CSS files).
       .filter((file) => file.content.length > 0)
       .map((file) => `  <link rel="stylesheet" href="${escapeHtml(baseUrl + file.filename)}">`)
       .join('\n')
@@ -179,7 +189,10 @@ function buildStyleHead(
   const frameworkCss = buildSiteFrameworkCss(site)
   const moduleCss = Array.from(cssMap.values()).join('\n')
   const classCss = collectClassCSS(site)
-  const allCss = [PUBLISHER_RESET_CSS, frameworkCss, moduleCss, classCss]
+  const userCss = collectUserStylesheetCss(site)
+  // Same cascade order as the external-link path: user CSS comes last so it
+  // wins specificity ties against the class registry.
+  const allCss = [PUBLISHER_RESET_CSS, frameworkCss, moduleCss, classCss, userCss]
     .filter(Boolean)
     .join('\n')
   return `  <style>\n${allCss}\n  </style>\n`

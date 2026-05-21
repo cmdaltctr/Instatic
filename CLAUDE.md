@@ -136,9 +136,10 @@ All design tokens are CSS custom properties declared in `src/styles/globals.css`
 
 ### Token rules
 
-- **No hardcoded hex / rgb / hsl in CSS modules.** Every color comes from a `var(--*)` token. If a needed token doesn't exist, **add it to `globals.css`** — don't inline.
-- **Achromatic editor chrome.** The editor and admin shells stay achromatic (white-on-black neutrals). The only chromatic accents are the semantic state tokens (`--editor-danger`, `--editor-warning`, `--editor-success-*`) and the canvas rings (`--canvas-selection-ring`, `--canvas-hover-ring`). Tinted Tailwind classes (`zinc-*`, `slate-*`, `blue-*`, `indigo-*`, `violet-*`) are gated by `achromatic-color-policy.test.ts`.
-- **Border radius:** `--editor-radius` (6px), `--editor-radius-sm` (3px), `--input-radius` (12px), `--panel-radius` (12px). Don't introduce ad-hoc radius values.
+- **No hardcoded hex / rgb / hsl in CSS modules.** Every color comes from a `var(--*)` token. If a needed token doesn't exist, **add it to `globals.css`** — don't inline. Gated by `css-token-policy.test.ts`.
+- **Two-layer color model.** Surfaces, borders, and default text are achromatic (white-on-black neutrals stepping through `--editor-bg` → `--editor-surface-5`). On top of that base, color is used **as identity and meaning, never as decoration**: rail tints (`--rail-tint-mint/lilac/sky/peach`) for categorical identity (widget categories, panel rails, sidebar icons), semantic state tokens (`--editor-danger`, `--editor-warning`, `--editor-success-*`, `--editor-info-*`) for state, and canvas neon (`--canvas-selection-ring`, `--canvas-hover-ring`) for canvas affordances. Every color is a token — no inline hex, no Tailwind palette class names. The broader Tailwind ban (`noTailwindUtilities.test.ts`, `no-tailwind-deps.test.ts`) enforces this at the className level.
+- **Card surface pattern.** First-party tile surfaces (dashboard widgets and equivalent borderless cards) are `--editor-surface-2` sitting on the darker `--editor-surface` parent with a `1px` grid gap that reveals the parent and reads as a borderless divider. 16px radius. Hover lifts to `--editor-surface-3` — never recolor a border. See `src/ui/components/Widget/Widget.module.css` for the canonical implementation.
+- **Border radius scale.** `--editor-radius-sm` (3px) for tight chips. `--editor-radius` (6px) for default editor controls and buttons. `--panel-radius` (12px) for floating overlay panels. 16px for borderless tile cards (Widget). `--input-radius` (1em ≈ 16px) for pill-shaped inputs. Don't introduce ad-hoc radius values.
 
 ### UI primitive rules
 

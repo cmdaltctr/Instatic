@@ -73,6 +73,12 @@
         153,
         0.1
     ); /* emerald-400 at 10% — success pill surface */
+    --editor-success-border: rgba(
+        52,
+        211,
+        153,
+        0.3
+    ); /* emerald-400 at 30% — success pill / alert border */
     --editor-info-text: #c4b5fd; /* violet-300 — info text */
 
     /* ─── Mint accent surface (canvas breakpoint chrome, mode toggle) ────── */
@@ -125,6 +131,9 @@
     --panel-shadow:
         var(--panel-shadow-inset-top), var(--panel-shadow-inset-bottom),
         var(--panel-shadow-drop);
+
+    /* ─── Inline code block surface (used by the Code primitive) ─────────── */
+    --code-bg: rgba(0, 0, 0, 0.3);
 
     /* ─── Editor Inputs ──────── */
     --input-bg: transparent;

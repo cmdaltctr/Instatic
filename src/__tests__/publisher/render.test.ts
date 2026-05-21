@@ -507,12 +507,13 @@ describe('publishPage', () => {
 
   // ─── External CSS mode (per-site bundle served at /_pb/css/) ──────────────
 
-  it('emits three <link> tags pointing at the site bundle in external mode', () => {
+  it('emits four <link> tags pointing at the site bundle in external mode', () => {
     const page = makePage({ root: { moduleId: 'base.text', props: { text: 'Hi' } } })
     const cssBundle = {
       reset: { bundle: 'reset' as const, filename: 'reset-aaaaaaaaaaaa.css', hash: 'aaaaaaaaaaaa', content: ':where(*) { margin: 0; }' },
       framework: { bundle: 'framework' as const, filename: 'framework-bbbbbbbbbbbb.css', hash: 'bbbbbbbbbbbb', content: ':root { --x: 1; }' },
       style: { bundle: 'style' as const, filename: 'style-cccccccccccc.css', hash: 'cccccccccccc', content: '.foo { color: red; }' },
+      userStyles: { bundle: 'userStyles' as const, filename: 'userStyles-dddddddddddd.css', hash: 'dddddddddddd', content: 'body { background: tomato; }' },
     }
     const { html } = publishPage(page, site, registry, {
       cssEmission: 'external',
@@ -522,25 +523,30 @@ describe('publishPage', () => {
     expect(html).toContain('<link rel="stylesheet" href="/_pb/css/reset-aaaaaaaaaaaa.css">')
     expect(html).toContain('<link rel="stylesheet" href="/_pb/css/framework-bbbbbbbbbbbb.css">')
     expect(html).toContain('<link rel="stylesheet" href="/_pb/css/style-cccccccccccc.css">')
+    expect(html).toContain('<link rel="stylesheet" href="/_pb/css/userStyles-dddddddddddd.css">')
 
     // No inline <style> block for site-wide CSS in external mode.
     expect(html).not.toMatch(/<style>\s*\n[^<]*:where\(\*\)/)
 
-    // Cascade order: reset → framework → style (last loaded wins ties).
+    // Cascade order: reset → framework → style → userStyles (last loaded wins ties).
     const resetIdx = html.indexOf('reset-aaaaaaaaaaaa.css')
     const frameworkIdx = html.indexOf('framework-bbbbbbbbbbbb.css')
     const styleIdx = html.indexOf('style-cccccccccccc.css')
+    const userIdx = html.indexOf('userStyles-dddddddddddd.css')
     expect(resetIdx).toBeLessThan(frameworkIdx)
     expect(frameworkIdx).toBeLessThan(styleIdx)
+    expect(styleIdx).toBeLessThan(userIdx)
   })
 
   it('skips empty bundle files in external mode (no zero-byte <link> requests)', () => {
     const page = makePage({ root: { moduleId: 'base.text', props: { text: 'Hi' } } })
     const cssBundle = {
       reset: { bundle: 'reset' as const, filename: 'reset-aaaaaaaaaaaa.css', hash: 'aaaaaaaaaaaa', content: ':where(*) { margin: 0; }' },
-      // Empty framework + style on a fresh site (no framework, no classes).
+      // Empty framework + style + userStyles on a fresh site (no framework,
+      // no classes, no user-authored CSS files).
       framework: { bundle: 'framework' as const, filename: 'framework-bbbbbbbbbbbb.css', hash: 'bbbbbbbbbbbb', content: '' },
       style: { bundle: 'style' as const, filename: 'style-cccccccccccc.css', hash: 'cccccccccccc', content: '' },
+      userStyles: { bundle: 'userStyles' as const, filename: 'userStyles-dddddddddddd.css', hash: 'dddddddddddd', content: '' },
     }
     const { html } = publishPage(page, site, registry, {
       cssEmission: 'external',
@@ -550,6 +556,7 @@ describe('publishPage', () => {
     expect(html).toContain('reset-aaaaaaaaaaaa.css')
     expect(html).not.toContain('framework-bbbbbbbbbbbb.css')
     expect(html).not.toContain('style-cccccccccccc.css')
+    expect(html).not.toContain('userStyles-dddddddddddd.css')
   })
 
   it('uses a custom cssAssetBaseUrl when provided', () => {
@@ -558,6 +565,7 @@ describe('publishPage', () => {
       reset: { bundle: 'reset' as const, filename: 'reset-aaaaaaaaaaaa.css', hash: 'aaaaaaaaaaaa', content: 'x' },
       framework: { bundle: 'framework' as const, filename: 'framework-bbbbbbbbbbbb.css', hash: 'bbbbbbbbbbbb', content: 'x' },
       style: { bundle: 'style' as const, filename: 'style-cccccccccccc.css', hash: 'cccccccccccc', content: 'x' },
+      userStyles: { bundle: 'userStyles' as const, filename: 'userStyles-dddddddddddd.css', hash: 'dddddddddddd', content: 'x' },
     }
     const { html } = publishPage(page, site, registry, {
       cssEmission: 'external',

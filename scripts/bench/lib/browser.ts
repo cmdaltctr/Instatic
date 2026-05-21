@@ -302,9 +302,17 @@ export async function loadPageWithMetrics(page: Page, url: string): Promise<Page
     const resourceEntries = performance.getEntriesByType('resource') as PerformanceResourceTiming[]
     const transferredBytes = resourceEntries.reduce((sum, r) => sum + (r.transferSize ?? 0), 0)
     const domNodeCount = document.querySelectorAll('*').length
+    // Fall back to a direct read of the paint timeline. With very-fast cold
+    // loads the PerformanceObserver may race against the FCP entry (the
+    // entry can land before the observer's task fires its first callback);
+    // `getEntriesByType('paint')` is the synchronous, authoritative source.
+    const paintEntries = performance.getEntriesByType('paint') as PerformanceEntry[]
+    const fcpEntry = paintEntries.find((p) => p.name === 'first-contentful-paint')
+    const lcpEntries = performance.getEntriesByType('largest-contentful-paint') as PerformanceEntry[]
+    const lastLcp = lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1] : undefined
     return {
-      fcp: w.__benchMetrics?.fcp ?? null,
-      lcp: w.__benchMetrics?.lcp ?? null,
+      fcp: w.__benchMetrics?.fcp ?? fcpEntry?.startTime ?? null,
+      lcp: w.__benchMetrics?.lcp ?? lastLcp?.startTime ?? null,
       domContentLoaded: nav ? nav.domContentLoadedEventEnd - nav.startTime : null,
       load: nav ? nav.loadEventEnd - nav.startTime : null,
       longTasks: w.__benchMetrics?.longTasks ?? [],

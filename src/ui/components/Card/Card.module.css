@@ -1,0 +1,13 @@
+/* Card — shared surfaced container primitive. */
+
+.card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--panel-radius);
+}
+
+.cardBare {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}

@@ -1,0 +1,39 @@
+/* Alert — shared inline message primitive. */
+
+.alert {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: var(--editor-radius);
+    padding: 12px 14px;
+    border: 1px solid var(--editor-border);
+    background: var(--panel-bg);
+    color: var(--editor-text);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.alertTitle {
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.alertBody {
+    font-size: 13px;
+}
+
+.alertInfo {
+    border-color: var(--editor-border);
+}
+
+.alertSuccess {
+    border-color: var(--editor-success-border);
+}
+
+.alertWarning {
+    border-color: var(--editor-warning);
+}
+
+.alertDanger {
+    border-color: var(--editor-danger);
+}

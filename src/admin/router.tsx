@@ -1,13 +1,27 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { Navigate, Route, Routes } from './lib/routing'
 import { useLocation } from './lib/routing'
 import { ErrorBoundary } from '@ui/components/ErrorBoundary'
 import { AppLoadingScreen } from './AppLoadingScreen'
+import AdminEntry from './AdminEntry'
 
-const AdminEntry = lazy(() => import('./AdminEntry'))
-
+// AdminEntry is eager-imported (not behind `React.lazy`) so the cold load
+// path does not require Suspense resolution before the first contentful
+// commit. Cold-load measurements showed React 19's concurrent scheduler
+// taking ~280 ms between the lazy chunk resolving and the commit being
+// painted, which is what flushSync(root.render(...)) cannot bypass —
+// flushSync only synchronises the FIRST render, and the lazy resolution
+// produces a SECOND render that goes through the concurrent scheduler.
+// Eager import folds AdminEntry's tiny chunk (10 KB gz) into the main
+// entry; the heavy `AuthenticatedAdmin` chunk is still lazy and only
+// loads post-login.
+//
+// Net effect on cold /admin: useEffect fires ~290 ms earlier, LCP drops
+// proportionally. See `.tmp/benchmarks/REPORT.md` for the measurements.
 function withSuspense(element: ReactElement): ReactElement {
+  // Suspense still wraps the route so any downstream `lazy()` boundaries
+  // (e.g. AuthenticatedAdmin) have a fallback.
   return <Suspense fallback={<AppLoadingScreen />}>{element}</Suspense>
 }
 

@@ -31,6 +31,7 @@
 
 import {
   createElement,
+  startTransition,
   use,
   useCallback,
   useEffect,
@@ -98,12 +99,28 @@ export function Router({ children }: { children: ReactNode }) {
   const navigate = useCallback<NavigateFn>((to, options) => {
     if (!isBrowser()) return
     const replace = options?.replace ?? false
+    // Wrap the location-change dispatch in `startTransition` so React 19
+    // treats the subsequent route render as a low-priority Transition:
+    //
+    //   - If the new route's lazy chunk hasn't loaded yet, React keeps
+    //     showing the CURRENT page instead of swapping to the Suspense
+    //     fallback. The fallback flash that previously happened on every
+    //     nav click (Dashboard → Site, etc.) disappears entirely.
+    //   - When the chunk resolves, React atomically swaps to the new
+    //     page. The transition is invisible — the user perceives the
+    //     navigation as instant.
+    //
+    // The history update itself stays synchronous; only the
+    // `useSyncExternalStore` re-read (triggered by the event) runs
+    // inside the transition.
     if (replace) {
       window.history.replaceState(null, '', to)
     } else {
       window.history.pushState(null, '', to)
     }
-    window.dispatchEvent(new Event(LOCATION_CHANGE_EVENT))
+    startTransition(() => {
+      window.dispatchEvent(new Event(LOCATION_CHANGE_EVENT))
+    })
   }, [])
 
   const value = useMemo<RouterContextValue>(
@@ -141,7 +158,11 @@ export function MemoryRouter({
   }, [snapshot])
 
   const navigate = useCallback<NavigateFn>((to) => {
-    setSnapshot(to)
+    // Same transition wrapping as <Router>'s navigate. Tests that assert
+    // on Suspense fallback behavior get parity with production routing.
+    startTransition(() => {
+      setSnapshot(to)
+    })
   }, [])
 
   const value = useMemo<RouterContextValue>(

@@ -1,0 +1,29 @@
+/* Text — shared body-text primitive. */
+
+.text {
+    margin: 0;
+    color: var(--editor-text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.textMuted {
+    color: var(--editor-text-muted);
+}
+
+.textStrong {
+    font-weight: 600;
+}
+
+.textMono {
+    font-family: var(--font-mono);
+}
+
+.textSm {
+    font-size: 11px;
+}
+
+.textLg {
+    font-size: 15px;
+}

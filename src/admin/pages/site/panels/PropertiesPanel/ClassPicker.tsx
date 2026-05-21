@@ -394,6 +394,7 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
           onKeyDown={handleSearchKeyDown}
           placeholder="Add or create class…"
           aria-label="Add or create a CSS class"
+          data-testid="class-picker-input"
           trailingSlot={
             <Button
               variant="ghost"
@@ -408,6 +409,7 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
                 e.preventDefault()
               }}
               onClick={submitQuery}
+              data-testid="class-picker-submit"
             >
               <CornerDownLeftIcon size={11} color="currentColor" aria-hidden="true" />
             </Button>
@@ -597,6 +599,7 @@ function AssignedClassPill({
       tabIndex={0}
       onContextMenu={onContextMenu}
       onKeyDown={handleKeyDown}
+      data-testid={`class-chip-${cls.name}`}
     >
       <span className={styles.pillName}>{cls.name}</span>
 
@@ -613,6 +616,7 @@ function AssignedClassPill({
         tooltip="Remove from this element"
         dangerHover
         className={styles.pillRemoveBtn}
+        data-testid={`class-chip-remove-${cls.name}`}
       >
         <CloseIcon size={10} color="currentColor" aria-hidden="true" />
       </Button>
@@ -656,6 +660,7 @@ function RankedSuggestionsList({
           <ContextMenuItem
             key={cls.id}
             data-class-suggestion-id={cls.id}
+            data-testid={`class-picker-suggestion-${cls.name}`}
             className={cn(isHighlighted && styles.suggestionHighlighted)}
             onClick={() => onPick(cls.id)}
             onMouseEnter={() => previewClass(cls.id)}
@@ -673,7 +678,10 @@ function RankedSuggestionsList({
       {canCreateNew && (
         <>
           {filteredSuggestions.length > 0 && <ContextMenuSeparator />}
-          <ContextMenuItem onClick={onCreateAndAdd}>
+          <ContextMenuItem
+            onClick={onCreateAndAdd}
+            data-testid="class-picker-create-new"
+          >
             + Create &ldquo;{query.trim()}&rdquo;
           </ContextMenuItem>
         </>
@@ -732,6 +740,7 @@ function ClassSuggestionSections({
       <ContextMenuItem
         key={cls.id}
         data-class-suggestion-id={cls.id}
+        data-testid={`class-picker-suggestion-${cls.name}`}
         className={cn(isHighlighted && styles.suggestionHighlighted)}
         onClick={() => onPick(cls.id)}
         onMouseEnter={() => previewClass(cls.id)}

@@ -5,7 +5,36 @@ import {
   getCurrentCmsUser,
   type CmsCurrentUser,
   type CmsPublicSite,
+  type CmsSetupStatus,
 } from '@core/persistence'
+
+/**
+ * Pre-flighted boot probes (see server/static.ts `BOOT_API_KICKOFF`).
+ *
+ * The unauthenticated SSR shell ships an inline `<script>` that fires the
+ * three boot fetches at HTML-parse time and exposes the result promises on
+ * `window.__pbBootPromises`. When present, this hook consumes them instead
+ * of issuing its own fetches — net effect: ~300 ms shaved off cold load
+ * because React 19's `useEffect` would otherwise be deferred behind the
+ * scheduler + first-paint cycle.
+ *
+ * Window typing kept loose (`unknown`) so we don't grow a public ambient
+ * declaration; this consumer narrows once and validates the result shape.
+ */
+interface PreflightedBootPromises {
+  setupStatus: Promise<CmsSetupStatus>
+  me: Promise<{ ok: true; user: CmsCurrentUser } | { ok: false }>
+  publicSite: Promise<CmsPublicSite | null>
+}
+
+function readPreflightedBootPromises(): PreflightedBootPromises | null {
+  if (typeof window === 'undefined') return null
+  const candidate = (window as unknown as { __pbBootPromises?: unknown }).__pbBootPromises
+  if (!candidate || typeof candidate !== 'object') return null
+  const c = candidate as Record<string, unknown>
+  if (!('setupStatus' in c) || !('me' in c) || !('publicSite' in c)) return null
+  return c as unknown as PreflightedBootPromises
+}
 
 // Phase the admin shell can be in after the boot effect has resolved. The
 // 'mfa' phase is owned by the pre-auth form (it's a sub-state of 'login' that
@@ -44,29 +73,28 @@ export function useAdminBoot(): AdminBootResult {
   useEffect(() => {
     let cancelled = false
 
-    // Site identity hydrates independently of the auth probe so a slow
-    // identity endpoint never blocks login.
-    void getCmsPublicSite()
-      .then((next) => {
-        if (!cancelled) setPublicSite(next)
-      })
-      .catch(() => {
-        // Brand row falls back to the default mark on failure.
-      })
+    // Preferred path: consume the promises the SSR shell fired at HTML
+    // parse time. They started at ~5 ms and are almost certainly already
+    // resolved by the time React's `useEffect` runs (~300 ms post-mount).
+    // Falls back to firing the fetches from here if the inline script is
+    // missing (dev server, custom SSR setups, or pre-SSR builds).
+    const preflighted = readPreflightedBootPromises()
+
+    const publicSitePromise = preflighted?.publicSite ?? getCmsPublicSite().catch(() => null)
+    void publicSitePromise.then((next) => {
+      if (cancelled || next === null) return
+      setPublicSite(next)
+    })
 
     async function resolveAuthPhase(): Promise<void> {
       try {
-        // Fire both probes in parallel. setup/status decides which UI to
-        // show; /me decides whether we have a session. The two answers
-        // don't depend on each other, so sequential awaits wasted one
-        // round-trip on every cold load. We swallow /me's rejection up
-        // front so the speculative request can't crash the boot if the
-        // server bounces /me before setup/status resolves.
-        const setupStatusPromise = getCmsSetupStatus()
-        const currentUserPromise = getCurrentCmsUser().then(
-          (u) => ({ ok: true as const, user: u }),
-          () => ({ ok: false as const }),
-        )
+        const setupStatusPromise = preflighted?.setupStatus ?? getCmsSetupStatus()
+        const currentUserPromise: Promise<{ ok: true; user: CmsCurrentUser } | { ok: false }> =
+          preflighted?.me
+            ?? getCurrentCmsUser().then(
+              (u) => ({ ok: true as const, user: u }),
+              () => ({ ok: false as const }),
+            )
         const setupStatus = await setupStatusPromise
         if (cancelled) return
 
