@@ -401,9 +401,25 @@ export function AdminCanvasLayout({
             )}
           </div>
         </div>
+        {/* `mode` tells the RightSidebar which expansion model to use:
+            - `'workspace'`: Content / Data / Media — width follows saved
+              `propertiesPanel.collapsed` only, independent of whether
+              `contentPanel` happens to be truthy yet (those workspaces
+              gate the inspector on async data; a contentPanel-dependent
+              width would slide in once the fetch resolves).
+            - `'site'`:      Site editor — width follows the selection-
+              gated `sitePropertiesExpanded` selector.
+            - `'hidden'`:    Site viewer (cannot save drafts) — always
+              closed; nothing inside.
+            `key={workspace}` remounts the sidebar on workspace switch so
+            no transition fires across navigations even when both sides
+            happen to be expanded at saved widths. Cross-workspace
+            visual continuity is handled by the page-level
+            `::view-transition(root)` fade in this file's stylesheet. */}
         <RightSidebar
+          key={workspace}
+          mode={workspace !== 'site' ? 'workspace' : canSaveSite ? 'site' : 'hidden'}
           contentPanel={workspace !== 'site' ? contentRightPanel : undefined}
-          suppressDefaultPanel={workspace !== 'site' || !canSaveSite}
         />
       </div>
       </ConfirmDeleteProvider>

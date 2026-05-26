@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useId, useState } from 'react'
+import { Suspense, lazy, useId, useState } from 'react'
 import { createHeadingBlock, createParagraphBlock, serializeMarkdownBlocks } from '@core/markdown/blockModel'
 import { readTitleCell } from '@core/data/cells'
 import type {
@@ -7,7 +7,6 @@ import type {
   DataRowStatus,
   UpdateDataTableInput,
 } from '@core/data/schemas'
-import { useEditorStore } from '@site/store/store'
 import { HeadingIcon } from 'pixel-art-icons/icons/heading'
 import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
 import { TextPlusIcon } from 'pixel-art-icons/icons/text-plus'
@@ -92,9 +91,14 @@ export function ContentPage() {
   const canEditSelectedEntry = canEditContentEntry(permissionUser, workspace.selectedEntry)
   const canPublishSelectedEntry = canPublishContentEntry(permissionUser, workspace.selectedEntry)
 
-  useEffect(() => {
-    useEditorStore.getState().setPropertiesPanel({ collapsed: false })
-  }, [])
+  // Note: we used to unconditionally `setPropertiesPanel({ collapsed:
+  // false })` here on mount, which forced the inspector open every time
+  // the user entered the Content workspace — overriding the saved
+  // closed state and causing a slide-in width transition on the right
+  // sidebar. The persisted layout in localStorage is the source of
+  // truth; if the user closed the inspector, it stays closed when they
+  // return. Specific actions (selecting an entry, opening a row) still
+  // open the inspector through their own handlers.
 
   async function handleCreateEntry() {
     if (!canCreateEntries) {

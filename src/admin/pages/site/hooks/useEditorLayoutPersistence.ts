@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import type { StoreApi, UseBoundStore } from 'zustand'
 import { useEditorStore, type EditorStore } from '@site/store/store'
 import {
   readEditorLayout,
@@ -12,6 +13,8 @@ import {
   LEFT_SIDEBAR_DEFAULT_WIDTH,
   type PropertiesPanelMode,
 } from '@site/store/slices/uiSlice'
+
+type EditorStoreApi = UseBoundStore<StoreApi<EditorStore>>
 
 type LayoutSelection = readonly [
   domOpen: boolean,
@@ -146,8 +149,21 @@ function layoutFromSelection(
   }
 }
 
-function restoreStoredLayout(layout: StoredEditorLayout) {
-  useEditorStore.setState((state) => {
+/**
+ * Apply a stored layout to the given editor-store API.
+ *
+ * Exported (and parameterised on the store API) so it can be called BOTH
+ * from the `useEditorLayoutPersistence` hook's mount effect AND
+ * synchronously at module-load time in `store.ts` — see the call site
+ * there for why synchronous hydration matters (preventing a paint
+ * between the default editor state and the persisted state, which
+ * triggers the right-sidebar width transition on cold loads).
+ */
+export function restoreStoredEditorLayout(
+  api: EditorStoreApi,
+  layout: StoredEditorLayout,
+) {
+  api.setState((state) => {
     const domOpen = panelOpen(layout, 'dom', !state.domTreePanel.collapsed)
     const siteOpen = panelOpen(layout, 'site', state.siteExplorerPanelOpen)
     const selectorsOpen = panelOpen(layout, 'selectors', state.selectorsPanelOpen)
@@ -215,9 +231,15 @@ function restoreStoredLayout(layout: StoredEditorLayout) {
 
 export function useEditorLayoutPersistence() {
   useEffect(() => {
+    // NOTE: The initial hydration also runs synchronously at module-load
+    // time in `store.ts` so the first render already sees the persisted
+    // layout. This effect re-applies it on mount as a safety net — for
+    // example when `<AdminCanvasLayout>` is remounted after navigating
+    // back from a non-editor route — but on cold loads it is usually a
+    // no-op (the state already matches the layout).
     const storedLayout = readEditorLayout()
     if (storedLayout) {
-      restoreStoredLayout(storedLayout)
+      restoreStoredEditorLayout(useEditorStore, storedLayout)
     }
 
     const unsubscribe = useEditorStore.subscribe(

@@ -4,12 +4,42 @@ import { PropertiesPanel } from '@site/panels/PropertiesPanel'
 import { SidebarResizeHandle } from '@admin/shared/SidebarResizeHandle'
 import styles from './RightSidebar.module.css'
 
+/**
+ * Right-sidebar mode — picked by the parent layout based on workspace and
+ * permissions. Decouples the sidebar's expanded/collapsed state from the
+ * (async) availability of its `contentPanel`:
+ *
+ * - `site`     — Site editor. Width follows `sitePropertiesExpanded`
+ *                (open iff a node/class is selected AND docked AND not
+ *                collapsed). When expanded and no `contentPanel` is
+ *                provided, falls back to the docked default
+ *                `<PropertiesPanel>`.
+ * - `workspace`— Content / Data / Media. Width follows the saved
+ *                `propertiesPanel.collapsed` state ONLY. Critically, it
+ *                does NOT depend on whether `contentPanel` happens to be
+ *                truthy yet — those workspaces gate their inspector on
+ *                async data (selected entry / selected table), so a
+ *                width formula that read `contentPanel` directly would
+ *                slide the sidebar in from 0 once the fetch resolved.
+ *                Mirrors the left sidebar's purely-local-state width.
+ * - `hidden`   — Site viewer (no `pages.draft.save` capability). Always
+ *                closed; renders nothing inside.
+ */
+export type RightSidebarMode = 'site' | 'workspace' | 'hidden'
+
 interface RightSidebarProps {
+  mode: RightSidebarMode
+  /**
+   * Inspector content for `mode === 'workspace'`. Provided by the
+   * workspace page (e.g. `<DataInspector>`, `<ContentSettingsPanel>`)
+   * once its selection is known. May be `undefined` while async data is
+   * loading — the sidebar's width does not depend on this; only what
+   * renders inside does.
+   */
   contentPanel?: ReactNode
-  suppressDefaultPanel?: boolean
 }
 
-export function RightSidebar({ contentPanel, suppressDefaultPanel = false }: RightSidebarProps) {
+export function RightSidebar({ mode, contentPanel }: RightSidebarProps) {
   const sidebarRef = useRef<HTMLElement | null>(null)
   const propertiesPanel = useEditorStore((s) => s.propertiesPanel)
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
@@ -18,7 +48,18 @@ export function RightSidebar({ contentPanel, suppressDefaultPanel = false }: Rig
 
   const isDocked = propertiesPanelMode === 'docked'
   const sitePropertiesExpanded = useEditorStore(selectRightSidebarExpanded)
-  const isExpanded = contentPanel ? !propertiesCollapsed : suppressDefaultPanel ? false : sitePropertiesExpanded
+
+  // Width is derived purely from synchronous state — same model the
+  // left sidebar uses. No dependence on the async `contentPanel` prop
+  // means the sidebar lands at its final width on first paint and
+  // stays there, only changing when the user explicitly toggles
+  // open/close (which the CSS transition in RightSidebar.module.css
+  // animates smoothly).
+  const isExpanded =
+    mode === 'workspace' ? !propertiesCollapsed
+      : mode === 'site' ? sitePropertiesExpanded
+        : false
+
   const panelWidth = isExpanded ? propertiesPanel.width : 0
 
   const style = {
@@ -45,14 +86,14 @@ export function RightSidebar({ contentPanel, suppressDefaultPanel = false }: Rig
         />
       )}
 
-      {contentPanel ? (
+      {mode === 'workspace' && contentPanel ? (
         <div
           className={styles.panelSlot}
           data-testid="right-sidebar-panel-slot"
         >
           {contentPanel}
         </div>
-      ) : !suppressDefaultPanel && isDocked && (
+      ) : mode === 'site' && isDocked && (
         <div
           className={styles.panelSlot}
           data-testid="right-sidebar-panel-slot"

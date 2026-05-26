@@ -146,8 +146,19 @@ export function useContentWorkspace({
         if (cancelled) return
         setEntries(nextEntries)
         setSelectedEntry((current) => {
+          // Auto-select the first entry when none was previously
+          // selected (or the previous selection belonged to a
+          // different table). We deliberately do NOT force the right
+          // sidebar open here — that used to call
+          // `setPropertiesPanel({ collapsed: false })`, which fired
+          // AFTER the network fetch resolved and animated the sidebar
+          // in from 0 → saved width on every page load. The right
+          // sidebar's expanded state is now sourced from
+          // `propertiesPanel.collapsed` directly (see RightSidebar.tsx
+          // `mode='workspace'`), so if the user previously closed it
+          // it stays closed; if they had it open it's already open at
+          // the saved width from the first paint.
           if (!current || current.tableId !== tableId) {
-            useEditorStore.getState().setPropertiesPanel({ collapsed: false })
             return nextEntries[0] ?? null
           }
           return current
