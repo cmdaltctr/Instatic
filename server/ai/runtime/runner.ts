@@ -80,6 +80,17 @@ export async function runChat(args: RunChatArgs): Promise<void> {
         case 'toolResult': {
           const pending = pendingToolCallsByCallId.get(event.toolCallId)
           pendingToolCallsByCallId.delete(event.toolCallId)
+          if (!event.ok) {
+            // Surface failed tool calls server-side so the operator can
+            // correlate a UI red-dot with a stack-trace / driver message
+            // in the server log. The browser already sees the error text
+            // (inline under the tool badge); this is the other half of
+            // the diagnostic loop.
+            console.error(
+              `[ai/runner] tool failed — ${pending?.name ?? event.toolName} (${event.toolCallId}):`,
+              event.error ?? 'no error message',
+            )
+          }
           await persister.appendToolResult({
             toolCallId: event.toolCallId,
             toolName: pending?.name ?? event.toolName,
@@ -93,6 +104,8 @@ export async function runChat(args: RunChatArgs): Promise<void> {
             promptTokens: event.promptTokens,
             completionTokens: event.completionTokens,
             costUsd: event.costUsd,
+            cacheReadTokens: event.cacheReadTokens,
+            cacheCreationTokens: event.cacheCreationTokens,
           })
           break
         }
@@ -113,9 +126,13 @@ export async function runChat(args: RunChatArgs): Promise<void> {
     await flushPendingAssistantText()
     emit({ type: 'done' })
   } catch (err) {
-    const detail = err instanceof Error ? err.message : 'Unknown error'
-    console.error('[ai/runner] driver.stream() threw:', detail)
+    const detail = err instanceof Error ? err.message : String(err)
+    // Log with the full Error (preserves the stack trace in the operator's
+    // terminal). Forward a tagged message to the browser so the admin
+    // can see the actual cause — this surface is capability-gated to
+    // admins, not end users.
+    console.error('[ai/runner] driver.stream() threw:', err)
     await flushPendingAssistantText().catch(() => { /* noop */ })
-    emit({ type: 'error', message: 'AI runtime error. Please try again.' })
+    emit({ type: 'error', message: `AI runtime error: ${detail}` })
   }
 }

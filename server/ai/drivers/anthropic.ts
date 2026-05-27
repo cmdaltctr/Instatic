@@ -131,7 +131,7 @@ async function* runAnthropicStream(req: AiStreamRequest): AsyncIterable<AiStream
     return
   }
 
-  const mcpServer = buildMcpServerForTools(req.tools, req.bridge, req.signal)
+  const mcpServer = buildMcpServerForTools(req.tools, req.bridge, req.signal, req.toolContextBase)
   const options = buildQueryOptions(req, mcpServer)
   const prompt = serialiseMessagesAsPrompt(req.messages)
   const streamState = createAnthropicStreamState()
@@ -145,21 +145,52 @@ async function* runAnthropicStream(req: AiStreamRequest): AsyncIterable<AiStream
       const sdkMsg = message as { type: 'assistant'; message?: unknown; error?: unknown }
       if (!sdkMsg.message) {
         // Auth/billing failure surfaces here as an absent message body.
-        // Log internally + emit a generic error (CWE-209 — never leak raw
-        // SDK details to the browser).
+        // Log + emit a classified error. Admin-only surface (capability
+        // gated) so the detail is fine to forward when present.
         console.error('[ai/anthropic] assistant message unavailable (auth/billing):', sdkMsg.error)
-        yield { type: 'error', message: 'Anthropic auth or billing error. Check your credentials in /admin/ai/providers.' }
+        const detail = formatAnthropicError(sdkMsg.error)
+        yield {
+          type: 'error',
+          message: detail
+            ? `Anthropic error: ${detail}. Check your credentials in /admin/ai/providers.`
+            : 'Anthropic auth or billing error. Check your credentials in /admin/ai/providers.',
+        }
         return
       }
     } else if (message.type === 'result') {
       const result = message as { type: 'result'; is_error?: boolean; subtype?: string; errors?: string[] }
       if (result.is_error) {
         console.error('[ai/anthropic] SDK result error:', result.subtype, result.errors)
-        yield { type: 'error', message: 'Anthropic session ended with an error. Please try again.' }
+        const detail = [result.subtype, ...(result.errors ?? [])]
+          .filter((s): s is string => typeof s === 'string' && s.length > 0)
+          .join(' — ')
+        yield {
+          type: 'error',
+          message: detail
+            ? `Anthropic session error: ${detail}`
+            : 'Anthropic session ended with an error. Please try again.',
+        }
         return
       }
     }
   }
+}
+
+/**
+ * Extract a short, user-facing message from the SDK's `error` field on an
+ * assistant message with no body. The SDK wraps either an `Error` instance,
+ * a plain string, or an object with a `message` property. Anything else
+ * collapses to null so the caller falls back to its generic copy.
+ */
+function formatAnthropicError(err: unknown): string | null {
+  if (!err) return null
+  if (typeof err === 'string') return err
+  if (err instanceof Error) return err.message
+  if (typeof err === 'object' && 'message' in err) {
+    const msg = (err as { message?: unknown }).message
+    if (typeof msg === 'string') return msg
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -207,8 +238,9 @@ function buildMcpServerForTools(
   tools: AiTool[],
   bridge: AiStreamRequest['bridge'],
   signal: AbortSignal,
+  toolContextBase: AiStreamRequest['toolContextBase'],
 ) {
-  const sdkTools = tools.map((t) => toolToSdkDefinition(t, bridge, signal))
+  const sdkTools = tools.map((t) => toolToSdkDefinition(t, bridge, signal, toolContextBase))
   return createSdkMcpServer({
     name: 'ai_tools',
     version: '1.0.0',
@@ -221,13 +253,14 @@ function toolToSdkDefinition(
   aiTool: AiTool,
   bridge: AiStreamRequest['bridge'],
   signal: AbortSignal,
+  toolContextBase: AiStreamRequest['toolContextBase'],
 ): SdkMcpToolDefinition<Record<string, ZodTypeAny>> {
   const rawShape = typeboxObjectToZodRawShape(aiTool.inputSchema)
   return tool(
     aiTool.name,
     aiTool.description,
     rawShape,
-    async (input) => callTool(aiTool, input, bridge, signal),
+    async (input) => callTool(aiTool, input, bridge, signal, toolContextBase),
     { alwaysLoad: true },
   )
 }
@@ -237,6 +270,7 @@ async function callTool(
   rawInput: unknown,
   bridge: AiStreamRequest['bridge'],
   signal: AbortSignal,
+  toolContextBase: AiStreamRequest['toolContextBase'],
 ): Promise<CallToolResult> {
   // Defence in depth: re-validate against the TypeBox schema before either
   // calling the handler OR forwarding to the browser. The SDK already
@@ -256,14 +290,7 @@ async function callTool(
     }
     try {
       const ctx: ToolContext = {
-        // The runner currently doesn't thread userId/scope/conversationId
-        // through tool calls because read tools only need the snapshot.
-        // Plumbing this through is a Phase 1 chore — handlers can extend
-        // the context object before invoking the runner.
-        userId: '',
-        scope: 'site',
-        conversationId: '',
-        snapshot: __toolSnapshotForTesting,
+        ...toolContextBase,
         signal,
       }
       const result = await aiTool.handler(validated, ctx)
@@ -300,32 +327,6 @@ function errorResult(message: string): CallToolResult {
     content: [{ type: 'text', text: message }],
     structuredContent: { ok: false, error: message },
   }
-}
-
-// ---------------------------------------------------------------------------
-// Snapshot wiring — temporary
-// ---------------------------------------------------------------------------
-//
-// The Claude Agent SDK's `tool()` callback API is fire-and-forget per call:
-// the SDK doesn't pass per-conversation context through to the handler.
-// Server-resolved read tools (list_modules, inspect_node, ...) need the
-// snapshot the chat handler attached to the request.
-//
-// Phase 1 wires this through a module-level binding the handler sets before
-// kicking off the stream and clears in the finally block. NOT re-entrant —
-// only one chat per process at a time would be a regression; in practice
-// node-style request isolation via async-local-storage is a Phase-3 followup.
-// For now the chat handler is the only call-site and is single-stream per
-// request, so this is safe.
-
-let __toolSnapshotForTesting: unknown = undefined
-
-export function __setActiveToolSnapshot(snapshot: unknown): void {
-  __toolSnapshotForTesting = snapshot
-}
-
-export function __clearActiveToolSnapshot(): void {
-  __toolSnapshotForTesting = undefined
 }
 
 // ---------------------------------------------------------------------------

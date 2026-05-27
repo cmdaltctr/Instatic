@@ -38,6 +38,15 @@ const AuditActionSchema = Type.Union([
   Type.Literal('plugin.delete'),
   Type.Literal('plugin.pack.install'),
   Type.Literal('plugin.settings.update'),
+  // AI runtime — see `docs/plans/2026-05-26-ai-runtime-rewrite.md` § Audit.
+  Type.Literal('ai.credential.created'),
+  Type.Literal('ai.credential.updated'),
+  Type.Literal('ai.credential.deleted'),
+  Type.Literal('ai.credential.tested'),
+  Type.Literal('ai.default.updated'),
+  Type.Literal('ai.chat.started'),
+  Type.Literal('ai.chat.completed'),
+  Type.Literal('ai.chat.failed'),
 ])
 
 const AuditMetadataSchema = Type.Record(

@@ -243,11 +243,37 @@ function fromResultUsage(message: unknown): AiStreamEvent | null {
   }
   const usage = result.usage
   if (!usage) return null
+
+  const cacheReadTokens = usage.cache_read_input_tokens ?? 0
+  const cacheCreationTokens = usage.cache_creation_input_tokens ?? 0
+  const promptTokens = usage.input_tokens ?? 0
+  const completionTokens = usage.output_tokens ?? 0
+
+  // Visibility for the operator — caching is meant to dominate per-call cost
+  // after the first turn. If we never see cache_read > 0 across a multi-turn
+  // chat, something is breaking the prefix (system prompt churn, tool list
+  // changes, model swap mid-chat, …).
+  if (cacheReadTokens > 0 || cacheCreationTokens > 0) {
+    console.info(
+      `[ai/anthropic] cache hit=${cacheReadTokens} write=${cacheCreationTokens} ` +
+      `input=${promptTokens} output=${completionTokens}`,
+    )
+  } else if (promptTokens > 1024) {
+    // Prefix is big enough to qualify (1024+ tokens for Sonnet/Opus) but
+    // we got zero cache activity — surface this so we can debug why.
+    console.warn(
+      `[ai/anthropic] no cache activity despite input=${promptTokens} ` +
+      `(prefix should be cacheable; check systemPrompt array shape)`,
+    )
+  }
+
   return {
     type: 'usage',
-    promptTokens: usage.input_tokens ?? 0,
-    completionTokens: usage.output_tokens ?? 0,
+    promptTokens,
+    completionTokens,
     costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : undefined,
+    cacheReadTokens: cacheReadTokens || undefined,
+    cacheCreationTokens: cacheCreationTokens || undefined,
   }
 }
 

@@ -343,6 +343,7 @@ const MarkdownTextBubble = memo(function MarkdownTextBubble({
 function ToolCallBadge({ toolCall }: { toolCall: AgentToolCall }) {
   const isPending = toolCall.status === 'pending'
   const isSuccess = toolCall.status === 'success'
+  const isError = toolCall.status === 'error'
 
   const iconClass = isPending
     ? styles.toolCallIconPending
@@ -357,26 +358,44 @@ function ToolCallBadge({ toolCall }: { toolCall: AgentToolCall }) {
     ? `Completed ${displayType}${label ? ` — ${label}` : ''}`
     : `Failed ${displayType}${label ? ` — ${label}` : ''}`
 
+  // Surface the tool's error message directly in the badge stream so the
+  // user sees WHY a tool failed without having to dig through devtools. The
+  // toolResult handler in agentSlice.ts already populates `result.error`.
+  const errorMessage = isError ? toolCall.result?.error ?? 'Tool call failed.' : null
+
   return (
-    <div
-      role="status"
-      aria-label={statusLabel}
-      className={styles.toolCallBadge}
-    >
-      <span className={iconClass} aria-hidden="true">
-        {isPending ? (
-          <LoaderIcon size={10} />
-        ) : isSuccess ? (
-          <CheckIcon size={10} />
-        ) : (
-          <CircleAlertSolidIcon size={10} />
-        )}
-      </span>
-      <span className={styles.toolCallType} aria-hidden="true">
-        {displayType}
-      </span>
-      <span aria-hidden="true">{label}</span>
-    </div>
+    <>
+      <div
+        role="status"
+        aria-label={statusLabel}
+        className={styles.toolCallBadge}
+      >
+        <span className={iconClass} aria-hidden="true">
+          {isPending ? (
+            <LoaderIcon size={10} />
+          ) : isSuccess ? (
+            <CheckIcon size={10} />
+          ) : (
+            <CircleAlertSolidIcon size={10} />
+          )}
+        </span>
+        <span className={styles.toolCallType} aria-hidden="true">
+          {displayType}
+        </span>
+        <span aria-hidden="true">{label}</span>
+      </div>
+      {errorMessage && (
+        <p
+          role="alert"
+          // Tone-aligned with `.errorBanner` (red text on muted background)
+          // but inline + compact so a string of failed tool calls stays
+          // readable.
+          className={styles.toolCallError}
+        >
+          {errorMessage}
+        </p>
+      )}
+    </>
   )
 }
 

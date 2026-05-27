@@ -47,9 +47,11 @@ export function ModelPicker({ className }: ModelPickerProps) {
   const [modelsByCred, setModelsByCred] = useState<Record<string, AiModel[]>>({})
   const [refreshKey, setRefreshKey] = useState(0)
 
-  // Load credentials when the popover opens. Cheap call — short list.
+  // Load credentials on mount AND every time the popover re-opens. The mount
+  // load is what makes the trigger label show the credential's friendly
+  // displayLabel (instead of a 6-char id slice) before the user has ever
+  // opened the popover. Cheap call — short list.
   useEffect(() => {
-    if (!open) return
     let cancelled = false
     async function load() {
       try {
@@ -62,15 +64,23 @@ export function ModelPicker({ className }: ModelPickerProps) {
     }
     void load()
     return () => { cancelled = true }
-  }, [open, refreshKey])
+  }, [refreshKey])
 
   // Lazy-load models for each credential's provider. Cached per credential
   // id so a later per-credential model list (Ollama with different
   // baseUrls returns different models) doesn't collide.
+  //
+  // Two-phase: while the popover is CLOSED we only fetch models for the
+  // currently-active credential (just enough to render its model's friendly
+  // label on the trigger). When the popover OPENS we fan out to every
+  // credential so the full picker is populated.
   useEffect(() => {
-    if (!open || credentials.length === 0) return
+    if (credentials.length === 0) return
     let cancelled = false
-    for (const cred of credentials) {
+    const targets = open
+      ? credentials
+      : credentials.filter((c) => c.id === activeCredentialId)
+    for (const cred of targets) {
       if (modelsByCred[cred.id]) continue
       void listModels(cred.providerId, cred.id).then((models) => {
         if (cancelled) return
@@ -78,16 +88,20 @@ export function ModelPicker({ className }: ModelPickerProps) {
       }).catch(() => { /* swallow */ })
     }
     return () => { cancelled = true }
-  }, [open, credentials, modelsByCred])
+  }, [open, credentials, modelsByCred, activeCredentialId])
 
   const activeLabel = useMemo(() => {
     if (!activeCredentialId || !activeModelId) return 'Default'
     const cred = credentials.find((c) => c.id === activeCredentialId)
     const models = modelsByCred[activeCredentialId] ?? []
     const model = models.find((m) => m.id === activeModelId)
-    const credLabel = cred?.displayLabel ?? activeCredentialId.slice(0, 6)
+    // Fall back to the model id (not the credential id slice) when the
+    // credential row hasn't loaded yet — the model id is at least a
+    // recognisable string like "gpt-5.5". Empty string until the first
+    // credential fetch settles so we don't flash an id slice.
+    const credLabel = cred?.displayLabel ?? ''
     const modelLabel = model?.label ?? activeModelId
-    return `${credLabel} · ${modelLabel}`
+    return credLabel ? `${credLabel} · ${modelLabel}` : modelLabel
   }, [activeCredentialId, activeModelId, credentials, modelsByCred])
 
   function toggle() {

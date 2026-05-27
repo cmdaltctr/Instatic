@@ -11,6 +11,7 @@ import { jsonResponse } from '../../http'
 import { isStateChangingMethod, originAllowed } from '../../auth/security'
 import { requireCapability } from '../../auth/authz'
 import type { DbClient } from '../../db/client'
+import { createAuditEvent } from '../../repositories/audit'
 import { listDefaults, setDefaultForScope } from '../defaults/store'
 import type { ToolScope } from '../runtime/types'
 
@@ -89,6 +90,17 @@ async function handleSet(req: Request, db: DbClient, scope: string): Promise<Res
       modelId,
       userOrResponse.id,
     )
+    await createAuditEvent(db, {
+      actorUserId: userOrResponse.id,
+      action: 'ai.default.updated',
+      targetType: 'ai_default',
+      targetId: scope,
+      metadata: {
+        scope,
+        credentialId,
+        modelId,
+      },
+    })
     return jsonResponse({ default: record })
   } catch (err) {
     // FK violation when credentialId doesn't exist or belongs to a

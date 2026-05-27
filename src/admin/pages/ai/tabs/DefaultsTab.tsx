@@ -6,7 +6,7 @@
  * credential's provider). Saving a row PUTs to /admin/api/ai/defaults/:scope.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Select } from '@ui/components/Select'
 import { SaveSolidIcon } from 'pixel-art-icons/icons/save-solid'
@@ -149,51 +149,107 @@ function ScopeRow({
   status: string | undefined
   onSave: (credentialId: string, modelId: string) => Promise<void>
 }) {
-  const [credentialId, setCredentialId] = useState<string>(current?.credentialId ?? credentials[0]?.id ?? '')
-  const [explicitModelId, setExplicitModelId] = useState<string>(current?.modelId ?? '')
+  // Track ONLY user overrides — the displayed values are derived from
+  // `(userOverride ?? validSavedValue ?? firstAvailable)` so the visible UI
+  // and the internal state can never disagree.
+  //
+  // Why this matters: the saved default may point to a credential the
+  // current user can no longer resolve (deleted, owned by another user,
+  // master-key rotated). The Select primitive silently renders the first
+  // option in that case but its underlying `value` would still hold the
+  // stale id — making "save" a no-op and "model dropdown" hang on
+  // "Loading models…" forever because `credentials.find(...)` returned
+  // undefined.
+  const [userOverride, setUserOverride] = useState<{
+    credentialId?: string
+    modelId?: string
+  }>({})
 
-  const selectedCred = useMemo(
-    () => credentials.find((c) => c.id === credentialId),
-    [credentials, credentialId],
-  )
-  const models = useMemo(
-    () => selectedCred ? (modelsByProvider[selectedCred.providerId] ?? []) : [],
-    [selectedCred, modelsByProvider],
-  )
+  const savedCredentialResolves = current?.credentialId
+    ? credentials.some((c) => c.id === current.credentialId)
+    : false
 
-  // Derived "effective" model id: prefer the explicit selection when it's
-  // still valid against the loaded list; otherwise fall back to the first
-  // model. Computed at render time — no effect, no setState ping-pong.
-  const modelId = explicitModelId && models.some((m) => m.id === explicitModelId)
-    ? explicitModelId
-    : (models[0]?.id ?? '')
+  const credentialId =
+    userOverride.credentialId
+    ?? (savedCredentialResolves ? current!.credentialId : credentials[0]?.id ?? '')
+
+  const selectedCred = credentials.find((c) => c.id === credentialId)
+  const providerId = selectedCred?.providerId
+  const models = providerId ? (modelsByProvider[providerId] ?? []) : []
+  // "loading" is honest now: provider is selected AND its model list hasn't
+  // been requested yet (parent's effect populates `modelsByProvider`
+  // lazily, one provider at a time).
+  const modelsLoading = Boolean(providerId) && !modelsByProvider[providerId!]
+
+  const savedModelMatches =
+    current?.modelId && models.some((m) => m.id === current.modelId)
+  const modelId =
+    (userOverride.modelId && models.some((m) => m.id === userOverride.modelId))
+      ? userOverride.modelId
+      : savedModelMatches
+        ? current!.modelId
+        : (models[0]?.id ?? '')
+
+  const stale =
+    Boolean(current?.credentialId) && !savedCredentialResolves
 
   const credOptions = credentials.map((c) => ({
     value: c.id,
     label: `${c.displayLabel} (${c.providerId})`,
   }))
-  const modelOptions = models.map((m) => ({ value: m.id, label: m.label }))
 
-  const canSave = !busy && credentialId && modelId &&
-    (current?.credentialId !== credentialId || current?.modelId !== modelId)
+  // Distinguish the empty-state reasons so the user knows what's wrong:
+  //   • No credential picked yet           → "Pick a credential first"
+  //   • Provider picked, list still loading → "Loading models…"
+  //   • Loaded and empty                    → "No models available"
+  const modelOptions = models.length > 0
+    ? models.map((m) => ({ value: m.id, label: m.label }))
+    : !selectedCred
+      ? [{ value: '', label: 'Pick a credential first' }]
+      : modelsLoading
+        ? [{ value: '', label: 'Loading models…' }]
+        : [{ value: '', label: 'No models available' }]
+
+  // A stale saved default is ALWAYS "needs saving" — even if the auto-
+  // resolved credentialId happens to match the first row, the user needs
+  // to confirm the change so the default isn't a stale phantom.
+  const dirty =
+    stale
+    || credentialId !== (current?.credentialId ?? '')
+    || modelId !== (current?.modelId ?? '')
+  const canSave = !busy && Boolean(credentialId) && Boolean(modelId) && dirty
 
   return (
     <div className={styles.defaultRow}>
       <div>
         <div className={styles.defaultScopeLabel}>{scope}</div>
         <p className={styles.secondaryText}>{SCOPE_DESCRIPTIONS[scope]}</p>
+        {stale && (
+          <p role="status" className={`${styles.testResult} ${styles.danger}`}>
+            Previously saved credential is no longer available. Pick another and Save.
+          </p>
+        )}
       </div>
       <Select
         aria-label={`Credential for ${scope}`}
         value={credentialId}
-        onChange={(e) => setCredentialId(e.currentTarget.value)}
+        onChange={(e) => setUserOverride((prev) => ({
+          ...prev,
+          credentialId: e.currentTarget.value,
+          // Switching credential invalidates any explicit model pick —
+          // the new credential's model list may not contain it.
+          modelId: undefined,
+        }))}
         options={credOptions}
       />
       <Select
         aria-label={`Model for ${scope}`}
         value={modelId}
-        onChange={(e) => setExplicitModelId(e.currentTarget.value)}
-        options={modelOptions.length > 0 ? modelOptions : [{ value: '', label: 'Loading models…' }]}
+        onChange={(e) => setUserOverride((prev) => ({
+          ...prev,
+          modelId: e.currentTarget.value,
+        }))}
+        options={modelOptions}
       />
       <div>
         <Button

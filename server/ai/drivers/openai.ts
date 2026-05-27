@@ -159,12 +159,18 @@ async function* runOpenAiStream(req: AiStreamRequest): AsyncIterable<AiStreamEve
       if (translated) yield translated
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'OpenAI stream failed.'
-    console.error('[ai/openai] stream error:', message)
+    const detail = err instanceof Error ? err.message : 'OpenAI stream failed.'
+    console.error('[ai/openai] stream error:', detail)
+    // Prefer the classified message (auth / billing / quota → actionable
+    // copy with a deep-link to /admin/ai/providers), but fall back to the
+    // raw SDK message so the admin can see WHY the stream failed instead
+    // of a content-free "session ended" placeholder. This is an
+    // admin-only surface (capability gated) — info-disclosure concerns
+    // don't apply.
+    const classified = classifyAuthOrBillingError(err)
     yield {
       type: 'error',
-      message: classifyAuthOrBillingError(err) ??
-        'OpenAI session ended with an error. Please try again.',
+      message: classified ?? `OpenAI error: ${detail}`,
     }
   }
 }
@@ -180,7 +186,9 @@ function buildAgent(req: AiStreamRequest): Agent {
     // we join our cache-tagged array (the cache marker is no-op here).
     instructions: req.systemPrompt.join('\n\n'),
     model: req.modelId,
-    tools: req.tools.map((t) => toolToSdkTool(t, req.bridge, req.signal)),
+    tools: req.tools.map((t) =>
+      toolToSdkTool(t, req.bridge, req.signal, req.toolContextBase),
+    ),
   })
 }
 
@@ -197,6 +205,7 @@ function toolToSdkTool(
   aiTool: AiTool,
   bridge: AiStreamRequest['bridge'],
   signal: AbortSignal,
+  toolContextBase: AiStreamRequest['toolContextBase'],
 ): ReturnType<typeof tool> {
   const parameters = typeboxToJsonObjectSchema(aiTool.inputSchema)
   return tool({
@@ -207,7 +216,7 @@ function toolToSdkTool(
     // and recursive references (insertTree). Non-strict tolerates both.
     strict: false,
     async execute(input) {
-      return callAiTool(aiTool, input, bridge, signal)
+      return callAiTool(aiTool, input, bridge, signal, toolContextBase)
     },
   })
 }
@@ -217,6 +226,7 @@ async function callAiTool(
   rawInput: unknown,
   bridge: AiStreamRequest['bridge'],
   signal: AbortSignal,
+  toolContextBase: AiStreamRequest['toolContextBase'],
 ): Promise<unknown> {
   // Defence in depth: validate against TypeBox before dispatching.
   let validated: unknown
@@ -232,20 +242,8 @@ async function callAiTool(
       return { ok: false, error: `Tool ${aiTool.name} declares execution='server' but has no handler.` }
     }
     try {
-      // The Anthropic driver has a module-level binding for the active
-      // tool snapshot; the same `__setActiveToolSnapshot` is wired by the
-      // chat handler before invoking either driver. Importing it here
-      // would create a circular dep — instead we expect the chat handler
-      // to set it before runChat() starts. Re-using the binding keeps the
-      // two drivers behaviourally consistent for read tools.
-      //
-      // FUTURE: Phase 3 replaces this with AsyncLocalStorage so concurrent
-      // chats don't share a single binding.
       const ctx: ToolContext = {
-        userId: '',
-        scope: 'site',
-        conversationId: '',
-        snapshot: getActiveToolSnapshot(),
+        ...toolContextBase,
         signal,
       }
       return await aiTool.handler(validated, ctx)
@@ -406,26 +404,6 @@ function serialiseLastUserMessage(messages: AiMessage[]): string {
     .filter((m): m is Extract<AiMessage, { role: 'user' }> => m.role === 'user')
     .map((m) => m.content.map((b) => (b.kind === 'text' ? b.text : '')).join(' '))
     .join('\n')
-}
-
-// ---------------------------------------------------------------------------
-// Shared tool-snapshot binding — set by the chat handler before invoking the
-// driver. Same mechanism the Anthropic driver uses; kept here so this file
-// has no circular import to that driver.
-// ---------------------------------------------------------------------------
-
-let _activeToolSnapshot: unknown = undefined
-
-export function __setActiveOpenAiToolSnapshot(snapshot: unknown): void {
-  _activeToolSnapshot = snapshot
-}
-
-export function __clearActiveOpenAiToolSnapshot(): void {
-  _activeToolSnapshot = undefined
-}
-
-function getActiveToolSnapshot(): unknown {
-  return _activeToolSnapshot
 }
 
 // ---------------------------------------------------------------------------

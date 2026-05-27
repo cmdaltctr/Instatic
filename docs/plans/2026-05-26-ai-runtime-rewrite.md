@@ -4,34 +4,37 @@ A plan to take the current single-provider, single-surface Claude Agent SDK inte
 
 ---
 
+## Status (as of last update)
+
+- **Phases 1, 2, 3, 6 shipped** — runtime + drivers + credential/conversation stores; settings UI at `/admin/ai`; site editor rewired onto the new transport with model + conversation pickers + no-credential banner; cost meter + audit (price table at `server/ai/pricing.ts`, `ai.*` audit events, Audit tab with totals + by-user/by-surface/daily rollups, dashboard "AI usage" widget).
+- **Phase 4 (Content + Data workspaces)** and **Phase 5 (Plugin SDK)** are not yet built.
+
 ## TL;DR
 
 - One canonical **AI runtime** (`server/ai/`) replaces the bespoke `server/handlers/agent/*` stack.
-- Three **provider drivers** behind an `AiProvider` interface: `anthropic`, `openai`, `ollama`. Each driver supports multiple **auth modes** (`ambient` / `apiKey` / `baseUrl`) — picked per credential row at setup time. **Each provider uses exactly one SDK** regardless of auth mode; the auth mode only changes whether the driver passes a key per call or lets the SDK pick up ambient credentials.
-  - Anthropic: `@anthropic-ai/claude-agent-sdk`. Ambient = SDK uses Claude Code OAuth from `claude auth login` (Pro/Max/Team subscription billing). apiKey = driver injects the user's `ANTHROPIC_API_KEY` per call.
-  - OpenAI: `@openai/agents`. Ambient = SDK reads `OPENAI_API_KEY` env var. apiKey = driver constructs a client with the user's key per call.
+- Three **provider drivers** behind an `AiProvider` interface: `anthropic`, `openai`, `ollama`. Auth modes: `apiKey` (Anthropic, OpenAI) and `baseUrl` (Ollama).
+  - Anthropic: `@anthropic-ai/claude-agent-sdk`. Driver injects the user's `ANTHROPIC_API_KEY` via `Options.env` per call — the host process env is never mutated.
+  - OpenAI: `@openai/agents`. Driver constructs a per-call `OpenAIProvider({ apiKey })` and wires it via `Runner({ modelProvider })`.
   - Ollama: no SDK, plain `fetch` against any OpenAI-compatible local endpoint. `baseUrl` mode (+ optional bearer key).
 - One **tool registry** (`server/ai/tools/`) defined with TypeBox; drivers translate to their SDK's native shape (Anthropic gets a thin Zod wrapper required by the Claude Agent SDK's `tool()` API; OpenAI gets JSON Schema; Ollama gets the same JSON Schema).
 - **Encrypted credential store** (`ai_provider_credentials` table) — AES-256-GCM via Bun's `crypto.subtle`, master key from env var `PAGE_BUILDER_SECRET_KEY`. Multiple rows per provider allowed (different keys for different purposes). Plaintext never crosses the wire.
-- **Persistent conversations**: new tables `ai_conversations` + `ai_messages`, scoped per user + per surface. Soft-delete with a nightly job that hard-purges rows older than 30 days. Conversations survive reload and device-switching.
-- **Four AI surfaces** with scoped toolsets and **independent message histories**: Site editor (existing 22 tools, rewired), Content (post/page CRUD + rewrite/summarise/translate), Data (table/row CRUD + schema generation + synthetic rows), Plugin SDK (`api.ai.complete` / `api.ai.stream` behind an `ai.invoke` permission).
-- **Model picker** in every chat: `(providerId, credentialId, modelId)` persisted per-surface. Defaults sourced from site-wide config with per-user override.
+- **Persistent conversations**: tables `ai_conversations` + `ai_messages`, scoped per user + per surface. Soft-delete with a nightly job that hard-purges rows older than 30 days. Conversations survive reload and device-switching.
+- **Four AI surfaces** with scoped toolsets and **independent message histories**: Site editor (24 tools, live), Content (Phase 4), Data (Phase 4), Plugin SDK (Phase 5).
+- **Model picker** in every chat: `(credentialId, modelId)` persisted per-surface. Defaults sourced from site-wide config with per-user override.
 - **New capabilities**: `ai.providers.manage` (set keys + site defaults), `ai.use` (invoke any AI surface, read own conversations), `ai.audit.read` (see all-user usage log).
-- **No-credential UX**: banner inside the chat panel with a "Set up a provider" deep-link to `/admin/ai/providers`; Send button disabled until at least one credential exists.
+- **No-credential UX**: banner inside the chat panel with a "Open AI settings" deep-link to `/admin/ai`; Send button disabled until at least one credential exists.
 - **Cost tracking via hard-coded price table** (`server/ai/pricing.ts`) updated by hand when providers change pricing. Token counts always stored; cost rolls up daily.
-- **Six-phase rollout**. The first phase delivers the runtime + drivers + credential + conversation stores without touching any UI; the last phase delivers cost rollups + audit visibility.
+- **Six-phase rollout**. Phases 1-3 are live; 4-6 are the next deliverables.
 
 ---
 
-## Why now / why this shape
+## Why this shape
 
-The current implementation is rigid in three ways that block production:
+Three concerns drove the design:
 
-1. **Single provider, single transport.** `server/handlers/agent/index.ts:24` imports `@anthropic-ai/claude-agent-sdk` directly. Switching providers means rewriting the handler. There is no abstraction.
-2. **Ambient auth only.** Constraint #385 (`docs/features/agent.md:18`) bans API-key config and relies on `claude auth login` on the host. That's fine for dev; it's a non-starter for hosted/self-hosted users who don't run a Claude Code CLI on the server.
-3. **One surface, hardcoded.** The agent is wired into `src/admin/pages/site/agent/` only. Content writers, data editors, and plugin authors can't reach it.
-
-This plan addresses all three at once because they share the same blocking dependency: **the lack of a stable AI runtime layer**. Doing them separately would mean writing the runtime three times.
+1. **Provider-agnostic transport.** The runtime owns the agent loop, NDJSON wire, and bridge bookkeeping. Drivers know one SDK each and translate between the canonical event/tool types and their SDK's native shapes.
+2. **BYO-key, never ambient.** Every credential carries an explicit API key. OpenAI never offered a programmatic ambient auth path for tool-calling; Anthropic offered one but is phasing it out. The simpler "every credential carries a key" model is consistent across providers and avoids the operational drift of dev-host CLI logins.
+3. **Cross-surface ready.** Tools are defined once and selected per scope (`site`, `content`, `data`, `plugin`). New surfaces register a tool subset + system prompt + browser bridge; the runtime and credential layer are reused.
 
 Pre-release rules (`CLAUDE.md` → "No backward compatibility. Ever.") apply throughout. The old `/admin/api/agent` endpoints, the `agentSlice.ts` transport, the `executor.ts` tool dispatcher, and the `no-anthropic-sdk.test.ts` gate are all replaced — not wrapped, not deprecated, not preserved.
 
@@ -58,31 +61,6 @@ Pre-release rules (`CLAUDE.md` → "No backward compatibility. Ever.") apply thr
 
 ---
 
-## Current state (one-screen summary)
-
-```text
-server/handlers/agent/
-├── index.ts              POST /admin/api/agent + /tool-result, NDJSON stream
-└── tools.ts              MCP server via createSdkMcpServer; 22 tools, Zod schemas
-
-src/admin/pages/site/agent/
-├── agentSlice.ts         Zustand slice; fetches /admin/api/agent; processes events
-├── agentConfig.ts        AGENT_API_PATH constants
-├── executor.ts           Bridges write tools → editor store mutations; TypeBox validated
-├── renderEvidence.ts     Page snapshot + render_snapshot screenshot capture
-├── systemPrompt.ts       Static prefix + dynamic suffix, cache-friendly
-└── types.ts              AgentMessage, ServerStreamEvent, PageContext, ...
-
-src/admin/pages/site/panels/AgentPanel/
-├── AgentPanel.tsx        Chat UI (single surface, no model picker, no provider notion)
-```
-
-Auth: ambient Claude Code via SDK. No env vars, no DB rows, no UI.
-Tools: 22 page-builder tools (8 read, 14 write). Defined via SDK's `tool()` + Zod.
-Streaming: NDJSON over `ReadableStream`. Each line is a `ServerStreamEvent`.
-
----
-
 ## Target architecture
 
 ```text
@@ -98,15 +76,14 @@ server/ai/
 ├── drivers/
 │   ├── index.ts            Driver registry + `resolveDriver(providerId)`.
 │   ├── anthropic.ts        Uses @anthropic-ai/claude-agent-sdk (the only
-│   │                       Anthropic SDK in the repo). 'ambient' = SDK reads
-│   │                       Claude Code OAuth from the host (subscription
-│   │                       billing); 'apiKey' = driver passes the user's key
-│   │                       into the SDK options/env per call.
-│   ├── openai.ts           Uses @openai/agents. 'ambient' = SDK reads
-│   │                       OPENAI_API_KEY from process env; 'apiKey' = driver
-│   │                       constructs a per-call client with the decrypted key.
+│   │                       Anthropic SDK in the repo). Driver passes the
+│   │                       user's key into the SDK's `Options.env` per call.
+│   ├── anthropicStream.ts  SDK message → AiStreamEvent translation.
+│   ├── openai.ts           Uses @openai/agents. Driver constructs a per-call
+│   │                       OpenAIProvider({ apiKey }) wired via Runner.
 │   ├── ollama.ts           Plain fetch against an OpenAI-compatible endpoint.
 │   │                       authMode = 'baseUrl' (+ optional bearer key).
+│   ├── typeboxToZod.ts     Thin adapter required by Claude Agent SDK's tool().
 │   └── types.ts            AiProvider, AiAuthMode, AiProviderModel, AiResolvedCredential.
 │
 ├── tools/
@@ -148,8 +125,9 @@ src/admin/ai/                 (new — admin UI for AI runtime)
 │                              conversation id, abort). One slice per scope.
 ├── ConversationSidebar.tsx   Lists this user's conversations for the current
 │                              scope; "New chat" button; per-row rename + delete.
-├── AiProvidersPage.tsx       /admin/ai/providers — credential CRUD; per-row
-│                              auth-mode picker (ambient/apiKey/baseUrl).
+├── AiProvidersPage.tsx       /admin/ai/providers — credential CRUD; auth mode
+│                              implied by provider (apiKey for Anthropic/OpenAI,
+│                              baseUrl for Ollama).
 ├── AiDefaultsPage.tsx        /admin/ai/defaults — per-scope site-wide defaults
 │                              (providerId + credentialId + modelId).
 ├── AiAuditPage.tsx           /admin/ai/audit — usage / cost / errors (Phase 6).
@@ -222,15 +200,15 @@ The wire shape is a strict superset of today's `ServerStreamEvent` so the front-
 // server/ai/drivers/types.ts
 
 export type AiProviderId = 'anthropic' | 'openai' | 'ollama'
-export type AiAuthMode = 'ambient' | 'apiKey' | 'baseUrl'
+export type AiAuthMode = 'apiKey' | 'baseUrl'
 
 export interface AiProvider {
   readonly id: AiProviderId
   readonly label: string
-  readonly supportedAuthModes: AiAuthMode[]       // anthropic: [ambient, apiKey]
-                                                   // openai:    [ambient, apiKey]
-                                                   // ollama:    [baseUrl]
-  capabilities(authMode: AiAuthMode): AiProviderCapabilities
+  readonly supportedAuthModes: readonly AiAuthMode[]   // anthropic: ['apiKey']
+                                                        // openai:    ['apiKey']
+                                                        // ollama:    ['baseUrl']
+  capabilities(modelId: string): AiProviderCapabilities
 
   listModels(creds: AiResolvedCredential): Promise<AiProviderModel[]>
 
@@ -238,18 +216,14 @@ export interface AiProvider {
   // The driver owns the entire tool-loop with its SDK; it yields canonical
   // AiStreamEvents. When a tool needs the browser (a write tool), it yields
   // { type: 'toolRequest', ... } and awaits resolution from the transport
-  // layer via a bridge promise — same mechanic as today's bridgeId/requestId.
-  //
-  // Inside Anthropic's stream(): switches on creds.authMode. 'ambient' goes
-  // through @anthropic-ai/claude-agent-sdk (no key); 'apiKey' goes through
-  // @anthropic-ai/sdk with the decrypted key.
+  // layer via a bridge promise.
 }
 
 export interface AiResolvedCredential {
   id: string                                       // ai_provider_credentials.id
   providerId: AiProviderId
   authMode: AiAuthMode
-  apiKey: string | null                            // null when authMode='ambient'
+  apiKey: string | null                            // null when authMode='baseUrl' & no bearer
   baseUrl: string | null                           // set when authMode='baseUrl'
 }
 
@@ -330,22 +304,21 @@ create table ai_provider_credentials (
   provider_id text not null,
   auth_mode text not null,
   display_label text not null,
-  ciphertext bytea,                -- null when auth_mode='ambient'
-  iv bytea,                        -- null when auth_mode='ambient'
+  ciphertext bytea,                -- set when auth_mode='apiKey'
+  iv bytea,                        -- set when auth_mode='apiKey'
   base_url text,                   -- set when auth_mode='baseUrl'
-  key_fingerprint text,            -- null when auth_mode='ambient'
+  key_fingerprint text,            -- set when ciphertext is set
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   last_used_at timestamptz,
   constraint ai_creds_provider_check
     check (provider_id in ('anthropic', 'openai', 'ollama')),
   constraint ai_creds_authmode_check
-    check (auth_mode in ('ambient', 'apiKey', 'baseUrl')),
+    check (auth_mode in ('apiKey', 'baseUrl')),
   constraint ai_creds_apikey_shape_check
     check (
-      (auth_mode = 'ambient'  and ciphertext is null    and iv is null    and base_url is null) or
       (auth_mode = 'apiKey'   and ciphertext is not null and iv is not null and base_url is null) or
-      (auth_mode = 'baseUrl'  and base_url is not null)
+      (auth_mode = 'baseUrl' and base_url is not null)
     )
 );
 
@@ -354,10 +327,10 @@ create unique index ai_creds_user_label_idx
 ```
 
 Notes:
-- **Multiple credentials per provider** are allowed and expected — e.g. one user may have "Anthropic (ambient)", "Anthropic (production key)", and "Anthropic (personal key)" all at once, and pick one per chat.
+- **Multiple credentials per provider** are allowed and expected — e.g. one user may have "Anthropic (production)" + "Anthropic (personal)" simultaneously and pick one per chat.
 - The constraint check enforces auth-mode-shape consistency at the DB layer.
 - SQLite dialect mirrors with `text`/`blob` etc per `docs/reference/database-dialects.md`.
-- `key_fingerprint` is `sha256(masterKey).slice(0, 16)`. On read, if the current master-key fingerprint mismatches the row's fingerprint, the credential is **flagged as needing re-entry** in the UI. Ambient rows have null fingerprint and are unaffected by rotation.
+- `key_fingerprint` is `sha256(masterKey).slice(0, 16)`. On read, if the current master-key fingerprint mismatches the row's fingerprint, the credential is **flagged as needing re-entry** in the UI. `baseUrl` rows without a bearer token store no fingerprint.
 
 ### `ai_defaults` — per-scope site-wide default credential + model
 
@@ -484,61 +457,47 @@ Out of scope for the first cut: rotation requires re-entry of every key (the UI 
 
 ## Drivers
 
-Each driver is a single file under `server/ai/drivers/<id>.ts`. Drivers are the **only** place provider SDKs are imported. An architecture gate test enforces this.
+Each driver is a single file under `server/ai/drivers/<id>.ts`. Drivers are the **only** place provider SDKs are imported. The `ai-driver-isolation.test.ts` gate enforces this.
 
-Each driver uses **one SDK** regardless of auth mode. Auth mode controls whether the driver provides credentials per-call or lets the SDK find them ambiently — not which SDK to use.
+### `anthropic.ts`
 
-### `anthropic.ts` — one SDK, two auth modes
-
-- Supported auth modes: `ambient`, `apiKey`.
-- SDK: `@anthropic-ai/claude-agent-sdk` (same SDK as today's `server/handlers/agent/index.ts:24`).
-- How auth mode flows through:
-  - **`ambient`** → driver passes options unchanged; SDK reads Claude Code OAuth tokens from the host (subscription billing via `sk-ant-oat01-` tokens from `claude auth login`). This is the current behaviour, unchanged.
-  - **`apiKey`** → driver passes `env: { ...process.env, ANTHROPIC_API_KEY: creds.apiKey }` in the SDK's `Options` for that single call. The SDK reads the env var and uses it as the `X-Api-Key` header. The user's key never leaks into the host's process env — only into the per-call scope the SDK manages.
-- Tool format: registered via `createSdkMcpServer` + `tool()` from the SDK. This requires Zod (the SDK's `tool()` API takes `AnyZodRawShape`); the driver wraps each `AiTool.inputSchema` (TypeBox) with a thin TypeBox→Zod adapter. **The only legitimate Zod use in the repo**, kept inside this one driver file.
-- Streaming: `query()` from the SDK yields `SdkMessage`s; driver normalises to canonical `AiStreamEvent` (port the existing logic from `server/handlers/agent/index.ts:193` `getServerStreamEventsFromSdkMessage`).
-- Prompt cache: the SDK accepts `systemPrompt: string[]` with the `__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__` separator and applies `cache_control` to the prefix automatically — same mechanism as today.
+- Supported auth modes: `apiKey`.
+- SDK: `@anthropic-ai/claude-agent-sdk`.
+- Auth: driver passes `env: { ...process.env, ANTHROPIC_API_KEY: creds.apiKey }` in the SDK's `Options` for the single call. The host process env is never mutated; concurrent chats with different keys don't race.
+- Tool format: registered via `createSdkMcpServer` + `tool()` from the SDK. Requires Zod (the SDK's `tool()` takes `AnyZodRawShape`); the driver wraps each `AiTool.inputSchema` (TypeBox) with a thin TypeBox→Zod adapter at `server/ai/drivers/typeboxToZod.ts`. **The only legitimate Zod use in the repo**, kept inside the drivers/ tree.
+- Streaming: `query()` yields `SdkMessage`s; driver normalises to canonical `AiStreamEvent` in `anthropicStream.ts`.
+- Prompt cache: the SDK accepts `systemPrompt: string[]` with the `__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__` separator and applies `cache_control` to the prefix automatically.
 - Vision: pass image blocks through.
-- `listModels(creds)` calls the SDK to discover available models; behaves the same in both auth modes — the set may differ depending on what the active credential is entitled to.
 
-### `openai.ts` — one SDK, two auth modes
+### `openai.ts`
 
-- Supported auth modes: `ambient`, `apiKey`.
+- Supported auth modes: `apiKey`.
 - SDK: `@openai/agents` (high-level Agents SDK).
-- How auth mode flows through:
-  - **`ambient`** → SDK reads `OPENAI_API_KEY` from `process.env` (the SDK's documented default). Returns a clear error if the env var is not set.
-  - **`apiKey`** → driver constructs a per-call `AsyncOpenAI` client with the decrypted key and registers it via `setDefaultOpenAIClient()` for that call, or passes it directly into the `Runner` constructor (depending on which API surface the SDK ends up exposing in TS — exact call shape pinned during Phase 1 spike).
-- Tool format: the Agents SDK accepts tool definitions with JSON Schema; driver converts each `AiTool.inputSchema` (TypeBox) to JSON Schema using TypeBox's built-in.
+- Auth: driver constructs a per-call `OpenAIProvider({ apiKey })` and wires it via a per-call `Runner({ modelProvider })`.
+- Tool format: the Agents SDK accepts JSON Schema via `parameters` with `strict: false`. Driver converts each `AiTool.inputSchema` (TypeBox) to JSON Schema by stripping symbol metadata via `JSON.parse(JSON.stringify(schema))` and forcing `additionalProperties: true`. No Zod required.
 - Tool calling: Agents SDK runs the tool loop internally. The driver wraps each `AiTool` with a handler that either resolves server-side (read tools) or yields a `toolRequest` and awaits the browser bridge (write tools).
 - Vision: image content blocks supported.
 
-### `ollama.ts` — local OpenAI-compatible endpoint
+### `ollama.ts`
 
 - Supported auth modes: `baseUrl`.
 - No SDK: plain `fetch` against `<creds.baseUrl>/v1/chat/completions`. Optional bearer key in `apiKey` field (used when the operator put Ollama behind a reverse proxy with auth).
 - Tool format: OpenAI-compatible JSON Schema.
 - Capability flags: `toolCalling: <model-dependent>`, `visionInput: <model-dependent>` — driver checks at `listModels()` time and tags each `AiProviderModel`. Older Ollama models lack tool-calling; UI greys them out in the picker when the active scope requires tools.
 
-### Why no separate `claude-code` driver
+### Why one SDK per provider
 
-The user-facing concept is **one provider per backend** (Anthropic, OpenAI, Ollama). Auth mode is a property of the credential, not of the provider. The Claude Agent SDK itself supports both subscription OAuth and API-key auth, so one driver file using one SDK covers both:
-
-- Users see one "Anthropic" entry in the credential UI, with an auth-mode picker.
-- The driver branches only on **what to put in the SDK call options** — not on which SDK to import.
-- The migration story for current users: their existing ambient setup becomes an `ai_provider_credentials` row with `provider_id='anthropic'`, `auth_mode='ambient'`. On Phase 1 boot, if the row is missing, the system auto-creates it (one-time bootstrap) so the editor keeps working without manual setup.
+The user-facing concept is **one provider per backend** (Anthropic, OpenAI, Ollama). Each driver file imports exactly one SDK. Bypassed paths (e.g. OpenAI's `@openai/codex-sdk` which supports ChatGPT-subscription auth but only for hard-coded codex tools) don't fit the custom-tool requirement of this runtime and are intentionally not used.
 
 ### Driver isolation gate
 
-A new architecture test `src/__tests__/architecture/ai-driver-isolation.test.ts`:
+`src/__tests__/architecture/ai-driver-isolation.test.ts`:
 
 - `@anthropic-ai/claude-agent-sdk` may only be imported from `server/ai/drivers/anthropic.ts`.
 - `@openai/agents` may only be imported from `server/ai/drivers/openai.ts`.
-- `zod` may only be imported from `server/ai/drivers/anthropic.ts` (required by the SDK's `tool()` API). Replaces today's `server/handlers/agent/tools.ts` exemption.
-- The plain `@anthropic-ai/sdk` package stays **completely banned everywhere** — the Agent SDK covers all our needs.
-- The plain `openai` package stays banned everywhere outside the OpenAI driver — Agents SDK is the only entry point.
+- `zod` may only be imported from `server/ai/drivers/anthropic.ts` or `server/ai/drivers/typeboxToZod.ts`.
+- The plain `@anthropic-ai/sdk` package stays **completely banned everywhere**.
 - The runtime, handlers, tools, and UI may import none of the above.
-
-The existing `no-anthropic-sdk.test.ts` is folded into `ai-driver-isolation.test.ts`.
 
 ---
 
@@ -831,42 +790,29 @@ Existing relevant gates (`task381-agent-panel-tab.test.ts`, `task390-agent-confi
 
 Each phase is independently shippable and leaves the app in a runnable state.
 
-### Phase 1 — Runtime + drivers + credential + conversation stores (no UI)
+### Phase 1 — Runtime + drivers + credential + conversation stores (no UI) ✅ shipped
 
-- Implement `server/ai/runtime/`, `server/ai/drivers/` (anthropic with both branches, openai, ollama), `server/ai/credentials/`, `server/ai/conversations/`, `server/ai/tools/` (port the 22 existing site tools).
-- Migrations: `ai_provider_credentials`, `ai_defaults`, `ai_conversations`, `ai_messages` — same IDs in both PG and SQLite dialect files.
-- `loadMasterKey` + env var bootstrap + dev-mode key generation script.
-- New handler: `POST /admin/api/ai/chat/site` (mirrors current `/admin/api/agent`) — internally creates an `ai_conversations` row + persists messages as the stream runs.
+- Implemented `server/ai/runtime/`, `server/ai/drivers/` (anthropic apiKey-only, openai apiKey-only, ollama baseUrl), `server/ai/credentials/`, `server/ai/conversations/`, `server/ai/tools/site/` (24 tools).
+- Migration `007_ai_runtime` (4 tables) added to both `migrations-pg.ts` and `migrations-sqlite.ts` with identical IDs.
+- `loadMasterKey` + env var (`PAGE_BUILDER_SECRET_KEY`) + dev-mode `.tmp/secret.key` fallback.
 - Conversation purge job registered with the scheduler tick: hard-deletes `deleted_at < now() - 30d` nightly.
-- One-time boot bootstrap: if the current host is an upgrade from the old ambient-only setup and the owner has zero credential rows, auto-create an `anthropic` + `ambient` row so the editor keeps working without manual setup.
-- Architecture gates land.
-- Site editor still uses the old endpoint — no change to UI yet.
+- Architecture gates: `ai-driver-isolation.test.ts`, `ai-credentials-never-leak.test.ts`, `ai-tools-typebox-only.test.ts`, `ai-handlers-capability-gated.test.ts`.
 
-Deliverable: a `bun test` suite that exercises the runtime + each driver branch against a fake provider + the encrypted store + the conversation persistence + the purge job.
+### Phase 2 — Settings UI + capability + credentials handlers ✅ shipped
 
-### Phase 2 — Settings UI + capability + credentials handlers
-
-- New capabilities: `ai.use`, `ai.providers.manage`, `ai.audit.read`.
-- New top-level admin route: `/admin/ai` workspace with three tabs:
-  - **Providers** — credential CRUD; per-row auth-mode picker; test button.
-  - **Defaults** — per-scope `(credentialId, modelId)` selection.
-  - **Audit** — placeholder until Phase 6.
-- Credentials handlers (5) + audit entries.
-- Owner / Admin built-in roles get the three new permissions by default.
+- Capabilities `ai.use`, `ai.providers.manage`, `ai.audit.read` added to the catalog and granted to Owner/Admin built-in roles.
+- Top-level admin route `/admin/ai` with three tabs: **Providers** (credential CRUD, two-column dialog), **Defaults** (per-scope `(credentialId, modelId)`), **Audit** (placeholder until Phase 6).
+- Credential handlers: list, create, update, delete, test.
+- Auth-mode is derived from `providerId` — UI does not expose a separate picker (Anthropic/OpenAI = `apiKey`; Ollama = `baseUrl`).
 - `AdminEntry` sidebar gains the AI nav entry (gated by `ai.providers.manage`).
 
-Deliverable: an operator can add an Anthropic key + an OpenAI key, see "test successful" on both, and set the site defaults per scope.
+### Phase 3 — Rewire site editor to the new stack + conversation history ✅ shipped
 
-### Phase 3 — Rewire site editor to the new stack + conversation history
-
-- Site editor's `agentSlice.ts` deleted. Replaced with `<AiAssistantDrawer scope="site" />` + `<ConversationSidebar scope="site" />`.
-- Old `/admin/api/agent[/tool-result]` deleted. Frontend POSTs `/admin/api/ai/chat/site` and `/admin/api/ai/tool-result`.
-- Conversation handlers (5) + sidebar UI.
-- Model picker (and credential picker) in panel header — defaults to `ai_defaults['site']`.
-- `<NoCredentialBanner>` integration.
-- Delete `no-anthropic-sdk.test.ts`, `agent-sdk-integration.test.ts`, `task381-agent-panel-tab.test.ts`, `task390-agent-config.test.ts`; replaced by `ai-driver-isolation.test.ts` + `ai-no-direct-agent-imports.test.ts`.
-
-Deliverable: site editor behaves identically, plus: chats survive reload, can be renamed/deleted, and are listed in a sidebar.
+- `src/admin/pages/site/agent/agentSlice.ts` rewritten to POST `/admin/api/ai/chat/site` against the new transport; old `/admin/api/agent[/tool-result]` deleted.
+- Per-conversation persistence wired end-to-end: site editor messages survive reload, can be renamed/deleted from `<ConversationHistory>`.
+- `<ModelPicker>` and `<ConversationHistory>` built on the shared `ContextMenu` primitive (same dropdown chrome as the rest of the admin).
+- `<NoCredentialBanner>` shown inside the panel when the user has zero credentials.
+- Replaced architecture gates: `no-anthropic-sdk.test.ts`, `agent-sdk-integration.test.ts`, `task381-agent-panel-tab.test.ts`, `task390-agent-config.test.ts` → `ai-driver-isolation.test.ts` + the new credential/tool/handler gates listed above.
 
 ### Phase 4 — Content + Data workspaces
 
@@ -886,24 +832,24 @@ Deliverable: AI assistant in three workspaces.
 
 Deliverable: a plugin can call the host AI model.
 
-### Phase 6 — Cost meter + audit visibility
+### Phase 6 — Cost meter + audit visibility ✅ shipped
 
-- `ai.*` audit events landing throughout.
-- `/admin/ai/audit` page with three views (by user, by surface, by plugin).
-- Daily/monthly cost rollups.
-- Dashboard widget: "AI usage this month".
-
-Deliverable: operators can see spend and per-user activity.
+- `server/ai/pricing.ts` — hard-coded `(providerId, modelId)` → per-million-token rates. Anthropic + OpenAI tiers covered; Ollama omitted (self-hosted, no per-call cost). The persister falls back to `calculateCostUsd()` whenever the driver omits `costUsd` (OpenAI today; Ollama once it ships).
+- `ai.*` audit events: `ai.credential.{created,updated,deleted,tested}`, `ai.default.updated`, `ai.chat.{started,completed,failed}`. Per-chat metadata carries scope + provider + model + token + cost deltas.
+- `server/ai/audit/store.ts` — read-only repository over `ai_messages` + `ai_conversations` returning four rollups: `getUsageTotals`, `getUsageByUser`, `getUsageByScope`, `getUsageByDay`.
+- `GET /admin/api/ai/audit?since=ISO` — capability-gated by `ai.audit.read`; returns `{ since, totals, byUser, byScope, byDay }`.
+- `/admin/ai` Audit tab — Today / 7d / 30d / All range picker; totals strip (spend, chats, input tokens, output tokens); top-users + by-surface tables; daily-spend bar list.
+- Dashboard widget `ai-usage` — "AI usage this month" headline + chats + top scope + daily-cost Sparkline. Gracefully no-ops on missing `ai.audit.read` capability.
 
 ---
 
 ## Migration of existing data
 
-There is no AI-related persistent state today (no DB rows, no localStorage beyond ephemeral chat messages that don't survive reload). So:
+Pre-rewrite there was no AI-related persistent state to migrate (no DB rows, no localStorage beyond ephemeral chat messages that didn't survive reload). What actually shipped:
 
-- **DB**: clean adds, no migration of old rows. The Phase 1 boot bootstrap adds a single ambient `anthropic` credential row for the owner so existing dev setups keep working without a manual UI step.
-- **localStorage**: ephemeral message state is replaced by DB persistence. Any leftover localStorage chat data is silently dropped on first load of the new UI.
-- **Constraint #385** (ambient-only auth) is removed from `docs/features/agent.md` and from `CLAUDE.md` (the explicit "ban `@anthropic-ai/sdk`" rule moves to "only inside `server/ai/drivers/anthropic.ts`").
+- **DB**: clean adds via migration `007_ai_runtime`. Migration `008_ai_drop_ambient_credentials` removes any stray ambient rows from early dev iterations.
+- **localStorage**: ephemeral message state replaced by DB persistence. Any leftover localStorage chat data is silently dropped on first load of the new UI.
+- **Constraint #385** (ambient-only auth) is removed from `docs/features/agent.md` and from `CLAUDE.md`. The "ban `@anthropic-ai/sdk`" rule is rewritten as "the SDK is imported only inside `server/ai/drivers/anthropic.ts` and `server/ai/drivers/anthropicStream.ts`".
 
 ---
 
@@ -925,31 +871,26 @@ There is no AI-related persistent state today (no DB rows, no localStorage beyon
 
 ## Locked decisions
 
-These were the open questions resolved before Phase 1 begins:
-
 1. **Per-user keys.** Each admin sets their own. `ai_provider_credentials.user_id` is mandatory; spend bills to the user who initiated the call. A future "shared pool" option can be layered on top without schema breaks.
 2. **Top-level `/admin/ai` workspace.** Sibling of Plugins/Users. Three tabs: Providers, Defaults, Audit.
-3. **One Anthropic driver, one SDK, two auth modes.** No separate `claude-code` driver, no second SDK. The driver uses `@anthropic-ai/claude-agent-sdk` for both modes; the auth-mode picker only controls whether the driver injects `ANTHROPIC_API_KEY` per call (`apiKey`) or lets the SDK use ambient OAuth (`ambient`). The plain `@anthropic-ai/sdk` stays banned repo-wide.
-4. **Multiple credentials per provider.** Each row is one `(provider, authMode, label)` triple. A user can hold "Anthropic (ambient)" + "Anthropic (prod key)" + "Anthropic (personal key)" simultaneously and choose at chat time.
-5. **Persistent conversations.** New `ai_conversations` + `ai_messages` tables, per user + per scope. Each scope has its own independent message history; nothing crosses over.
+3. **One driver, one SDK, one auth mode per provider.** Anthropic = `apiKey` only via `@anthropic-ai/claude-agent-sdk` (driver injects `ANTHROPIC_API_KEY` per call through `Options.env`). OpenAI = `apiKey` only via `@openai/agents` (driver constructs per-call `OpenAIProvider({ apiKey })`). Ollama = `baseUrl` (+ optional bearer) via plain `fetch`. The plain `@anthropic-ai/sdk` stays banned repo-wide.
+4. **Multiple credentials per provider.** Each row is one `(provider, label)` pair. A user can hold "Anthropic (prod key)" + "Anthropic (personal key)" simultaneously and choose at chat time. Auth mode is implied by provider, not a separate axis.
+5. **Persistent conversations.** `ai_conversations` + `ai_messages` tables, per user + per scope. Each scope has its own independent message history; nothing crosses over.
 6. **Soft-delete retention.** Conversations stay until user-deletion. A nightly job hard-purges rows where `deleted_at` is older than 30 days. No per-site retention setting.
 7. **No-credentials UX.** Banner inside the chat panel with a "Go to AI settings" button; Send disabled until at least one credential exists.
-8. **OpenAI Agents SDK.** Use `@openai/agents` (higher-level). One SDK handles both ambient (env) and apiKey modes. Driver wraps `AiTool` definitions with handlers that route through our browser bridge for write tools.
+8. **OpenAI Agents SDK.** Use `@openai/agents` (higher-level). Driver wraps `AiTool` definitions with handlers that route through our browser bridge for write tools.
 9. **Hard-coded price table.** `server/ai/pricing.ts` updated by hand. Token counts always stored; cost is best-effort.
-
-The only outstanding implementation detail is the **model picker grouping** — it should group by provider with capability badges (vision, tools, cache), but the exact layout is a Phase 3 UI decision and doesn't need to be locked here.
+10. **Shared dropdown primitive for in-panel pickers.** `<ModelPicker>` and `<ConversationHistory>` are built on `ContextMenu` (auto-flip, click-outside, focus management) — no bespoke popovers.
 
 ---
 
-## Files that disappear
+## Files that disappeared (Phases 1–3)
 
-- `server/handlers/agent/index.ts` → `server/ai/handlers/chat.ts` + `toolResult.ts`
-- `server/handlers/agent/tools.ts` → split: tool definitions into `server/ai/tools/pageBuilder/*` (TypeBox), MCP-wrapping + Zod adapter logic into `server/ai/drivers/anthropic.ts`.
-- `src/admin/pages/site/agent/agentSlice.ts` → composes into `src/admin/ai/AiAssistantSlice.ts`
-- `src/admin/pages/site/agent/agentConfig.ts` → replaced by `src/admin/ai/transport.ts`
-- `src/admin/pages/site/agent/executor.ts` → `src/admin/pages/site/agent/siteBridge.ts` (kept; renamed; same behaviour)
-- Architecture tests: `no-anthropic-sdk.test.ts`, `agent-sdk-integration.test.ts`, `task381-agent-panel-tab.test.ts`, `task390-agent-config.test.ts` → replaced by `ai-driver-isolation.test.ts` + `ai-no-direct-agent-imports.test.ts`
-- Docs: `docs/features/agent.md` is rewritten in Phase 3 to describe the new runtime; Constraint #385 is removed; `CLAUDE.md`'s ban on `@anthropic-ai/sdk` is rewritten as "imports allowed only in `server/ai/drivers/anthropic.ts`".
+- `server/handlers/agent/*` (entire directory) → `server/ai/handlers/{chat,toolResult,credentials,conversations,defaults,models}.ts`
+- Old `server/handlers/agent/tools.ts` → tool definitions are now under `server/ai/tools/site/` (TypeBox); Zod adapter logic isolated in `server/ai/drivers/typeboxToZod.ts`.
+- Old client transport (`agentConfig.ts`, hand-rolled NDJSON) → `src/admin/ai/api.ts` + the rewritten `src/admin/pages/site/agent/agentSlice.ts`.
+- Architecture tests deleted: `no-anthropic-sdk.test.ts`, `agent-sdk-integration.test.ts`, `task381-agent-panel-tab.test.ts`, `task390-agent-config.test.ts`, plus the older agent-endpoint-auth gate. Replaced by `ai-driver-isolation.test.ts`, `ai-credentials-never-leak.test.ts`, `ai-tools-typebox-only.test.ts`, `ai-handlers-capability-gated.test.ts`.
+- Docs: `docs/features/agent.md` to be rewritten describing the runtime; Constraint #385 removed; `CLAUDE.md`'s ban on `@anthropic-ai/sdk` rewritten as "imports allowed only in `server/ai/drivers/anthropic.ts` and `server/ai/drivers/anthropicStream.ts`".
 
 ---
 
@@ -972,10 +913,13 @@ The only outstanding implementation detail is the **model picker grouping** — 
 - `docs/reference/database-dialects.md` — dialect parity rules for migrations
 - `docs/reference/typebox-patterns.md` — boundary validation patterns
 - `docs/reference/capabilities.md` — capability matrix (Phase 2 adds three entries)
-- Source-of-truth files (today):
-  - `server/handlers/agent/index.ts` — current endpoint
-  - `server/handlers/agent/tools.ts` — current tool registry
-  - `src/admin/pages/site/agent/` — current client implementation
+- Source-of-truth files (post-rewrite):
+  - `server/ai/handlers/chat.ts` — `/admin/api/ai/chat/:scope` entrypoint
+  - `server/ai/tools/site/` — site-editor tool registry (TypeBox)
+  - `server/ai/drivers/{anthropic,openai,ollama}.ts` — provider drivers
+  - `server/ai/credentials/{store,encryption,masterKey}.ts` — credential persistence
+  - `src/admin/pages/ai/` — admin AI workspace (Providers / Defaults / Audit)
+  - `src/admin/pages/site/agent/agentSlice.ts` — site editor client slice
+  - `src/admin/pages/site/panels/AgentPanel/` — chat panel + ModelPicker + ConversationHistory
   - `src/core/plugin-sdk/capabilities.ts` — capability catalog
-  - `server/plugins/host/handlers/crypto.ts` — pattern for `crypto.subtle` usage
-  - `server/db/migrations-{pg,sqlite}.ts` — where the new tables land
+  - `server/db/migrations-{pg,sqlite}.ts` — migrations 007 (initial) + 008 (drop ambient)

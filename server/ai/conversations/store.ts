@@ -55,6 +55,8 @@ interface ConversationRow {
   prompt_tokens_total: number | string
   completion_tokens_total: number | string
   cost_usd_total: number | string
+  cache_read_tokens_total: number | string
+  cache_creation_tokens_total: number | string
   created_at: Date | string
   updated_at: Date | string
   deleted_at: Date | string | null
@@ -73,6 +75,8 @@ interface MessageRow {
   prompt_tokens: number
   completion_tokens: number
   cost_usd: number | string
+  cache_read_tokens: number
+  cache_creation_tokens: number
   created_at: Date | string
 }
 
@@ -98,6 +102,8 @@ function conversationRowToRecord(row: ConversationRow): ConversationRecord {
     promptTokensTotal: toNumber(row.prompt_tokens_total),
     completionTokensTotal: toNumber(row.completion_tokens_total),
     costUsdTotal: toNumber(row.cost_usd_total),
+    cacheReadTokensTotal: toNumber(row.cache_read_tokens_total),
+    cacheCreationTokensTotal: toNumber(row.cache_creation_tokens_total),
     createdAt: dateString(row.created_at)!,
     updatedAt: dateString(row.updated_at)!,
     deletedAt: dateString(row.deleted_at),
@@ -133,6 +139,8 @@ function messageRowToRecord(row: MessageRow): MessageRecord {
     promptTokens: row.prompt_tokens,
     completionTokens: row.completion_tokens,
     costUsd: toNumber(row.cost_usd),
+    cacheReadTokens: row.cache_read_tokens,
+    cacheCreationTokens: row.cache_creation_tokens,
     createdAt: dateString(row.created_at)!,
   }
 }
@@ -151,6 +159,8 @@ export function toConversationView(record: ConversationRecord): ConversationView
     promptTokensTotal: record.promptTokensTotal,
     completionTokensTotal: record.completionTokensTotal,
     costUsdTotal: record.costUsdTotal,
+    cacheReadTokensTotal: record.cacheReadTokensTotal,
+    cacheCreationTokensTotal: record.cacheCreationTokensTotal,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   }
@@ -195,7 +205,7 @@ export async function listConversationsForUserScope(
   const { rows } = await db<ConversationRow>`
     select id, user_id, scope, title, credential_id, model_id, session_id,
            context_json, prompt_tokens_total, completion_tokens_total,
-           cost_usd_total, created_at, updated_at, deleted_at
+           cost_usd_total, cache_read_tokens_total, cache_creation_tokens_total, created_at, updated_at, deleted_at
     from ai_conversations
     where user_id = ${userId}
       and scope = ${scope}
@@ -217,7 +227,7 @@ export async function readConversationForUser(
   const { rows } = await db<ConversationRow>`
     select id, user_id, scope, title, credential_id, model_id, session_id,
            context_json, prompt_tokens_total, completion_tokens_total,
-           cost_usd_total, created_at, updated_at, deleted_at
+           cost_usd_total, cache_read_tokens_total, cache_creation_tokens_total, created_at, updated_at, deleted_at
     from ai_conversations
     where id = ${conversationId}
       and user_id = ${userId}
@@ -238,7 +248,8 @@ export async function listMessagesForConversation(
   const { rows } = await db<MessageRow>`
     select id, conversation_id, position, role, content_json,
            tool_call_id, tool_name,
-           prompt_tokens, completion_tokens, cost_usd, created_at
+           prompt_tokens, completion_tokens, cost_usd,
+           cache_read_tokens, cache_creation_tokens, created_at
     from ai_messages
     where conversation_id = ${conversationId}
     order by position asc
@@ -272,7 +283,7 @@ export async function createConversationForUser(
     )
     returning id, user_id, scope, title, credential_id, model_id, session_id,
               context_json, prompt_tokens_total, completion_tokens_total,
-              cost_usd_total, created_at, updated_at, deleted_at
+              cost_usd_total, cache_read_tokens_total, cache_creation_tokens_total, created_at, updated_at, deleted_at
   `
   return conversationRowToRecord(rows[0]!)
 }
@@ -308,7 +319,7 @@ export async function updateConversationForUser(
     where id = ${conversationId} and user_id = ${userId}
     returning id, user_id, scope, title, credential_id, model_id, session_id,
               context_json, prompt_tokens_total, completion_tokens_total,
-              cost_usd_total, created_at, updated_at, deleted_at
+              cost_usd_total, cache_read_tokens_total, cache_creation_tokens_total, created_at, updated_at, deleted_at
   `
   return rows[0] ? conversationRowToRecord(rows[0]) : null
 }
@@ -357,6 +368,8 @@ export async function appendMessage(
     const promptTokens = input.promptTokens ?? 0
     const completionTokens = input.completionTokens ?? 0
     const costUsd = input.costUsd ?? 0
+    const cacheReadTokens = input.cacheReadTokens ?? 0
+    const cacheCreationTokens = input.cacheCreationTokens ?? 0
 
     // Pass content as a plain array; both dialect adapters handle the JSON
     // encoding (SQLite auto-stringify on bind for objects; PG jsonb native).
@@ -364,16 +377,19 @@ export async function appendMessage(
       insert into ai_messages (
         id, conversation_id, position, role, content_json,
         tool_call_id, tool_name,
-        prompt_tokens, completion_tokens, cost_usd
+        prompt_tokens, completion_tokens, cost_usd,
+        cache_read_tokens, cache_creation_tokens
       )
       values (
         ${id}, ${conversationId}, ${position}, ${input.role}, ${input.content},
         ${input.toolCallId ?? null}, ${input.toolName ?? null},
-        ${promptTokens}, ${completionTokens}, ${costUsd}
+        ${promptTokens}, ${completionTokens}, ${costUsd},
+        ${cacheReadTokens}, ${cacheCreationTokens}
       )
       returning id, conversation_id, position, role, content_json,
                 tool_call_id, tool_name,
-                prompt_tokens, completion_tokens, cost_usd, created_at
+                prompt_tokens, completion_tokens, cost_usd,
+                cache_read_tokens, cache_creation_tokens, created_at
     `
 
     // Denormalised totals on the parent — kept in sync per-append so list
@@ -383,6 +399,8 @@ export async function appendMessage(
       set prompt_tokens_total = prompt_tokens_total + ${promptTokens},
           completion_tokens_total = completion_tokens_total + ${completionTokens},
           cost_usd_total = cost_usd_total + ${costUsd},
+          cache_read_tokens_total = cache_read_tokens_total + ${cacheReadTokens},
+          cache_creation_tokens_total = cache_creation_tokens_total + ${cacheCreationTokens},
           updated_at = current_timestamp
       where id = ${conversationId}
     `

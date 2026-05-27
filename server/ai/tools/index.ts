@@ -14,6 +14,7 @@
 
 import type { AiTool, ToolScope } from './types'
 import { siteTools } from './site'
+import { contentTools } from './content'
 
 /**
  * Returns the tools available for one chat scope. The runtime hands this
@@ -25,10 +26,9 @@ export function selectToolsForScope(scope: ToolScope): AiTool[] {
     case 'site':
       return siteTools
     case 'content':
-      // Phase 4
-      return []
+      return contentTools
     case 'data':
-      // Phase 4
+      // Phase 4 (data workspace)
       return []
     case 'plugin':
       // Phase 5

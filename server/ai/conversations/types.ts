@@ -28,6 +28,9 @@ export interface ConversationRecord {
   readonly promptTokensTotal: number
   readonly completionTokensTotal: number
   readonly costUsdTotal: number
+  /** Anthropic prompt-cache visibility — see migration 009_ai_cache_tokens. */
+  readonly cacheReadTokensTotal: number
+  readonly cacheCreationTokensTotal: number
   readonly createdAt: string
   readonly updatedAt: string
   readonly deletedAt: string | null
@@ -46,6 +49,9 @@ export interface MessageRecord {
   readonly promptTokens: number
   readonly completionTokens: number
   readonly costUsd: number
+  /** Anthropic prompt-cache visibility — see migration 009_ai_cache_tokens. */
+  readonly cacheReadTokens: number
+  readonly cacheCreationTokens: number
   readonly createdAt: string
 }
 
@@ -62,6 +68,8 @@ export interface ConversationView {
   readonly promptTokensTotal: number
   readonly completionTokensTotal: number
   readonly costUsdTotal: number
+  readonly cacheReadTokensTotal: number
+  readonly cacheCreationTokensTotal: number
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -108,4 +116,6 @@ export interface AppendMessageInput {
   readonly promptTokens?: number
   readonly completionTokens?: number
   readonly costUsd?: number
+  readonly cacheReadTokens?: number
+  readonly cacheCreationTokens?: number
 }

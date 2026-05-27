@@ -789,4 +789,25 @@ export const pgMigrations: Migration[] = [
       where auth_mode = 'ambient';
     `,
   },
+  {
+    id: '009_ai_cache_tokens',
+    sql: `
+      -- Anthropic prompt-cache visibility. The driver already reads
+      -- cache_read_input_tokens + cache_creation_input_tokens off the SDK
+      -- usage block; persisting them lets the audit page show whether
+      -- caching is actually firing (cache reads dominate after the first
+      -- turn in a healthy chat).
+      --
+      -- Per-message + denormalised conversation totals — same shape as the
+      -- existing prompt_tokens / completion_tokens pair so the rollups can
+      -- aggregate uniformly.
+      alter table ai_messages
+        add column cache_read_tokens integer not null default 0,
+        add column cache_creation_tokens integer not null default 0;
+
+      alter table ai_conversations
+        add column cache_read_tokens_total bigint not null default 0,
+        add column cache_creation_tokens_total bigint not null default 0;
+    `,
+  },
 ]

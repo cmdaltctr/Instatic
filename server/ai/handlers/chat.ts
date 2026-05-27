@@ -23,6 +23,7 @@ import { jsonResponse } from '../../http'
 import { isStateChangingMethod, originAllowed } from '../../auth/security'
 import { requireCapability } from '../../auth/authz'
 import type { DbClient } from '../../db/client'
+import { createAuditEvent } from '../../repositories/audit'
 import {
   appendMessage,
   listMessagesForConversation,
@@ -40,13 +41,9 @@ import {
   type SiteSnapshot,
 } from '../tools/site'
 import {
-  __setActiveToolSnapshot,
-  __clearActiveToolSnapshot,
-} from '../drivers/anthropic'
-import {
-  __setActiveOpenAiToolSnapshot,
-  __clearActiveOpenAiToolSnapshot,
-} from '../drivers/openai'
+  buildContentSystemPrompt,
+  type ContentSnapshot,
+} from '../tools/content'
 import {
   createBridge,
   createConversationsPersister,
@@ -169,20 +166,32 @@ async function handleAiChat(
 
   const systemPrompt = buildSystemPromptForScope(scope, snapshot)
 
-  // Snapshot binding for server-resolved tools. Both Anthropic and OpenAI
-  // drivers consult the same per-process binding via their respective
-  // __setActiveToolSnapshot helpers. See the comment in
-  // server/ai/drivers/anthropic.ts on the per-process binding caveat
-  // (AsyncLocalStorage replacement is a Phase 3 follow-up).
-  if (scope === 'site' && snapshot !== undefined) {
-    __setActiveToolSnapshot(snapshot)
-    __setActiveOpenAiToolSnapshot(snapshot)
+  // Capture totals reported by the persister so the audit row can hold
+  // them when the stream completes (we read them off the conversation row
+  // diff post-stream — see the post-loop block).
+  const tokensAtStart = {
+    prompt: conversation.promptTokensTotal,
+    completion: conversation.completionTokensTotal,
+    cost: conversation.costUsdTotal,
   }
+
+  await createAuditEvent(db, {
+    actorUserId: user.id,
+    action: 'ai.chat.started',
+    targetType: 'ai_conversation',
+    targetId: conversation.id,
+    metadata: {
+      scope,
+      providerId: credential.providerId,
+      modelId: conversation.modelId,
+    },
+  })
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let streamClosed = false
       let destroyBridge: (() => void) | null = null
+      let streamError: string | null = null
 
       const closeStream = () => {
         if (streamClosed) return
@@ -191,6 +200,7 @@ async function handleAiChat(
       }
       const emit = (event: AiStreamEvent): void => {
         if (streamClosed) return
+        if (event.type === 'error') streamError = event.message
         try {
           controller.enqueue(encodeStreamEvent(event))
         } catch {
@@ -211,24 +221,59 @@ async function handleAiChat(
           credentials: resolvedCredential,
           signal: req.signal,
           bridge,
+          toolContextBase: {
+            db,
+            userId: user.id,
+            scope,
+            conversationId: conversation.id,
+            snapshot,
+          },
         }
 
-        const persister = createConversationsPersister(db, conversation.id)
+        const persister = createConversationsPersister(db, conversation.id, {
+          providerId: credential.providerId,
+          modelId: conversation.modelId,
+        })
         await runChat({ driver, request, persister, emit })
 
         // Best-effort: record that this credential was used.
         await touchCredentialLastUsed(db, credential.id).catch(() => { /* noop */ })
       } catch (err) {
-        const detail = err instanceof Error ? err.message : 'Unknown error'
-        console.error('[ai/chat] stream failed:', detail)
-        emit({ type: 'error', message: 'AI chat failed. Please try again.' })
+        const detail = err instanceof Error ? err.message : String(err)
+        // Full Error preserves the stack trace in the operator's terminal.
+        console.error('[ai/chat] stream failed:', err)
+        streamError = detail
+        emit({ type: 'error', message: `AI chat failed: ${detail}` })
       } finally {
         if (destroyBridge) destroyBridge()
-        if (scope === 'site' && snapshot !== undefined) {
-          __clearActiveToolSnapshot()
-          __clearActiveOpenAiToolSnapshot()
-        }
         closeStream()
+        // Emit the terminal audit event. Re-read the conversation row to
+        // capture the deltas the persister just committed.
+        try {
+          const post = await readConversationForUser(db, user.id, conversation.id)
+          const promptDelta = post ? post.promptTokensTotal - tokensAtStart.prompt : 0
+          const completionDelta = post ? post.completionTokensTotal - tokensAtStart.completion : 0
+          const costDelta = post ? Number((post.costUsdTotal - tokensAtStart.cost).toFixed(6)) : 0
+          await createAuditEvent(db, {
+            actorUserId: user.id,
+            action: streamError ? 'ai.chat.failed' : 'ai.chat.completed',
+            targetType: 'ai_conversation',
+            targetId: conversation.id,
+            metadata: {
+              scope,
+              providerId: credential.providerId,
+              modelId: conversation.modelId,
+              promptTokens: promptDelta,
+              completionTokens: completionDelta,
+              costUsd: costDelta,
+              ...(streamError ? { error: streamError.slice(0, 200) } : {}),
+            },
+          })
+        } catch (auditErr) {
+          // Audit failures must never break the user-visible stream — the
+          // request already finished by the time we hit this branch.
+          console.error('[ai/chat] audit emit failed:', auditErr)
+        }
       }
     },
   })
@@ -256,8 +301,11 @@ function buildSystemPromptForScope(
     // (the editor's renderEvidence + Phase 3 will add schema validation).
     return buildSiteSystemPrompt((snapshot ?? emptySiteSnapshot()) as SiteSnapshot)
   }
-  // Other scopes don't have system prompts yet (Phase 4+). The driver
-  // gets a minimal prompt so the conversation isn't completely contextless.
+  if (scope === 'content') {
+    return buildContentSystemPrompt((snapshot ?? emptyContentSnapshot()) as ContentSnapshot)
+  }
+  // Other scopes don't have system prompts yet. The driver gets a minimal
+  // prompt so the conversation isn't completely contextless.
   return [
     `You are an AI assistant embedded in the "${scope}" workspace of a CMS. ` +
     `No scope-specific tools are wired up yet — respond conversationally only.`,
@@ -276,6 +324,15 @@ function emptySiteSnapshot(): SiteSnapshot {
     availableModules: [],
     selectedNodeId: null,
     classes: [],
+  }
+}
+
+function emptyContentSnapshot(): ContentSnapshot {
+  return {
+    collections: [],
+    activeCollectionId: null,
+    activeDocument: null,
+    currentUser: { id: '', displayName: 'Anonymous', email: '' },
   }
 }
 

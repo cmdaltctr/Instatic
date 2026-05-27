@@ -758,9 +758,13 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
         if (err instanceof Error && err.name === 'AbortError') {
           flushPendingText()
         } else {
-          // Constraint #388 (CWE-209): never surface raw error details.
+          // Admin-only surface (capability gated) — show the actual
+          // failure cause so the operator can act. Network / unexpected
+          // throws still get a prefix so they're distinguishable from
+          // server-classified driver errors.
+          const detail = err instanceof Error ? err.message : String(err)
           console.error('[AgentSlice] sendAgentMessage error:', err)
-          set({ agentError: 'Something went wrong. Please try again.' })
+          set({ agentError: `Agent request failed: ${detail}` })
           set((state) => {
             const msg = state.agentMessages.find((m) => m.id === assistantId)
             if (msg && msg.blocks.length === 0) {
@@ -893,10 +897,14 @@ export async function processStreamEvent(
     }
 
     case 'error': {
-      // Constraint #388: server messages may carry internal detail. Log
-      // server-side; show fixed copy in the UI.
+      // Surface the server's error message verbatim — drivers already
+      // classify and shape these to be user-facing (auth/billing/quota
+      // shows actionable copy, raw stack traces are stripped at the driver
+      // boundary). The admin needs the actual reason, not a "Something
+      // went wrong" placeholder; this surface is admin-only (capability
+      // gated) so info-disclosure concerns don't apply.
       console.error('[AgentSlice] Server error event:', event.message)
-      set({ agentError: 'Something went wrong. Please try again.' })
+      set({ agentError: event.message })
       break
     }
 

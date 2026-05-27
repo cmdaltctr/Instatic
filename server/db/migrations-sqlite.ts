@@ -771,4 +771,16 @@ export const sqliteMigrations: Migration[] = [
       where auth_mode = 'ambient';
     `,
   },
+  {
+    id: '009_ai_cache_tokens',
+    sql: `
+      -- Anthropic prompt-cache visibility. See PG migration 009 for the
+      -- rationale. SQLite splits the ALTERs into separate statements (no
+      -- multi-column ALTER syntax) but the schema is the same.
+      alter table ai_messages add column cache_read_tokens integer not null default 0;
+      alter table ai_messages add column cache_creation_tokens integer not null default 0;
+      alter table ai_conversations add column cache_read_tokens_total integer not null default 0;
+      alter table ai_conversations add column cache_creation_tokens_total integer not null default 0;
+    `,
+  },
 ]

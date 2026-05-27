@@ -8,6 +8,7 @@
  */
 
 import type { DbClient } from '../../db/client'
+import { tryHandleAiAudit } from './audit'
 import { tryHandleAiChat } from './chat'
 import { tryHandleAiToolResult } from './toolResult'
 import { tryHandleAiCredentials } from './credentials'
@@ -27,6 +28,7 @@ export function tryHandleAi(
   // generic credentials/:id route — both live inside the credentials
   // handler so the order is handled there.
   return (
+    tryHandleAiAudit(req, db, url, pathname) ??
     tryHandleAiChat(req, db, pathname) ??
     tryHandleAiToolResult(req, db, pathname) ??
     tryHandleAiCredentials(req, db, pathname) ??

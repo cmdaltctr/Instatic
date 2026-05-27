@@ -105,6 +105,8 @@ export interface AiTool {
  * the top of their handler — the runtime is scope-agnostic.
  */
 export interface ToolContext {
+  /** Database client — server-side tool handlers query through this. */
+  readonly db: import('../../db/client').DbClient
   readonly userId: string
   readonly scope: ToolScope
   readonly conversationId: string
@@ -129,8 +131,20 @@ export type AiStreamEvent =
   | { type: 'toolResult'; toolCallId: string; toolName: string; ok: boolean; error?: string }
   /** Server asks the browser to apply a write tool against its store. */
   | { type: 'toolRequest'; requestId: string; toolName: string; input: unknown }
-  /** Aggregated token usage for the entire stream — emitted just before `done`. */
-  | { type: 'usage'; promptTokens: number; completionTokens: number; costUsd?: number }
+  /**
+   * Aggregated token usage for the entire stream — emitted just before `done`.
+   *
+   * Cache-aware fields are Anthropic-specific (OpenAI/Ollama return 0 for now):
+   *   - `cacheReadTokens`     — tokens served from the prompt cache this call
+   *                              (billed at ~10% of normal input price).
+   *   - `cacheCreationTokens` — tokens written to the prompt cache this call
+   *                              (billed at ~125% of normal input price; only
+   *                              charged on the FIRST call that populates the
+   *                              cache, then amortised across subsequent hits).
+   * `promptTokens` is the BILLED non-cached input (Anthropic SDK convention —
+   * cache hits/writes are reported separately).
+   */
+  | { type: 'usage'; promptTokens: number; completionTokens: number; costUsd?: number; cacheReadTokens?: number; cacheCreationTokens?: number }
   /** Terminal error — stream is about to end abnormally. */
   | { type: 'error'; message: string }
   /** Stream ended cleanly. */

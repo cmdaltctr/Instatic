@@ -100,6 +100,8 @@ const ConversationViewSchema = Type.Object({
   promptTokensTotal: Type.Number(),
   completionTokensTotal: Type.Number(),
   costUsdTotal: Type.Number(),
+  cacheReadTokensTotal: Type.Number(),
+  cacheCreationTokensTotal: Type.Number(),
   createdAt: Type.String(),
   updatedAt: Type.String(),
 })
@@ -260,6 +262,79 @@ export async function listConversations(scope: 'site' | 'content' | 'data' | 'pl
   await throwIfNotOk(res)
   const body = await parseJsonResponse(res, ConversationListResponseSchema)
   return body.conversations
+}
+
+// ---------------------------------------------------------------------------
+// Endpoints — audit
+// ---------------------------------------------------------------------------
+
+const UsageRowSchema = Type.Object({
+  promptTokens: Type.Number(),
+  completionTokens: Type.Number(),
+  costUsd: Type.Number(),
+  chatCount: Type.Number(),
+  cacheReadTokens: Type.Number(),
+  cacheCreationTokens: Type.Number(),
+})
+
+const UsageByUserRowSchema = Type.Composite([
+  UsageRowSchema,
+  Type.Object({
+    userId: Type.String(),
+    userLabel: Type.String(),
+  }),
+])
+
+const UsageByScopeRowSchema = Type.Composite([
+  UsageRowSchema,
+  Type.Object({
+    scope: ToolScope,
+  }),
+])
+
+const UsageByDayRowSchema = Type.Composite([
+  UsageRowSchema,
+  Type.Object({
+    day: Type.String(),
+  }),
+])
+
+const UsageByModelRowSchema = Type.Composite([
+  UsageRowSchema,
+  Type.Object({
+    // Server may report 'unknown' for conversations whose credential was
+    // deleted mid-window — keep this loose enough to accept that.
+    providerId: Type.String(),
+    modelId: Type.String(),
+  }),
+])
+
+const AuditResponseSchema = Type.Object({
+  since: Type.String(),
+  totals: UsageRowSchema,
+  byUser: Type.Array(UsageByUserRowSchema),
+  byScope: Type.Array(UsageByScopeRowSchema),
+  byModel: Type.Array(UsageByModelRowSchema),
+  byDay: Type.Array(UsageByDayRowSchema),
+})
+
+export type AiUsageRow = Static<typeof UsageRowSchema>
+export type AiUsageByUserRow = Static<typeof UsageByUserRowSchema>
+export type AiUsageByScopeRow = Static<typeof UsageByScopeRowSchema>
+export type AiUsageByDayRow = Static<typeof UsageByDayRowSchema>
+export type AiUsageByModelRow = Static<typeof UsageByModelRowSchema>
+export type AiAuditResponse = Static<typeof AuditResponseSchema>
+
+/**
+ * Fetch the AI usage rollups. `since` is an ISO date the server interprets
+ * as "include any message at or after this instant". Omit to default to the
+ * server's 30-day window.
+ */
+export async function listAiAudit(since?: string): Promise<AiAuditResponse> {
+  const q = since ? `?since=${encodeURIComponent(since)}` : ''
+  const res = await fetch(`/admin/api/ai/audit${q}`)
+  await throwIfNotOk(res)
+  return parseJsonResponse(res, AuditResponseSchema)
 }
 
 // Re-export the error response schema for callers that want to assert wire

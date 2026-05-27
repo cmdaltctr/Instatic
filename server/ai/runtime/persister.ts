@@ -9,7 +9,8 @@
 
 import type { DbClient } from '../../db/client'
 import { appendMessage } from '../conversations/store'
-import type { AiContentBlock } from './types'
+import { calculateCostUsd } from '../pricing'
+import type { AiContentBlock, AiProviderId } from './types'
 
 export interface ConversationsPersister {
   appendAssistantText(text: string): Promise<void>
@@ -28,12 +29,22 @@ export interface ConversationsPersister {
     promptTokens: number
     completionTokens: number
     costUsd?: number
+    cacheReadTokens?: number
+    cacheCreationTokens?: number
   }): Promise<void>
+}
+
+export interface ConversationsPersisterContext {
+  /** Used to price `usage` events whose driver omits a `costUsd` value. */
+  providerId: AiProviderId
+  /** Used together with providerId to look up the per-million-token rates. */
+  modelId: string
 }
 
 export function createConversationsPersister(
   db: DbClient,
   conversationId: string,
+  ctx: ConversationsPersisterContext,
 ): ConversationsPersister {
   // Token + cost totals are kept in memory and flushed onto the LAST
   // assistant message we write per turn. Drivers report usage as a
@@ -92,6 +103,15 @@ export function createConversationsPersister(
       // simply skip — the totals are still correct, only the per-message
       // attribution is lost in that edge case.
       if (!lastAssistantMessageId) return
+      // Driver-supplied cost wins (Anthropic SDK reports `total_cost_usd`
+      // directly). When absent (OpenAI, Ollama) we compute from the price
+      // table — token counts are always trusted as reported by the driver.
+      const costUsd = usage.costUsd ?? calculateCostUsd(
+        ctx.providerId,
+        ctx.modelId,
+        usage.promptTokens,
+        usage.completionTokens,
+      )
       // Lightweight UPDATE — bypasses the repository because there's no
       // public-facing API for "patch the latest message". Single-table
       // write, no FK touch.
@@ -100,7 +120,9 @@ export function createConversationsPersister(
         lastAssistantMessageId,
         usage.promptTokens,
         usage.completionTokens,
-        usage.costUsd ?? 0,
+        costUsd,
+        usage.cacheReadTokens ?? 0,
+        usage.cacheCreationTokens ?? 0,
       )
     },
   }
@@ -112,6 +134,8 @@ async function updateMessageUsage(
   promptTokens: number,
   completionTokens: number,
   costUsd: number,
+  cacheReadTokens: number,
+  cacheCreationTokens: number,
 ): Promise<void> {
   // Move the increment off the message row (which started at zero in
   // appendMessage) AND propagate the delta onto the parent conversation
@@ -130,7 +154,9 @@ async function updateMessageUsage(
       update ai_messages
       set prompt_tokens = ${promptTokens},
           completion_tokens = ${completionTokens},
-          cost_usd = ${costUsd}
+          cost_usd = ${costUsd},
+          cache_read_tokens = ${cacheReadTokens},
+          cache_creation_tokens = ${cacheCreationTokens}
       where id = ${messageId}
     `
 
@@ -139,6 +165,8 @@ async function updateMessageUsage(
       set prompt_tokens_total = prompt_tokens_total + ${promptTokens},
           completion_tokens_total = completion_tokens_total + ${completionTokens},
           cost_usd_total = cost_usd_total + ${costUsd},
+          cache_read_tokens_total = cache_read_tokens_total + ${cacheReadTokens},
+          cache_creation_tokens_total = cache_creation_tokens_total + ${cacheCreationTokens},
           updated_at = current_timestamp
       where id = ${conversationId}
     `

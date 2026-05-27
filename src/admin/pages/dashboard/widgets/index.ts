@@ -10,6 +10,7 @@
  * here.
  */
 import { ActivityWidget } from './ActivityWidget'
+import { AiUsageWidget } from './AiUsageWidget'
 import { DomainWidget } from './DomainWidget'
 import { MediaWidget } from './MediaWidget'
 import { PagesWidget } from './PagesWidget'
@@ -155,5 +156,16 @@ export function registerFirstPartyDashboardWidgets(): void {
     defaultSize: 3,
     tint: 'sky',
     render: DomainWidget,
+  })
+
+  dashboardWidgetRegistry.register({
+    id: 'ai-usage',
+    ownerId: 'core',
+    name: 'AI usage',
+    description: 'Spend + chats this month',
+    icon: ZapSolidIcon,
+    defaultSize: 3,
+    tint: 'lilac',
+    render: AiUsageWidget,
   })
 }

@@ -68,7 +68,7 @@ export const insertNodeTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    "Insert one new node under an existing parent. Returns the new node's id (use it as parentId in subsequent inserts). Use this for single-element additions; for multi-element sections (hero, pricing card, CTA block) prefer insertTree, which inserts a nested tree and supporting CSS classes in a single call. `parentId` must be a real node id (root id, or an id from a prior tool result / inspect_page). `props` are content/behaviour fields per the module schema in list_modules. `classIds` may use class ids OR class names; unknown class names fail — create the class with createClass first.",
+    "Insert one node under an existing parent. Returns the new node's id. Prefer insertTree for multi-element sections. `classIds` accepts class ids OR names (unknown names fail — create first).",
   inputSchema: InsertNodeInput,
 }
 
@@ -84,7 +84,7 @@ export const insertTreeTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    "Insert a nested tree of nodes (and optionally create the supporting CSS classes for it) in a single call. Strongly preferred over chained insertNode calls for any multi-element build. `classes` are created/updated first, then referenced from `tree.children[].classIds` by class name. `tree.moduleId` is the root's module; `tree.children[]` are recursive — each child has the same shape. Returns the root node's id.",
+    "Insert a nested tree of nodes plus the supporting CSS classes in one call. `classes` are created first, then referenced by name from `tree.children[].classIds`. Returns the root node's id. Strongly preferred over chained insertNode for any multi-element section.",
   inputSchema: InsertTreeInput,
 }
 
@@ -97,7 +97,7 @@ export const deleteNodeTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    'Remove a node and every descendant under it. Pass the real node id (from a prior tool result or inspect_page / search_nodes). Permanent within the session — the user can undo it via Cmd+Z but you cannot undo it from within the agent loop.',
+    'Remove a node and its descendants. Not undoable from inside the loop (user can Cmd+Z after).',
   inputSchema: DeleteNodeInput,
 }
 
@@ -112,7 +112,7 @@ export const updateNodePropsTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    'Patch one or more prop values on an existing node. The patch shallow-merges with the current props (omitted keys keep their current value; pass an empty string or null to clear). `breakpointId` writes a per-breakpoint override and is rejected for content props (text, tag, src, alt, href, …) — those are single-value across all breakpoints because the published page is one HTML document. For per-breakpoint *visual* variation use class breakpoint styles via createClass.breakpointStyles / updateClassStyles instead. Sanitises richtext-keyed props through DOMPurify automatically.',
+    'Shallow-merge a patch onto an existing node\'s props. `breakpointId` is only valid for props marked `breakpointOverridable` in the schema (rejected for content props like text/tag/src). For per-breakpoint visual variation use class breakpointStyles, not this. Richtext props are auto-sanitised.',
   inputSchema: UpdateNodePropsInput,
 }
 
@@ -127,7 +127,7 @@ export const moveNodeTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    "Move a node to a different parent and/or position in its parent's children array. `newIndex` is 0-based among the destination parent's children. Use this for re-ordering sections, reparenting nodes between containers, or moving a child to root.",
+    "Move a node to a different parent and/or position. `newIndex` is 0-based among the destination's children.",
   inputSchema: MoveNodeInput,
 }
 
@@ -141,7 +141,7 @@ export const renameNodeTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    "Set the user-facing label shown for a node in the DOM tree panel. Doesn't affect the rendered HTML — only the editor display. Useful when you build a complex tree and want each node to be findable by name in the layers panel.",
+    "Set the node's display label in the DOM tree panel. Editor-only; doesn't affect rendered HTML.",
   inputSchema: RenameNodeInput,
 }
 
@@ -155,7 +155,7 @@ export const duplicateNodeTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    "Deep-clone a node and its entire subtree (props, classIds, breakpoint overrides, all descendants) right after the original in the same parent. Pass `count` (1-50, default 1) to produce N clones in one call — the canonical way to handle \"make 6 cards from the existing 3\" or \"add another section like this one\". Returns the first new node's id in `nodeId`. The clones share class assignments with the original, so styling stays consistent.",
+    "Deep-clone a node + subtree (props, classIds, breakpoint overrides) right after the original. `count` (1-50, default 1) produces N clones in one call. Returns the first new node's id.",
   inputSchema: DuplicateNodeInput,
 }
 
@@ -174,7 +174,7 @@ export const createClassTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    'Create a new reusable CSS class with optional base and per-breakpoint styles. CSS property names are camelCase (fontSize, backgroundColor, paddingTop, gridTemplateColumns, etc.). Returns the new class id; you can then pass it to assignClass, but you can also pass the class NAME to assignClass/updateClassStyles/removeClass — the executor resolves names automatically. Class names must be unique within the site.',
+    'Create a reusable CSS class with camelCase style keys (fontSize, paddingTop, gridTemplateColumns). Name must be a CSS identifier (no spaces) and unique. Returns the new class id; other class tools accept id OR name.',
   inputSchema: CreateClassInput,
 }
 
@@ -189,7 +189,7 @@ export const updateClassStylesTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    'Patch the style declarations of an existing class. The patch shallow-merges with the current styles. Pass `breakpointId` to write breakpoint-specific overrides rather than changing the base styles. `classId` accepts either the class id or its name (the executor resolves names).',
+    'Shallow-merge a style patch onto an existing class. `breakpointId` writes a per-breakpoint override instead of base. `classId` accepts id or name.',
   inputSchema: UpdateClassStylesInput,
 }
 
@@ -203,7 +203,7 @@ export const assignClassTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    "Attach an existing CSS class to a node. The class's styles cascade onto the node according to the project's class layering rules. `classId` accepts either the id or the class name.",
+    "Attach an existing CSS class to a node. `classId` accepts id or name.",
   inputSchema: AssignClassInput,
 }
 
@@ -217,7 +217,7 @@ export const removeClassTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    'Detach a CSS class from a node (does not delete the class itself; other nodes keep their assignment). `classId` accepts either the id or the class name.',
+    'Detach a class from a node (the class itself is not deleted). `classId` accepts id or name.',
   inputSchema: RemoveClassInput,
 }
 
@@ -235,7 +235,7 @@ export const addPageTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    'Add a new EMPTY page to the site with the given title and optional slug (defaults to a slugified title). Use this when the user asks to create a fresh page from scratch. For "create a page like this one" or "copy the landing page", use duplicatePage instead. Returns the new page id in `nodeId`.',
+    'Add an EMPTY page. `slug` defaults to a slugified title. Returns the new page id. For copying an existing page use duplicatePage.',
   inputSchema: AddPageInput,
 }
 
@@ -248,7 +248,7 @@ export const deletePageTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    'Permanently delete a page and all of its content. Cannot delete the only remaining page in a site (a site must have at least one page). Use list_pages first if you need to find the page id.',
+    'Permanently delete a page. Fails if it would leave the site with zero pages.',
   inputSchema: DeletePageInput,
 }
 
@@ -263,7 +263,7 @@ export const renamePageTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    "Change a page's title and/or slug. Pass `slug` as \"index\" to make this page the site's homepage (the homepage convention is whichever page lives at slug \"index\"). Pass `slug` as undefined to keep the current slug. Use list_pages first if you need to find the page id.",
+    "Change a page's title and/or slug. `slug=\"index\"` makes this page the homepage. Omit slug to keep it.",
   inputSchema: RenamePageInput,
 }
 
@@ -278,7 +278,7 @@ export const duplicatePageTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    'Deep-clone an existing page (every node, prop, class assignment, and breakpoint override) under a new title and slug. Use this for "copy this page", "make a /pricing page like the /plans page", or any template-style workflow. Every node in the new page gets a fresh id; class assignments are preserved. Returns the new page id in `nodeId`.',
+    'Deep-clone an existing page (every node, prop, class assignment, breakpoint override) under a new title/slug. Node ids are regenerated; class assignments preserved. Returns the new page id.',
   inputSchema: DuplicatePageInput,
 }
 
@@ -295,7 +295,7 @@ export const renderSnapshotTool: AiTool = {
   scope: 'site',
   execution: 'browser',
   description:
-    "Capture a fresh screenshot of the canvas frame for one breakpoint and return it alongside browser-collected layout data: viewport dimensions, per-node bounding boxes, image-load status, and warnings (horizontal-overflow, hidden-overflow, broken-image, invisible-node). Use this to verify visual changes, debug responsive issues, or inspect a layout you can't reason about from props alone. The image is returned as MCP image content so you can see it directly. `breakpointId` defaults to the active breakpoint.",
+    "Capture a screenshot of the canvas at one breakpoint plus layout data (viewport size, per-node bounding boxes, image-load status, warnings for overflow/broken-image/invisible). Use to verify visuals or debug layout issues. `breakpointId` defaults to active.",
   inputSchema: RenderSnapshotInput,
 }
 

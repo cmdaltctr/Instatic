@@ -87,6 +87,29 @@ export interface AiStreamRequest {
   readonly credentials: AiResolvedCredential
   readonly signal: AbortSignal
   readonly bridge: AiBrowserBridge
+  /**
+   * Base for the per-call `ToolContext` the driver builds when invoking a
+   * server-side tool handler. Carries db + identity + scope + the per-turn
+   * snapshot; drivers add `signal` and pass the whole thing to the handler.
+   *
+   * Threading this through the request avoids the module-level "active
+   * snapshot" binding the early drivers used (concurrent chats would race
+   * a single global). Drivers receive their own copy per call.
+   */
+  readonly toolContextBase: ToolContextBase
+}
+
+/**
+ * Subset of `ToolContext` the chat handler can populate at request time —
+ * everything except the per-call `signal`. Drivers compose the final
+ * `ToolContext` by spreading this and adding their own signal.
+ */
+export interface ToolContextBase {
+  readonly db: import('../../db/client').DbClient
+  readonly userId: string
+  readonly scope: import('../runtime/types').ToolScope
+  readonly conversationId: string
+  readonly snapshot: unknown
 }
 
 // ---------------------------------------------------------------------------

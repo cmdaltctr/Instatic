@@ -12,6 +12,7 @@ import { jsonResponse } from '../../http'
 import { isStateChangingMethod, originAllowed } from '../../auth/security'
 import { requireCapability } from '../../auth/authz'
 import type { DbClient } from '../../db/client'
+import { createAuditEvent } from '../../repositories/audit'
 import {
   CredentialError,
   createCredentialForUser,
@@ -117,6 +118,17 @@ async function handleCreate(req: Request, db: DbClient): Promise<Response> {
       userOrResponse.id,
       parsed.value as Static<typeof CreateBodySchema>,
     )
+    await createAuditEvent(db, {
+      actorUserId: userOrResponse.id,
+      action: 'ai.credential.created',
+      targetType: 'ai_credential',
+      targetId: record.id,
+      metadata: {
+        providerId: record.providerId,
+        authMode: record.authMode,
+        displayLabel: record.displayLabel,
+      },
+    })
     return jsonResponse({ credential: await toCredentialView(record) }, { status: 201 })
   } catch (err) {
     if (err instanceof CredentialError) {
@@ -163,6 +175,23 @@ async function handleUpdate(req: Request, db: DbClient, id: string): Promise<Res
       parsed.value as Static<typeof UpdateBodySchema>,
     )
     if (!record) return jsonResponse({ error: 'Credential not found' }, { status: 404 })
+    const patch = parsed.value as Static<typeof UpdateBodySchema>
+    await createAuditEvent(db, {
+      actorUserId: userOrResponse.id,
+      action: 'ai.credential.updated',
+      targetType: 'ai_credential',
+      targetId: record.id,
+      metadata: {
+        providerId: record.providerId,
+        displayLabel: record.displayLabel,
+        // Only record which fields were touched — never the key itself.
+        fieldsTouched: [
+          patch.displayLabel !== undefined ? 'displayLabel' : null,
+          patch.apiKey !== undefined ? 'apiKey' : null,
+          patch.baseUrl !== undefined ? 'baseUrl' : null,
+        ].filter((v): v is string => v !== null),
+      },
+    })
     return jsonResponse({ credential: await toCredentialView(record) })
   } catch (err) {
     if (err instanceof CredentialError) {
@@ -180,9 +209,25 @@ async function handleDelete(req: Request, db: DbClient, id: string): Promise<Res
   const userOrResponse = await requireCapability(req, db, 'ai.providers.manage')
   if (userOrResponse instanceof Response) return userOrResponse
 
+  // Snapshot identity BEFORE the delete so the audit row carries provider +
+  // label even though the row no longer exists post-commit.
+  const snapshot = await readCredentialForUser(db, userOrResponse.id, id)
+
   try {
     const deleted = await deleteCredentialForUser(db, userOrResponse.id, id)
     if (!deleted) return jsonResponse({ error: 'Credential not found' }, { status: 404 })
+    if (snapshot) {
+      await createAuditEvent(db, {
+        actorUserId: userOrResponse.id,
+        action: 'ai.credential.deleted',
+        targetType: 'ai_credential',
+        targetId: id,
+        metadata: {
+          providerId: snapshot.providerId,
+          displayLabel: snapshot.displayLabel,
+        },
+      })
+    }
     return jsonResponse({ ok: true })
   } catch (err) {
     if (err instanceof CredentialError) {
@@ -214,9 +259,35 @@ async function dispatchTest(req: Request, db: DbClient, id: string): Promise<Res
     const resolved = await resolveCredentialForDriver(record)
     const driver = resolveDriver(record.providerId)
     const models = await driver.listModels(resolved)
+    await createAuditEvent(db, {
+      actorUserId: userOrResponse.id,
+      action: 'ai.credential.tested',
+      targetType: 'ai_credential',
+      targetId: record.id,
+      metadata: {
+        providerId: record.providerId,
+        displayLabel: record.displayLabel,
+        ok: true,
+        modelCount: models.length,
+      },
+    })
     return jsonResponse({ ok: true, modelCount: models.length })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Test failed.'
+    await createAuditEvent(db, {
+      actorUserId: userOrResponse.id,
+      action: 'ai.credential.tested',
+      targetType: 'ai_credential',
+      targetId: record.id,
+      metadata: {
+        providerId: record.providerId,
+        displayLabel: record.displayLabel,
+        ok: false,
+        // Truncated to keep audit metadata bounded — full driver errors
+        // can be hundreds of chars.
+        error: message.slice(0, 200),
+      },
+    })
     return jsonResponse({ ok: false, error: message }, { status: 200 })
   }
 }
