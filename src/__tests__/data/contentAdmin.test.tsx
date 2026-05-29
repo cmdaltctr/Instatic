@@ -652,8 +652,11 @@ describe('ContentPage', () => {
 
     expect(screen.getByTestId('panel-rail-content').getAttribute('aria-label')).toBe('Close Content panel')
     expect(screen.getByTestId('panel-rail-media').getAttribute('aria-label')).toBe('Open Media panel')
+    // The AI assistant panel is docked into the content workspace (it is a
+    // content-specific rail panel), so its rail button is present + closed.
+    expect(screen.getByTestId('panel-rail-agent').getAttribute('aria-label')).toBe('Open AI assistant panel')
+    // Layers + Dependencies remain editor-only and must NOT appear here.
     expect(screen.queryByLabelText('Open Layers panel')).toBeNull()
-    expect(screen.queryByLabelText('Open AI assistant panel')).toBeNull()
     expect(screen.queryByLabelText('Open Dependencies panel')).toBeNull()
   })
 
