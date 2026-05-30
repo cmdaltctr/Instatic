@@ -29,8 +29,49 @@ import type {
   FrameworkTypographyGroup,
 } from '@core/page-tree'
 import type { ImportFragment } from '@core/htmlImport'
+import type { NewStyleRule } from '@core/siteImport'
 import type { FrameworkChangeImpact } from '@core/framework/changeImpact'
 import type { EditorStore } from '@site/store/types'
+
+// ---------------------------------------------------------------------------
+// SuperImportHelpers — passed to mutateAllPagesAndSite recipes.
+// ---------------------------------------------------------------------------
+
+/**
+ * Transaction helpers passed to the `mutateAllPagesAndSite` recipe. Each
+ * method operates inside the same Immer producer so all changes land in a
+ * single undoable history snapshot.
+ */
+export interface SuperImportHelpers {
+  /**
+   * Add a new page with the given title, slug, and body content.
+   * Class names on fragment nodes are resolved to registry ids (auto-creating
+   * bare classes for unknown names), exactly as `insertImportedNodes` does.
+   * @returns The new page's generated id.
+   */
+  addPage(input: { title: string; slug: string; nodeFragment: ImportFragment }): string
+
+  /**
+   * Add a new style rule to the global registry.
+   * Appended after all existing rules (order = maxExisting + 1).
+   * @returns The new rule's generated id.
+   */
+  addStyleRule(rule: NewStyleRule): string
+
+  /**
+   * Overwrite the content of an existing page (conflict: overwrite resolution).
+   * Preserves `id`, `ownerUserId`, `createdByUserId`; replaces everything else.
+   * Throws if `pageId` is not found.
+   */
+  overwritePage(pageId: string, input: { title: string; slug: string; nodeFragment: ImportFragment }): void
+
+  /**
+   * Overwrite an existing style rule (conflict: overwrite resolution).
+   * Preserves `id`, `createdAt`, `order`; replaces all other fields.
+   * Throws if `ruleId` is not found.
+   */
+  overwriteStyleRule(ruleId: string, rule: NewStyleRule): void
+}
 
 // ---------------------------------------------------------------------------
 // Public action surface — every method below appears as a top-level entry on
@@ -229,6 +270,18 @@ export interface SiteSlice {
     applyChange: (site: SiteDocument) => void,
   ) => FrameworkChangeImpact | null
 
+  // ─── Super Import ─────────────────────────────────────────────────────────
+  /**
+   * Mutate the entire site — all pages and style rules — in ONE undoable
+   * history snapshot. The recipe receives a SiteDocument draft and helpers
+   * that mint new pages / style rules or overwrite existing ones.
+   *
+   * Used by the Super Import wizard so Cmd+Z reverts the whole import in a
+   * single press. Returns `true` when the recipe produced at least one real
+   * mutation; `false` for explicit no-ops.
+   */
+  mutateAllPagesAndSite(fn: (site: SiteDocument, helpers: SuperImportHelpers) => SiteMutationResult): boolean
+
   // ─── Undo / Redo ──────────────────────────────────────────────────────────
   /** Snapshots of previous site states — most recent last */
   _historyPast: SiteDocument[]
@@ -296,7 +349,7 @@ export interface SiteSliceHelpers {
    * Mutate the active node tree AND the surrounding site — auto-snapshots
    * undo history only on real changes. Same active-document routing as `mutateActiveTree`, plus
    * a `SiteDocument` draft so callers can also mutate site-level state
-   * (e.g. `site.classes` for scoped-class cloning) in one atomic recipe.
+   * (e.g. `site.styleRules` for scoped-class cloning) in one atomic recipe.
    */
   mutateActiveTreeAndSite: (
     fn: (tree: NodeTree<PageNode>, site: SiteDocument) => SiteMutationResult,
@@ -312,5 +365,13 @@ export interface SiteSliceHelpers {
    */
   mutateSiteState: (
     fn: (state: Draft<EditorStore>, site: SiteDocument) => SiteMutationResult,
+  ) => boolean
+
+  /**
+   * Mutate all pages and style rules in one undoable history snapshot.
+   * See `SiteSlice.mutateAllPagesAndSite` for the full contract.
+   */
+  mutateAllPagesAndSite: (
+    fn: (site: SiteDocument, helpers: SuperImportHelpers) => SiteMutationResult,
   ) => boolean
 }

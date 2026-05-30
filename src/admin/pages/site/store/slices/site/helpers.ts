@@ -9,18 +9,24 @@
  * tree code that uses them.
  */
 
+import { nanoid } from 'nanoid'
 import type { StoreApi } from 'zustand'
 import type {
   BaseNode,
   NodeTree,
   Page,
   PageNode,
+  StyleRule,
   SiteDocument,
 } from '@core/page-tree'
+import { addPage, createNode } from '@core/page-tree'
 import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
+import type { ImportFragment } from '@core/htmlImport'
+import type { NewStyleRule } from '@core/siteImport'
 import type { EditorStore } from '@site/store/types'
 import { MAX_HISTORY } from './defaults'
-import type { SiteMutationResult, SiteSliceHelpers, SiteSliceImmerRecipe } from './types'
+import { indexStyleRulesByName, linkImportedClassNames } from './importLinking'
+import type { SiteMutationResult, SiteSliceHelpers, SiteSliceImmerRecipe, SuperImportHelpers } from './types'
 
 /**
  * Walk every page's tree, find every `base.visual-component-ref` that points
@@ -246,7 +252,7 @@ export function buildSiteHelpers(
    * site-level state alongside the tree mutation in one transaction.
    *
    * Used by duplicate operations that must clone scoped classes (which live
-   * on `site.classes`) atomically with the node duplication. Without this
+   * on `site.styleRules`) atomically with the node duplication. Without this
    * the duplicate's `classIds` would point at the source's scoped classes,
    * silently coupling per-node CSS across both nodes.
    */
@@ -286,6 +292,130 @@ export function buildSiteHelpers(
     return changed
   }
 
+  /**
+   * Mutate the entire site — all pages and style rules — in ONE undoable
+   * history snapshot. The recipe receives a SiteDocument draft and transaction
+   * helpers for adding or overwriting pages and style rules.
+   *
+   * Class names on imported fragment nodes are resolved to registry ids (and
+   * unknown names auto-create bare classes) via the shared `byName` map that
+   * the helpers build once and share across the whole recipe. This guarantees
+   * that a class added by `addStyleRule` earlier in the recipe is reused by
+   * `addPage` later in the same recipe — no duplicate rules for the same name.
+   *
+   * A history snapshot is pushed ONLY when the recipe returns a non-false
+   * result AND at least one helper actually mutated the site. Explicit no-ops
+   * (`return false`) never produce a history entry.
+   */
+  function mutateAllPagesAndSite(
+    fn: (site: SiteDocument, helpers: SuperImportHelpers) => SiteMutationResult,
+  ): boolean {
+    const snapshot = snapshotCurrentSite()
+    let changed = false
+    set((state) => {
+      if (!state.site || !snapshot) return
+      const site = state.site
+      let didMutate = false
+
+      // Build the name→id index once. All helpers share this map so that
+      // a `addStyleRule(kind:'class', name:'btn')` followed by
+      // `addPage(fragment with node.classIds:['btn'])` resolves to the same id.
+      const byName = indexStyleRulesByName(site.styleRules)
+
+      const helpers: SuperImportHelpers = {
+        addPage({ title, slug, nodeFragment }: { title: string; slug: string; nodeFragment: ImportFragment }): string {
+          // addPage creates a fresh base.body root, normalises the slug, and
+          // pushes the page onto site.pages. We then graft the fragment nodes
+          // in as children of that root — same logical step as insertImportedNodes.
+          const page = addPage(site as SiteDocument, title, slug)
+          for (const [id, node] of Object.entries(nodeFragment.nodes)) {
+            page.nodes[id] = {
+              ...node,
+              classIds: linkImportedClassNames(node.classIds, site.styleRules, byName),
+            }
+          }
+          page.nodes[page.rootNodeId]!.children = [...nodeFragment.rootIds]
+          didMutate = true
+          return page.id
+        },
+
+        addStyleRule(rule: NewStyleRule): string {
+          const id = nanoid()
+          const now = Date.now()
+          // Append after every existing rule so imports don't disrupt the
+          // established cascade order.
+          let maxOrder = -1
+          for (const r of Object.values(site.styleRules)) {
+            if (typeof r.order === 'number' && r.order > maxOrder) maxOrder = r.order
+          }
+          const newRule: StyleRule = {
+            ...rule,
+            id,
+            createdAt: now,
+            updatedAt: now,
+            order: maxOrder + 1,
+          }
+          site.styleRules[id] = newRule
+          // Register in byName so subsequent addPage calls referencing this
+          // class name resolve to this id rather than creating a duplicate.
+          if (rule.kind === 'class') byName.set(rule.name, id)
+          didMutate = true
+          return id
+        },
+
+        overwritePage(pageId: string, { title, slug, nodeFragment }: { title: string; slug: string; nodeFragment: ImportFragment }): void {
+          const page = site.pages.find((p) => p.id === pageId)
+          if (!page) throw new Error('overwritePage: page not found')
+
+          // Mint a fresh body root; wire fragment roots as its children.
+          const rootNode = createNode('base.body')
+          rootNode.children = [...nodeFragment.rootIds]
+
+          const newNodes: Record<string, PageNode> = { [rootNode.id]: rootNode }
+          for (const [id, node] of Object.entries(nodeFragment.nodes)) {
+            newNodes[id] = {
+              ...node,
+              classIds: linkImportedClassNames(node.classIds, site.styleRules, byName),
+            }
+          }
+
+          // Replace tree fields; preserve identity + ownership fields.
+          page.rootNodeId = rootNode.id
+          page.nodes = newNodes
+          page.title = title
+          page.slug = slug
+          didMutate = true
+        },
+
+        overwriteStyleRule(ruleId: string, rule: NewStyleRule): void {
+          const existing = site.styleRules[ruleId]
+          if (!existing) throw new Error('overwriteStyleRule: style rule not found')
+
+          const now = Date.now()
+          // Replace all fields except identity + cascade position.
+          site.styleRules[ruleId] = {
+            ...rule,
+            id: ruleId,
+            createdAt: existing.createdAt,
+            updatedAt: now,
+            order: existing.order,
+          }
+          if (rule.kind === 'class') byName.set(rule.name, ruleId)
+          didMutate = true
+        },
+      }
+
+      const result = fn(site as SiteDocument, helpers)
+      if (recipeDidMutate(result) && didMutate) {
+        pushHistorySnapshot(state, snapshot)
+        state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
+        changed = true
+      }
+    })
+    return changed
+  }
+
   return {
     set,
     get,
@@ -295,5 +425,6 @@ export function buildSiteHelpers(
     mutateActiveTreeAndSite,
     mutateSite,
     mutateSiteState,
+    mutateAllPagesAndSite,
   }
 }

@@ -1,0 +1,8 @@
+.body {
+  /* The Dialog component wraps children in a scrollable body div.
+     We remove extra padding here so the AnalyzeStep grid can reach the edges. */
+  padding: 0;
+}
+
+/* The dialog's built-in body padding applies; for DropStep / RunStep / DoneStep
+   we want some breathing room but the AnalyzeStep fills edge-to-edge. */

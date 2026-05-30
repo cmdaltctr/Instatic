@@ -319,7 +319,7 @@ interface ImportResult {
   - a `.zip` (unpacked client-side via JSZip; if every entry shares one top-level folder, that prefix is stripped silently).
 - Drag uses `DataTransferItem.webkitGetAsEntry()` to walk dropped folders; file picker uses `<input type="file" multiple>` + `webkitdirectory` for the folder-pick affordance.
 - Path normalization: each input shape produces a `FileMap` keyed by relative path (`assets/img/hero.png`). The downstream pipeline is shape-agnostic.
-- Validates aggregate size ≤ N MB (default 200 MB), file count (max 10k), zip uncompressed-bomb guard (max 5 GB).
+- Validates aggregate size ≤ N MB (default 1 GB), file count (max 10k), zip uncompressed-bomb guard (max 5 GB).
 - Progress for unpacking (zip) or reading (loose files / folder).
 
 ### Step 2 — Analyze (preview "what goes where")
@@ -416,7 +416,7 @@ The plan is buildable as-written; these are pre-implementation refinements worth
 - **Q-A.** Per-page rule scope in v1 or Phase 4? ★ **Phase 4.** Site-wide is simpler and matches the current model. If specific feedback emerges that imported sites pollute the global selectors list, we promote it.
 - **Q-B.** SelectorsPanel "Add ambient rule" UX in Phase 0 or Phase 4? ★ **Phase 0** (minimal version: a single text input + live-validate). The importer creates rules programmatically anyway, but if users can't author one by hand, the model extension has no editor surface.
 - **Q-C.** Layout extraction (shared `<header>`/`<footer>` → Visual Component) — opt-in dialog vs always-on? ★ **Phase 4 opt-in.** Don't surprise users in v1; analytic upgrade later.
-- **Q-D.** Maximum aggregate size + count gates (any input shape) — what are the right defaults? ★ **200 MB aggregate / 10k files / 5 GB uncompressed (zip-bomb guard).** Revisit when we have one real import to benchmark.
+- **Q-D.** Maximum aggregate size + count gates (any input shape) — what are the right defaults? ★ **1 GB aggregate / 10k files / 5 GB uncompressed (zip-bomb guard).** Revisit when we have one real import to benchmark.
 - **Q-E.** Should `kind:'class'` rules without an attached node (no node references them) be auto-pruned? ★ **No.** Treat as user-authored "available to use later." The Selectors panel already shows usage count.
 
 ## Test plan
