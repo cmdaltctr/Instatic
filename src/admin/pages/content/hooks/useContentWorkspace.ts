@@ -61,6 +61,8 @@ export function useContentWorkspace({
   const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId) ?? null
   const contentLoading = loading || entriesLoading
 
+  // Exception #1: referenced in deep-link effect B's dependency array, so it
+  // needs a stable identity for react-hooks/exhaustive-deps.
   const selectEntry = useCallback((entry: DataRow | null) => {
     setSelectedEntry(entry)
     useEditorStore.getState().setPropertiesPanel({ collapsed: false })

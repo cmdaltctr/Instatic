@@ -66,15 +66,17 @@ export function useDomPanelDnd({
   const [target, setTarget] = useState<DomDropTarget | null>(null)
   const [invalidOverId, setInvalidOverId] = useState<string | null>(null)
 
+  // exception #1: feeds resolveTargetAtPoint's effect-bound closure (exhaustive-deps)
   const canHaveChildren = useCallback((moduleId: string) => {
     return registry.get(moduleId)?.canHaveChildren === true
   }, [])
 
-  const registerRow = useCallback((nodeId: string, element: HTMLElement | null) => {
+  const registerRow = (nodeId: string, element: HTMLElement | null) => {
     if (element) rowsRef.current.set(nodeId, element)
     else rowsRef.current.delete(nodeId)
-  }, [])
+  }
 
+  // exception #1: feeds runAutoScroll's effect-bound closure (exhaustive-deps)
   const measureRows = useCallback(() => {
     measuredRowsRef.current = Array.from(rowsRef.current.entries())
       .map(([nodeId, element]) => {
@@ -91,17 +93,20 @@ export function useDomPanelDnd({
       .sort((a, b) => a.rect.top - b.rect.top)
   }, [])
 
+  // exception #1: feeds runAutoScroll/resetDragState effect-bound closures (exhaustive-deps)
   const clearAutoExpand = useCallback(() => {
     const pending = autoExpandRef.current
     if (pending) window.clearTimeout(pending.timeoutId)
     autoExpandRef.current = null
   }, [])
 
+  // exception #1: feeds runAutoScroll/resetDragState effect-bound closures (exhaustive-deps)
   const setResolvedTarget = useCallback((next: DomDropTarget | null) => {
     latestTargetRef.current = next
     setTarget((prev) => areTargetsEqual(prev, next) ? prev : next)
   }, [])
 
+  // exception #1: feeds runAutoScroll's effect-bound closure (exhaustive-deps)
   const scheduleAutoExpand = useCallback((next: DomDropTarget | null, point: Point) => {
     if (!next || next.position !== 'inside' || isExpanded(next.parentId)) {
       clearAutoExpand()
@@ -128,6 +133,7 @@ export function useDomPanelDnd({
     autoExpandRef.current = { targetKey, point, timeoutId }
   }, [clearAutoExpand, expandNode, isExpanded, measureRows])
 
+  // exception #1: feeds runAutoScroll's effect-bound closure (exhaustive-deps)
   const resolveTargetAtPoint = useCallback((draggedId: string, point: Point) => {
     if (!page) {
       setResolvedTarget(null)
@@ -164,6 +170,7 @@ export function useDomPanelDnd({
     scheduleAutoExpand(next, point)
   }, [canHaveChildren, clearAutoExpand, page, scheduleAutoExpand, setResolvedTarget])
 
+  // exception #1: feeds resetDragState's effect-bound closure (exhaustive-deps)
   const stopAutoScroll = useCallback(() => {
     if (scrollFrameRef.current !== null) {
       cancelAnimationFrame(scrollFrameRef.current)
@@ -171,6 +178,7 @@ export function useDomPanelDnd({
     }
   }, [])
 
+  // exception #1: assigned to runAutoScrollRef inside a useEffect dep array (exhaustive-deps)
   const runAutoScroll = useCallback(() => {
     scrollFrameRef.current = null
     const container = treeAreaRef.current
@@ -206,13 +214,14 @@ export function useDomPanelDnd({
     runAutoScrollRef.current = runAutoScroll
   }, [runAutoScroll])
 
-  const updateAutoScroll = useCallback((point: Point) => {
+  const updateAutoScroll = (point: Point) => {
     latestPointerRef.current = point
     if (scrollFrameRef.current === null) {
       scrollFrameRef.current = requestAnimationFrame(() => runAutoScrollRef.current())
     }
-  }, [])
+  }
 
+  // exception #1: referenced in a useEffect dep array (cleanup on unmount, exhaustive-deps)
   const resetDragState = useCallback(() => {
     stopAutoScroll()
     clearAutoExpand()

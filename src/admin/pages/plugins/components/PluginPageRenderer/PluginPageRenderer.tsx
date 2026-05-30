@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useMemo,
   useState,
   type CSSProperties,
 } from 'react'
@@ -115,7 +114,7 @@ function PluginReactSubtree({
   Component: PluginAdminAppComponent
   page: AppPluginPageRoute
 }) {
-  const contextValue = useMemo<PluginContextValue>(() => ({
+  const contextValue: PluginContextValue = {
     pluginId: page.pluginId,
     pluginVersion: page.pluginVersion,
     surfaceId: page.id,
@@ -123,7 +122,7 @@ function PluginReactSubtree({
     settings: page.pluginSettings,
     routes: buildPluginRoutesHelper(page.pluginId),
     runCommand: (commandId) => pluginRuntime.runCommand(commandId),
-  }), [page.id, page.pluginId, page.pluginVersion, page.pluginSettings, page.title])
+  }
 
   return (
     <PluginContext.Provider value={contextValue}>

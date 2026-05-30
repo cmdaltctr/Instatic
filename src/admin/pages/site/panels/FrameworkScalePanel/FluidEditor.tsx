@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import {
   appendStep,
   computeFluidScale,
@@ -34,44 +33,36 @@ export function FluidEditor<G extends GroupShape, C extends GeneratorShape>({
   adapter: ScaleAdapter<G, C>
   preferences: ReturnType<typeof resolveFrameworkPreferences>
 }) {
-  const stepLabels = useMemo(
-    () => group.steps.split(',').map((s) => s.trim()).filter(Boolean),
-    [group.steps],
-  )
+  const stepLabels = group.steps.split(',').map((s) => s.trim()).filter(Boolean)
   const baseScaleIndex = Math.max(0, Math.min(group.baseScaleIndex, stepLabels.length - 1))
-  const fluid = useMemo<FluidScaleStep[]>(() => {
-    return computeFluidScale({
-      minBaseSize: adapter.readBaseSize(group, 'min'),
-      maxBaseSize: adapter.readBaseSize(group, 'max'),
-      minScaleRatio: effectiveScaleRatio(
-        group.min.scaleRatio,
-        group.min.isCustomScaleRatio,
-        group.min.scaleRatioInputValue,
-      ),
-      maxScaleRatio: effectiveScaleRatio(
-        group.max.scaleRatio,
-        group.max.isCustomScaleRatio,
-        group.max.scaleRatioInputValue,
-      ),
-      steps: stepLabels.length,
-      baseScaleIndex,
-      minScreenWidth: preferences.minScreenWidth,
-      maxScreenWidth: preferences.maxScreenWidth,
-    })
-  }, [adapter, baseScaleIndex, group, preferences.maxScreenWidth, preferences.minScreenWidth, stepLabels.length])
+  const fluid: FluidScaleStep[] = computeFluidScale({
+    minBaseSize: adapter.readBaseSize(group, 'min'),
+    maxBaseSize: adapter.readBaseSize(group, 'max'),
+    minScaleRatio: effectiveScaleRatio(
+      group.min.scaleRatio,
+      group.min.isCustomScaleRatio,
+      group.min.scaleRatioInputValue,
+    ),
+    maxScaleRatio: effectiveScaleRatio(
+      group.max.scaleRatio,
+      group.max.isCustomScaleRatio,
+      group.max.scaleRatioInputValue,
+    ),
+    steps: stepLabels.length,
+    baseScaleIndex,
+    minScreenWidth: preferences.minScreenWidth,
+    maxScreenWidth: preferences.maxScreenWidth,
+  })
 
   // Compute the largest endpoint across the entire scale so per-step charts
   // can scale their bar widths relative to a single shared baseline.
-  const largestSizeInScale = useMemo(() => {
-    let max = 0
-    for (const step of fluid) {
-      const min = Number(step.min)
-      const stepMax = Number(step.max)
-      if (Number.isFinite(min) && min > max) max = min
-      if (Number.isFinite(stepMax) && stepMax > max) max = stepMax
-    }
-    return max
-  }, [fluid])
+  let largestSizeInScale = 0
+  for (const step of fluid) {
+    const min = Number(step.min)
+    const stepMax = Number(step.max)
+    if (Number.isFinite(min) && min > largestSizeInScale) largestSizeInScale = min
+    if (Number.isFinite(stepMax) && stepMax > largestSizeInScale) largestSizeInScale = stepMax
+  }
 
   // Build stable input IDs per group so the ControlRow `<label htmlFor>` linkage
   // points to the right field even when the user switches between groups/tabs.

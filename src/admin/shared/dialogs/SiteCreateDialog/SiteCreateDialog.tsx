@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import type { Page } from '@core/page-tree'
 import {
   createUniquePageSlug,
@@ -35,7 +35,7 @@ const COPY: Record<SiteCreateKind, { title: string; placeholder: string }> = {
 
 const FORM_ID = 'site-create-form'
 
-export const SiteCreateDialog = memo(function SiteCreateDialog({
+export function SiteCreateDialog({
   kind,
   pages = [],
   onCancel,
@@ -138,4 +138,4 @@ export const SiteCreateDialog = memo(function SiteCreateDialog({
       </form>
     </Dialog>
   )
-})
+}

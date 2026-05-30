@@ -15,7 +15,6 @@
  *   - `onAssetRemoved(id)` — called after a successful purge so the caller
  *     drops the row from its local list.
  */
-import { useCallback, useMemo } from 'react'
 import {
   deleteCmsMediaAsset,
   purgeCmsMediaAsset,
@@ -47,19 +46,19 @@ export function useStandaloneMediaEditor({
 }: UseStandaloneMediaEditorOptions): MediaAssetEditor | null {
   // Tag palette is derived from the caller's current list — cheaper than a
   // dedicated fetch and stays in sync with whatever they're showing.
-  const tagPalette = useMemo(() => {
+  const tagPalette = (() => {
     const set = new Set<string>()
     for (const a of assets) for (const tag of a.tags) set.add(tag)
     return Array.from(set).sort()
-  }, [assets])
+  })()
 
-  const folderById = useMemo(() => {
+  const folderById = (() => {
     const map = new Map<string, CmsMediaFolder>()
     for (const folder of folders) map.set(folder.id, folder)
     return map
-  }, [folders])
+  })()
 
-  const updateAsset = useCallback(async (id: string, input: UpdateCmsMediaAssetInput) => {
+  const updateAsset = async (id: string, input: UpdateCmsMediaAssetInput) => {
     try {
       const next = await updateCmsMediaAsset(id, input)
       onAssetChanged(next)
@@ -72,9 +71,9 @@ export function useStandaloneMediaEditor({
       console.error('[useStandaloneMediaEditor] updateAsset failed:', err)
       return null
     }
-  }, [onAssetChanged])
+  }
 
-  const renameAsset = useCallback(async (id: string, filename: string) => {
+  const renameAsset = async (id: string, filename: string) => {
     try {
       const next = await renameCmsMediaAsset(id, filename)
       onAssetChanged(next)
@@ -84,9 +83,9 @@ export function useStandaloneMediaEditor({
       console.error('[useStandaloneMediaEditor] renameAsset failed:', err)
       return null
     }
-  }, [onAssetChanged])
+  }
 
-  const replaceAssetFile = useCallback(async (id: string, file: File) => {
+  const replaceAssetFile = async (id: string, file: File) => {
     try {
       const next = await replaceCmsMediaAssetFile(id, file)
       onAssetChanged(next)
@@ -96,9 +95,9 @@ export function useStandaloneMediaEditor({
       console.error('[useStandaloneMediaEditor] replaceAssetFile failed:', err)
       return null
     }
-  }, [onAssetChanged])
+  }
 
-  const restoreAsset = useCallback(async (id: string) => {
+  const restoreAsset = async (id: string) => {
     try {
       const next = await restoreCmsMediaAsset(id)
       onAssetChanged(next)
@@ -107,9 +106,9 @@ export function useStandaloneMediaEditor({
       console.error('[useStandaloneMediaEditor] restoreAsset failed:', err)
       return null
     }
-  }, [onAssetChanged])
+  }
 
-  const purgeAsset = useCallback(async (id: string) => {
+  const purgeAsset = async (id: string) => {
     try {
       // Purge requires the asset to already be soft-deleted server-side. The
       // standalone callers don't expose a Trash view, so they typically won't
@@ -124,7 +123,7 @@ export function useStandaloneMediaEditor({
     } catch (err) {
       console.error('[useStandaloneMediaEditor] purgeAsset failed:', err)
     }
-  }, [assets, onAssetRemoved])
+  }
 
   if (!asset) return null
   return {

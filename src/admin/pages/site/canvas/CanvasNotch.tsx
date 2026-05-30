@@ -1,4 +1,4 @@
-import { useCallback, type ReactNode, type SyntheticEvent } from "react";
+import { type ReactNode, type SyntheticEvent } from "react";
 import { registry } from "@core/module-engine/registry";
 import { useInsertModule } from "@site/hooks/useInsertModule";
 import { ModulePickerDropdown } from "@site/toolbar/ModulePickerDropdown";
@@ -51,18 +51,15 @@ export function CanvasNotch({
 }: CanvasNotchProps = {}) {
   const insertModule = useInsertModule();
 
-  const stopCanvasInteraction = useCallback((event: SyntheticEvent) => {
+  const stopCanvasInteraction = (event: SyntheticEvent) => {
     event.stopPropagation();
-  }, []);
+  };
 
-  const handleQuickInsert = useCallback(
-    (moduleId: string) => {
-      const mod = registry.get(moduleId);
-      if (!mod) return;
-      insertModule(mod);
-    },
-    [insertModule],
-  );
+  const handleQuickInsert = (moduleId: string) => {
+    const mod = registry.get(moduleId);
+    if (!mod) return;
+    insertModule(mod);
+  };
 
   const defaultActions: CanvasNotchAction[] = [];
   for (const moduleId of QUICK_ACTION_MODULE_IDS) {

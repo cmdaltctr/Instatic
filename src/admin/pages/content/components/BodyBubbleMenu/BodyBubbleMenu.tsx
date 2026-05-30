@@ -12,7 +12,7 @@
  * selection still active — no need to retreat to the slash menu.
  */
 
-import { useMemo, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
+import { useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
 import type { ChainedCommands, Editor } from '@tiptap/core'
 import { useEditorState } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -87,48 +87,47 @@ export function BodyBubbleMenu({ editor, iframeEl }: BodyBubbleMenuProps) {
   // the editor view's selection coords directly — those are iframe-
   // viewport coords, so without translation the menu would appear
   // shifted by the iframe's offset.
-  const iframeOverrides = useMemo(() => {
-    if (!iframeEl) return undefined
-    return {
-      appendTo: () => document.body,
-      options: {
-        strategy: 'fixed' as const,
-        // Clip the menu to the iframe's visible region so it can't
-        // drift over the left content sidebar (or beyond any other
-        // host chrome). floating-ui's `shift` middleware uses this
-        // boundary to compute overflow corrections.
-        shift: { boundary: iframeEl, padding: 8 },
-        flip: { boundary: iframeEl, padding: 8 },
-      },
-      getReferencedVirtualElement: (): VirtualElement | null => {
-        if (editor.isDestroyed) return null
-        const { from, to } = editor.state.selection
-        // `coordsAtPos` returns viewport-relative coords for whichever
-        // document the view lives in (here: the iframe doc). Build the
-        // selection rect from the endpoints and translate to host
-        // viewport by adding the iframe's bounding rect.
-        const head = editor.view.coordsAtPos(from)
-        const tail = editor.view.coordsAtPos(to)
-        const iframeRect = iframeEl.getBoundingClientRect()
-        const left = Math.min(head.left, tail.left) + iframeRect.left
-        const right = Math.max(head.right, tail.right) + iframeRect.left
-        const top = Math.min(head.top, tail.top) + iframeRect.top
-        const bottom = Math.max(head.bottom, tail.bottom) + iframeRect.top
-        return {
-          getBoundingClientRect: () => ({
-            x: left,
-            y: top,
-            width: right - left,
-            height: bottom - top,
-            top,
-            left,
-            bottom,
-            right,
-          }),
-        }
-      },
-    }
-  }, [editor, iframeEl])
+  const iframeOverrides = !iframeEl
+    ? undefined
+    : {
+        appendTo: () => document.body,
+        options: {
+          strategy: 'fixed' as const,
+          // Clip the menu to the iframe's visible region so it can't
+          // drift over the left content sidebar (or beyond any other
+          // host chrome). floating-ui's `shift` middleware uses this
+          // boundary to compute overflow corrections.
+          shift: { boundary: iframeEl, padding: 8 },
+          flip: { boundary: iframeEl, padding: 8 },
+        },
+        getReferencedVirtualElement: (): VirtualElement | null => {
+          if (editor.isDestroyed) return null
+          const { from, to } = editor.state.selection
+          // `coordsAtPos` returns viewport-relative coords for whichever
+          // document the view lives in (here: the iframe doc). Build the
+          // selection rect from the endpoints and translate to host
+          // viewport by adding the iframe's bounding rect.
+          const head = editor.view.coordsAtPos(from)
+          const tail = editor.view.coordsAtPos(to)
+          const iframeRect = iframeEl.getBoundingClientRect()
+          const left = Math.min(head.left, tail.left) + iframeRect.left
+          const right = Math.max(head.right, tail.right) + iframeRect.left
+          const top = Math.min(head.top, tail.top) + iframeRect.top
+          const bottom = Math.max(head.bottom, tail.bottom) + iframeRect.top
+          return {
+            getBoundingClientRect: () => ({
+              x: left,
+              y: top,
+              width: right - left,
+              height: bottom - top,
+              top,
+              left,
+              bottom,
+              right,
+            }),
+          }
+        },
+      }
 
   // Subscribe to the editor's transactions so the toolbar's active /
   // pressed states reflect the current selection. Without this, the

@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { SiteFile } from '@core/files/schemas'
 import {
@@ -32,14 +31,11 @@ export function StyleSettingsPane({ file }: StyleSettingsPaneProps) {
   const config = normalizeStyleRuntimeConfig(
     siteRuntime.styles[file.id] ?? DEFAULT_STYLE_RUNTIME_CONFIG,
   )
-  const scopeOptions: ScopePageOption[] = useMemo(
-    () => pages.map((page) => ({
-      id: page.id,
-      label: page.title || page.slug || page.id,
-      isTemplate: Boolean(page.template),
-    })),
-    [pages],
-  )
+  const scopeOptions: ScopePageOption[] = pages.map((page) => ({
+    id: page.id,
+    label: page.title || page.slug || page.id,
+    isTemplate: Boolean(page.template),
+  }))
 
   function patch(patchValue: Parameters<typeof patchStyleRuntimeConfig>[1]) {
     patchStyleRuntimeConfig(file.id, patchValue)

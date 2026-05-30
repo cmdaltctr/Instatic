@@ -16,7 +16,6 @@
  *   Shift+1 → reset to 100% (legacy muscle-memory)
  */
 
-import { useCallback } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { MinusIcon } from 'pixel-art-icons/icons/minus'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
@@ -46,17 +45,17 @@ export function ZoomControls() {
   const zoomOut = useEditorStore((s) => s.zoomOut)
   const resetView = useEditorStore((s) => s.resetView)
 
-  const handleZoomIn = useCallback(() => {
+  const handleZoomIn = () => {
     const center = getCanvasCenter()
     if (center) zoomIn(center.x, center.y)
     else zoomIn()
-  }, [zoomIn])
+  }
 
-  const handleZoomOut = useCallback(() => {
+  const handleZoomOut = () => {
     const center = getCanvasCenter()
     if (center) zoomOut(center.x, center.y)
     else zoomOut()
-  }, [zoomOut])
+  }
 
   const pct = Math.round(zoom * 100)
 

@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Dialog } from '@ui/components/Dialog'
@@ -35,7 +35,7 @@ function errorMessage(err: unknown) {
 
 const FORM_ID = 'content-collection-create-form'
 
-export const ContentCollectionCreateDialog = memo(function ContentCollectionCreateDialog({
+export function ContentCollectionCreateDialog({
   onCancel,
   onCreate,
 }: ContentCollectionCreateDialogProps) {
@@ -247,4 +247,4 @@ export const ContentCollectionCreateDialog = memo(function ContentCollectionCrea
       </form>
     </Dialog>
   )
-})
+}

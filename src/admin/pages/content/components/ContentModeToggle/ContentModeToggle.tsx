@@ -16,7 +16,7 @@
  * The toggle owns no app state — `mode` + `onChange` are passed in.
  */
 
-import { type SyntheticEvent, useCallback } from 'react'
+import { type SyntheticEvent } from 'react'
 import { cn } from '@ui/cn'
 import { Tooltip } from '@ui/components/Tooltip'
 import { TextStartTIcon } from 'pixel-art-icons/icons/text-start-t'
@@ -34,9 +34,9 @@ export function ContentModeToggle({ mode, onChange }: ContentModeToggleProps) {
   // The toggle lives on the canvas surface, which has its own click /
   // keyboard handlers (deselect, shortcuts). Stop propagation so the
   // tab buttons feel like chrome, not "clicks on empty canvas".
-  const stopCanvasInteraction = useCallback((event: SyntheticEvent) => {
+  const stopCanvasInteraction = (event: SyntheticEvent) => {
     event.stopPropagation()
-  }, [])
+  }
 
   return (
     <div

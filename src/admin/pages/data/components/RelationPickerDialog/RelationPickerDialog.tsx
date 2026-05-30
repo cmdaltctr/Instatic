@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { EmptyState } from '@ui/components/EmptyState'
@@ -42,7 +42,7 @@ function buildResult(selected: Set<string>, allowMultiple: boolean): string | st
 // Component
 // ---------------------------------------------------------------------------
 
-export const RelationPickerDialog = memo(function RelationPickerDialog({
+export function RelationPickerDialog({
   open,
   onClose,
   targetTable,
@@ -96,13 +96,13 @@ export const RelationPickerDialog = memo(function RelationPickerDialog({
 
   const primaryFieldId = targetTable?.primaryFieldId ?? ''
 
-  const filteredRows = useMemo(() => {
+  const filteredRows = (() => {
     if (!search.trim()) return rows
     const q = search.trim().toLowerCase()
     return rows.filter((row) =>
       readStringCell(row.cells, primaryFieldId).toLowerCase().includes(q),
     )
-  }, [rows, search, primaryFieldId])
+  })()
 
   function toggleRow(rowId: string) {
     setSelected((prev) => {
@@ -220,4 +220,4 @@ export const RelationPickerDialog = memo(function RelationPickerDialog({
       )}
     </Dialog>
   )
-})
+}

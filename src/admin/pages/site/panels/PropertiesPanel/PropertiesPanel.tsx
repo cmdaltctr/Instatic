@@ -31,7 +31,7 @@
  * `renderModuleTabContent`. Keeping the shell trivial means the hotspot
  * complexity score stays bounded as the panel grows.
  */
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { usePropertiesPanelAutoOpen } from './usePropertiesPanelAutoOpen'
 import { usePropertiesPanelData } from './usePropertiesPanelData'
 import { renderModuleTabContent } from './renderModuleTabContent'
@@ -69,9 +69,9 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
 
   // ── ClassPicker ref — for the locked-state 'Add class' CTA ────────────────
   const classPickerRef = useRef<ClassPickerHandle>(null)
-  const handleFocusClassPicker = useCallback(() => {
+  const handleFocusClassPicker = () => {
     classPickerRef.current?.focusInput()
-  }, [])
+  }
 
   // ── Draggable panel position ───────────────────────────────────────────────
   const { panelRef: dragPanelElementRef, headerDragProps, panelPositionStyle } = useDraggablePanel(
@@ -92,12 +92,12 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
   }, [data.focusedPanel, dragPanelElementRef])
 
   // ─── Panel keyboard shortcuts ──────────────────────────────────────────────
-  const handlePanelKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handlePanelKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'F6') {
       e.preventDefault()
       useEditorStore.getState().cycleFocusedPanel()
     }
-  }, [])
+  }
 
   if (data.collapsed || (!data.selectedNodeId && !data.selectedSelectorClass)) return null
 

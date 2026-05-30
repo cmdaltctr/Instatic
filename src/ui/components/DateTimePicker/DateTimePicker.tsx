@@ -28,9 +28,7 @@
  * grid is a proper `role="grid"` with `gridcell` items.
  */
 import {
-  useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -211,7 +209,7 @@ export function DateTimePicker({
   minDate,
   ariaLabel = 'Date and time picker',
 }: DateTimePickerProps) {
-  const initial = useMemo(() => value ?? defaultInitialDate(), [value])
+  const initial = value ?? defaultInitialDate()
 
   // Internal state — confirms commit via `onConfirm`; closing without
   // confirming throws the changes away.
@@ -219,17 +217,16 @@ export function DateTimePicker({
   const [viewYear, setViewYear] = useState(initial.getFullYear())
   const [viewMonth, setViewMonth] = useState(initial.getMonth())
 
-  const today = useMemo(() => {
+  const today = (() => {
     const t = new Date()
     return new Date(t.getFullYear(), t.getMonth(), t.getDate())
-  }, [])
+  })()
 
-  const minDay = useMemo(() => {
-    if (!minDate) return null
-    return new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
-  }, [minDate])
+  const minDay = minDate
+    ? new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
+    : null
 
-  const cells = useMemo(() => buildMonthCells(viewYear, viewMonth), [viewYear, viewMonth])
+  const cells = buildMonthCells(viewYear, viewMonth)
 
   const gridRef = useRef<HTMLDivElement | null>(null)
 
@@ -290,21 +287,15 @@ export function DateTimePicker({
   }
 
   // Hour/minute spinners — clamp on change, allow direct typing.
-  const handleHourChange = useCallback(
-    (raw: string) => {
-      const v = clampHour(parseInt(raw, 10))
-      setSelected((prev) => combine(prev, v, prev.getMinutes()))
-    },
-    [],
-  )
+  const handleHourChange = (raw: string) => {
+    const v = clampHour(parseInt(raw, 10))
+    setSelected((prev) => combine(prev, v, prev.getMinutes()))
+  }
 
-  const handleMinuteChange = useCallback(
-    (raw: string) => {
-      const v = clampMinute(parseInt(raw, 10))
-      setSelected((prev) => combine(prev, prev.getHours(), v))
-    },
-    [],
-  )
+  const handleMinuteChange = (raw: string) => {
+    const v = clampMinute(parseInt(raw, 10))
+    setSelected((prev) => combine(prev, prev.getHours(), v))
+  }
 
   function bumpHour(delta: number) {
     setSelected((prev) => {

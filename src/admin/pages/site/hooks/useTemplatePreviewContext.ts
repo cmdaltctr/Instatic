@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Page } from '@core/page-tree'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { dataTablePreviewToLoopItem } from '@core/templates/templatePreviewData'
@@ -56,19 +56,17 @@ export function useTemplatePreviewContext(page: Page | null): TemplateRenderData
   // tableSlug; outside that, the stack stays empty so bindings against
   // currentEntry stay empty until the loop interceptor pushes a real
   // iteration on top.
-  return useMemo<TemplateRenderDataContext | undefined>(() => {
-    if (!page || !site) return undefined
-    const entryStack: TemplateRenderDataContext['entryStack'] =
-      tableSlug && previewState?.tableSlug === tableSlug ? previewState.entryStack : []
-    const pageFrame = buildPageFrame(page)
-    return {
-      entryStack,
-      page: pageFrame,
-      site: buildSiteFrame(site),
-      // Route frame mirrors what the published page will see. Editor
-      // doesn't have the real request URL, so we derive from the page's
-      // permalink — same shape, same fields.
-      route: buildRouteFrame(pageFrame.permalink),
-    }
-  }, [page, site, tableSlug, previewState])
+  if (!page || !site) return undefined
+  const entryStack: TemplateRenderDataContext['entryStack'] =
+    tableSlug && previewState?.tableSlug === tableSlug ? previewState.entryStack : []
+  const pageFrame = buildPageFrame(page)
+  return {
+    entryStack,
+    page: pageFrame,
+    site: buildSiteFrame(site),
+    // Route frame mirrors what the published page will see. Editor
+    // doesn't have the real request URL, so we derive from the page's
+    // permalink — same shape, same fields.
+    route: buildRouteFrame(pageFrame.permalink),
+  }
 }

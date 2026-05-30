@@ -36,7 +36,7 @@
  * Routes into the editor through the existing soft-nav helpers so the
  * Site editor's heavy bundle doesn't load on the dashboard.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -246,11 +246,11 @@ export function DashboardPage() {
 
   // Bridge the registry array into a stable Map keyed by id for O(1)
   // lookups inside the grid + library.
-  const definitionsById = useMemo(() => {
+  const definitionsById = (() => {
     const map = new Map<string, typeof widgets[number]>()
     for (const w of widgets) map.set(w.id, w)
     return map
-  }, [widgets])
+  })()
 
   // KEEP layout entries whose widget definition isn't yet registered.
   // The grid now renders a `<WidgetSkeleton>` placeholder for those
@@ -284,10 +284,10 @@ export function DashboardPage() {
    * dashboard; dragging it back drops it from the dashboard and the
    * widget reappears in the library on the next render.
    */
-  const availableWidgets = useMemo(() => {
+  const availableWidgets = (() => {
     const active = new Set(layout.items.map((i) => i.id))
     return widgets.filter((w) => !active.has(w.id))
-  }, [widgets, layout.items])
+  })()
 
   function handleDragStart(event: DragStartEvent) {
     setActiveId(String(event.active.id))

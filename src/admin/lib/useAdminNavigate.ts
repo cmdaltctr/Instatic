@@ -24,7 +24,6 @@
  * the function falls back to a plain `navigate(to)` and the rest of the
  * shell still works.
  */
-import { useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { useNavigate } from './routing'
 
@@ -32,7 +31,7 @@ export type AdminNavigate = (to: string) => void
 
 export function useAdminNavigate(): AdminNavigate {
   const navigate = useNavigate()
-  return useCallback<AdminNavigate>((to) => {
+  return (to) => {
     const startViewTransition = (document as Document & {
       startViewTransition?: (callback: () => void) => void
     }).startViewTransition
@@ -49,5 +48,5 @@ export function useAdminNavigate(): AdminNavigate {
         void navigate(to)
       })
     })
-  }, [navigate])
+  }
 }

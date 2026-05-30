@@ -39,7 +39,7 @@ export function useSelectMenuAnchor({
 }: UseSelectMenuAnchorArgs): UseSelectMenuAnchorResult {
   const [menuSizing, setMenuSizing] = useState<MenuSizing | null>(null)
 
-  const getAnchorRect = useCallback((): DOMRect | null => {
+  const getAnchorRect = (): DOMRect | null => {
     const triggerRect = selectRef.current?.getBoundingClientRect()
     if (!triggerRect) return null
     if (menuPlacement === 'left-start' || !menuAnchorRef?.current) {
@@ -65,8 +65,9 @@ export function useSelectMenuAnchor({
         return { left, right, width, top, bottom, height, x: left, y: top }
       },
     } as DOMRect
-  }, [menuAnchorRef, menuPlacement, selectRef])
+  }
 
+  // Exception #1: referenced in the useEffect dep array below; exhaustive-deps needs a stable identity.
   const updateMenuSizing = useCallback(() => {
     const widthAnchor =
       menuPlacement !== 'left-start' && menuAnchorRef?.current
@@ -79,9 +80,9 @@ export function useSelectMenuAnchor({
     setMenuSizing({ width: resolvedWidth, minWidth: resolvedMinWidth })
   }, [menuAnchorRef, menuMinWidth, menuPlacement, selectRef])
 
-  const clearMenuSizing = useCallback(() => {
+  const clearMenuSizing = () => {
     setMenuSizing(null)
-  }, [])
+  }
 
   useEffect(() => {
     if (!open) return

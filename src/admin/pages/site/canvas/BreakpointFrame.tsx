@@ -17,7 +17,7 @@
  * for why preview no longer reuses these frames.
  */
 
-import { useCallback, useRef, useState, type CSSProperties } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import type { Page, Breakpoint } from '@core/page-tree'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { NodeRenderer } from './NodeRenderer'
@@ -70,15 +70,15 @@ export function BreakpointFrame({
   const permissions = useEditorPermissions()
   const breakpointChromeVisible = permissions.canEditStyle || permissions.canEditStructure
 
-  const handleIframeRef = useCallback((handle: IframeFrameSurfaceHandle | null) => {
+  const handleIframeRef = (handle: IframeFrameSurfaceHandle | null) => {
     iframeHandleRef.current = handle
     setIframeEl(handle?.iframeElement ?? null)
-  }, [])
+  }
 
-  const handleEmptyFrameClick = useCallback(() => {
+  const handleEmptyFrameClick = () => {
     if (!breakpointChromeVisible) return
     onActivate(breakpoint.id)
-  }, [breakpointChromeVisible, onActivate, breakpoint.id])
+  }
 
   return (
     <div

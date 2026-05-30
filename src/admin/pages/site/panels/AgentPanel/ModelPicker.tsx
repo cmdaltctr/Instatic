@@ -18,7 +18,7 @@
  * auto-flip behaviour as the rest of the admin.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAgentStore } from '@admin/ai/useAgentStore'
 import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
@@ -90,7 +90,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
     return () => { cancelled = true }
   }, [open, credentials, modelsByCred, activeCredentialId])
 
-  const activeLabel = useMemo(() => {
+  const activeLabel = (() => {
     if (!activeCredentialId || !activeModelId) return 'Default'
     const cred = credentials.find((c) => c.id === activeCredentialId)
     const models = modelsByCred[activeCredentialId] ?? []
@@ -102,7 +102,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
     const credLabel = cred?.displayLabel ?? ''
     const modelLabel = model?.label ?? activeModelId
     return credLabel ? `${credLabel} · ${modelLabel}` : modelLabel
-  }, [activeCredentialId, activeModelId, credentials, modelsByCred])
+  })()
 
   function toggle() {
     setOpen((v) => !v)

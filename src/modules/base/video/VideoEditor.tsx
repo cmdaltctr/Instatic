@@ -19,7 +19,7 @@
  * re-running module registration. The `youtube.ts` sibling owns the URL
  * helpers shared with `index.ts`.
  */
-import React, { useMemo } from 'react'
+import React from 'react'
 import type { CSSProperties } from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
 import { useCmsMediaAssetByPath } from '@admin/pages/media/hooks/useCmsMediaAssetByPath'
@@ -82,7 +82,7 @@ const FACADE_SHIELD_STYLE: CSSProperties = {
 }
 
 export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
-  const youtubeId = useMemo(() => parseYoutubeId(props.videoUrl || ''), [props.videoUrl])
+  const youtubeId = parseYoutubeId(props.videoUrl || '')
 
   // Resolve both assets in parallel via the per-path cache. For YouTube
   // URLs the videoUrl isn't a library asset, so that lookup returns null —
@@ -90,20 +90,13 @@ export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props,
   const videoAsset = useCmsMediaAssetByPath(!youtubeId ? props.videoUrl || null : null)
   const posterAsset = useCmsMediaAssetByPath(props.poster || null)
 
-  const posterUrl = useMemo(() => {
-    if (!posterAsset) return props.poster || null
-    return pickVariantUrl(posterAsset, CANVAS_CSS_WIDTH)
-  }, [posterAsset, props.poster])
+  const posterUrl = posterAsset ? pickVariantUrl(posterAsset, CANVAS_CSS_WIDTH) : props.poster || null
 
-  const posterSrcset = useMemo(
-    () => (posterAsset ? buildVariantSrcset(posterAsset) ?? null : null),
-    [posterAsset],
-  )
+  const posterSrcset = posterAsset ? buildVariantSrcset(posterAsset) ?? null : null
 
-  const intrinsic = useMemo(() => {
-    if (!videoAsset) return null
-    return { width: videoAsset.width ?? undefined, height: videoAsset.height ?? undefined }
-  }, [videoAsset])
+  const intrinsic = videoAsset
+    ? { width: videoAsset.width ?? undefined, height: videoAsset.height ?? undefined }
+    : null
 
   // ─── YouTube ────────────────────────────────────────────────────────────
   if (youtubeId) {

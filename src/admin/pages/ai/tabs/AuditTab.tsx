@@ -12,7 +12,7 @@
  * All), so the data feels coherent across the admin.
  */
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { RangeTabs } from '@ui/components/RangeTabs'
 import {
   listAiAudit,
@@ -318,10 +318,7 @@ function ScopesPanel({ rows }: { rows: AiUsageByScopeRow[] }) {
 function DaysPanel({ rows }: { rows: AiUsageByDayRow[] }) {
   // Derive the max cost so each bar reads as a proportion of the busiest
   // day in the window. Cheap, no need for a chart library.
-  const maxCost = useMemo(
-    () => rows.reduce((acc, r) => Math.max(acc, r.costUsd), 0),
-    [rows],
-  )
+  const maxCost = rows.reduce((acc, r) => Math.max(acc, r.costUsd), 0)
 
   return (
     <div className={styles.auditPanel}>

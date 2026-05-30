@@ -108,6 +108,7 @@ export function MediaStoragePanel() {
   // the running loop.
   const migrationCancelRef = useRef<(() => void) | null>(null)
 
+  // Exception #1: referenced in the useEffect dependency array below.
   const reload = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -131,7 +132,7 @@ export function MediaStoragePanel() {
   }, [reload])
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const handleElect = useCallback(async (role: MediaAssetRole, adapterId: string) => {
+  const handleElect = async (role: MediaAssetRole, adapterId: string) => {
     setPendingElection(role)
     setError(null)
     try {
@@ -142,9 +143,9 @@ export function MediaStoragePanel() {
     } finally {
       setPendingElection(null)
     }
-  }, [reload])
+  }
 
-  const handleDelegate = useCallback(async (delegateId: string | null) => {
+  const handleDelegate = async (delegateId: string | null) => {
     setPendingDelegate(true)
     setError(null)
     try {
@@ -155,9 +156,9 @@ export function MediaStoragePanel() {
     } finally {
       setPendingDelegate(false)
     }
-  }, [reload])
+  }
 
-  const handleVerify = useCallback(async (adapterId: string) => {
+  const handleVerify = async (adapterId: string) => {
     setVerify((prev) => ({ ...prev, [adapterId]: { loading: true, result: null } }))
     try {
       const result = await verifyCmsMediaAdapter(adapterId)
@@ -169,7 +170,7 @@ export function MediaStoragePanel() {
         [adapterId]: { loading: false, result: { ok: false, reason: message } },
       }))
     }
-  }, [])
+  }
 
   /**
    * Start a migration for `role`, streaming progress into the
@@ -180,7 +181,7 @@ export function MediaStoragePanel() {
    * disabled in that state, but defending against double-clicks here
    * keeps the SSE state machine honest.
    */
-  const handleMigrate = useCallback(async (role: MigrationRole) => {
+  const handleMigrate = async (role: MigrationRole) => {
     if (migration.kind === 'running') return
     if (!state) return
     const target = state.elections.find((e) => e.role === role)?.adapterId ?? ''
@@ -231,11 +232,11 @@ export function MediaStoragePanel() {
       // Refresh the state so the backlog count + asset counts update.
       void reload()
     }
-  }, [migration.kind, state, reload])
+  }
 
-  const handleCancelMigration = useCallback(() => {
+  const handleCancelMigration = () => {
     migrationCancelRef.current?.()
-  }, [])
+  }
 
   if (loading && !state) {
     return (

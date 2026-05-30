@@ -12,7 +12,7 @@
  * Reuses the editor's PanelRail / LeftSidebar CSS so the visual language is
  * identical across Site / Content / Media.
  */
-import { useMemo, useRef, type CSSProperties } from 'react'
+import { useRef, type CSSProperties } from 'react'
 import { Button } from '@ui/components/Button'
 import { CloudUploadSolidIcon } from 'pixel-art-icons/icons/cloud-upload-solid'
 import { FolderGlyphIcon } from 'pixel-art-icons/icons/folder-glyph'
@@ -74,12 +74,10 @@ export function MediaSidebar({ workspace, activePanel, onActivePanelChange }: Me
   // Gated by `storage.elect` (split from the old `runtime.manage`). Hide
   // the rail button entirely for users who can't use it; the API
   // endpoints also enforce this gate server-side as defense-in-depth.
-  const railItems = useMemo<RailItem[]>(() => {
-    return ALL_RAIL_ITEMS.filter((item) => {
-      if (item.id === 'storage') return hasCapability(currentUser, 'storage.elect')
-      return true
-    })
-  }, [currentUser])
+  const railItems: RailItem[] = ALL_RAIL_ITEMS.filter((item) => {
+    if (item.id === 'storage') return hasCapability(currentUser, 'storage.elect')
+    return true
+  })
 
   // Defensive: if the user previously had the storage panel open and then
   // had their capability revoked, collapse it on the next render so they

@@ -13,7 +13,7 @@
  * its own per-group toggle in its header. The whole picker scrolls with the
  * Dialog body — no inner scroll, no double scrollbar.
  */
-import { useId, useMemo, type FormEvent } from 'react'
+import { useId, type FormEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Dialog } from '@ui/components/Dialog'
@@ -56,7 +56,7 @@ export function RoleDialog({
 }: RoleDialogProps) {
   const title = mode === 'create' ? 'Create Role' : mode === 'edit' ? 'Edit Role' : 'View Role'
   const readonly = mode === 'view'
-  const selectedCapabilities = useMemo(() => new Set(form.capabilities), [form.capabilities])
+  const selectedCapabilities = new Set(form.capabilities)
   const totalCount = ALL_PICKER_CAPABILITIES.length
   const selectedCount = ALL_PICKER_CAPABILITIES.reduce(
     (n, cap) => (selectedCapabilities.has(cap) ? n + 1 : n),

@@ -20,7 +20,7 @@
  * both honor the explicit parent.
  */
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   ContextMenu as UIContextMenu,
   ContextMenuItem,
@@ -48,7 +48,7 @@ export function TreeBackgroundContextMenu({
   const firstItemRef = useRef<HTMLButtonElement>(null)
 
   const rootNodeId = useEditorStore(
-    useCallback((s) => selectActiveCanvasPage(s)?.rootNodeId ?? null, []),
+    (s) => selectActiveCanvasPage(s)?.rootNodeId ?? null,
   )
   const insertComponentRef = useEditorStore((s) => s.insertComponentRef)
   const pasteNodeAction = useEditorStore((s) => s.pasteNode)
@@ -62,29 +62,23 @@ export function TreeBackgroundContextMenu({
     firstItemRef.current?.focus()
   }, [])
 
-  const handlePaste = useCallback(() => {
+  const handlePaste = () => {
     if (!rootNodeId) return
     pasteNodeAction(rootNodeId)
     onClose()
-  }, [rootNodeId, pasteNodeAction, onClose])
+  }
 
-  const handleSelectModule = useCallback(
-    (mod: AnyModuleDefinition) => {
-      if (!rootNodeId) return
-      insertModule(mod, rootNodeId)
-      onClose()
-    },
-    [insertModule, rootNodeId, onClose],
-  )
+  const handleSelectModule = (mod: AnyModuleDefinition) => {
+    if (!rootNodeId) return
+    insertModule(mod, rootNodeId)
+    onClose()
+  }
 
-  const handleSelectVC = useCallback(
-    (vcId: string) => {
-      if (!rootNodeId) return
-      insertComponentRef(rootNodeId, vcId)
-      onClose()
-    },
-    [insertComponentRef, rootNodeId, onClose],
-  )
+  const handleSelectVC = (vcId: string) => {
+    if (!rootNodeId) return
+    insertComponentRef(rootNodeId, vcId)
+    onClose()
+  }
 
   // Without an active canvas page we have no root to anchor to — render
   // nothing. The menu is effectively a no-op in that state and showing

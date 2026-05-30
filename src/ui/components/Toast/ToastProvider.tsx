@@ -19,7 +19,7 @@
  *   - Close affordance + optional action use the Button primitive
  *   - Pixel-art icons only (close, circle-alert, warning-diamond)
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
@@ -71,10 +71,7 @@ function ToastIcon({ kind }: { kind: ToastKind }) {
 export function ToastProvider() {
   const [items, setItems] = useState<ReadonlyArray<Toast>>([])
   const [paused, setPaused] = useState(false)
-  const portalRoot = useMemo(
-    () => (typeof document !== 'undefined' ? getToastRoot() : null),
-    [],
-  )
+  const portalRoot = typeof document !== 'undefined' ? getToastRoot() : null
 
   useEffect(() => {
     return subscribeToasts((next) => setItems(next))

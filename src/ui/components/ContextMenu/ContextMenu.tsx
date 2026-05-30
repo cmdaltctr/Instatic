@@ -411,10 +411,12 @@ function useEvent<TArgs extends unknown[], TReturn>(
   useLayoutEffect(() => {
     ref.current = fn
   })
-  // useCallback returns a stable wrapper that reads the latest function
-  // off the ref when invoked — so callers see a stable identity but always
-  // call the latest closure. Reading `ref.current` happens at call time,
-  // not during render.
+  // Memoization exception #1 (effect dep array): the wrappers this returns
+  // (recomputeAutoPosition / recomputePointPosition) are consumed by
+  // useLayoutEffect/useEffect dep arrays, so they need the stable identity
+  // exhaustive-deps demands — which the compiler's runtime memoization can't
+  // satisfy for that static lint. The wrapper reads the latest function off
+  // the ref at call time, not during render.
   return useCallback((...args: TArgs) => ref.current(...args), [])
 }
 
@@ -539,6 +541,10 @@ export function ContextMenuSubmenu({
   // Mirrors the ContextMenu (anchored mode) and Tooltip auto-flip strategy
   // — `computeFloatingPosition` tries `right` first, then `left`, and
   // clamps to the viewport so the panel never overflows the screen edge.
+  // Memoization exception #1 (effect dep array): recomputePosition is listed
+  // in the useLayoutEffect/useEffect dep arrays below, so exhaustive-deps
+  // requires a stable identity that the compiler's runtime memoization can't
+  // provide for that static lint.
   const recomputePosition = useCallback(() => {
     const triggerEl = triggerRef.current
     const menuEl = submenuRef.current

@@ -6,7 +6,7 @@
  * navigation are owned by the parent (StyleSurface).
  */
 
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { StyleRule, CSSPropertyBag, StyleCondition } from '@core/page-tree'
 import { ClassPropertyRow } from './ClassPropertyRow'
@@ -96,26 +96,20 @@ export function ClassComposer({
 
   const visibleStyleSections = getVisibleStyleSections(styleQuery)
 
-  const handleChange = useCallback(
-    (key: keyof CSSPropertyBag, value: string | number | undefined) => {
-      const patch = { [key]: value ?? null } as Partial<CSSPropertyBag>
-      if (onCondition) {
-        updateConditionalLayerStyles(classId, (activeTarget as { layerId: string }).layerId, patch)
-      } else if (activeTab !== 'base') {
-        setClassBreakpointStyles(classId, activeTab, patch)
-      } else {
-        updateClassStyles(classId, patch)
-      }
-    },
-    [classId, activeTab, onCondition, activeTarget, updateClassStyles, setClassBreakpointStyles, updateConditionalLayerStyles],
-  )
+  const handleChange = (key: keyof CSSPropertyBag, value: string | number | undefined) => {
+    const patch = { [key]: value ?? null } as Partial<CSSPropertyBag>
+    if (onCondition) {
+      updateConditionalLayerStyles(classId, (activeTarget as { layerId: string }).layerId, patch)
+    } else if (activeTab !== 'base') {
+      setClassBreakpointStyles(classId, activeTab, patch)
+    } else {
+      updateClassStyles(classId, patch)
+    }
+  }
 
-  const handleRemoveProperty = useCallback(
-    (key: keyof CSSPropertyBag) => {
-      handleChange(key, undefined)
-    },
-    [handleChange],
-  )
+  const handleRemoveProperty = (key: keyof CSSPropertyBag) => {
+    handleChange(key, undefined)
+  }
 
   /**
    * Fully clear a property — used by visual switchers (LayoutSection) where
@@ -124,61 +118,49 @@ export function ClassComposer({
    * Routes through `removeClassStyleProperty` which removes the key from
    * base styles AND every breakpoint override in a single history entry.
    */
-  const handleClearProperty = useCallback(
-    (key: keyof CSSPropertyBag) => {
-      if (onCondition) {
-        // On a condition tab, "clear" removes the prop from that layer only.
-        updateConditionalLayerStyles(classId, (activeTarget as { layerId: string }).layerId, {
-          [key]: undefined,
-        } as Partial<CSSPropertyBag>)
-        return
-      }
-      removeClassStyleProperty(classId, key)
-    },
-    [classId, onCondition, activeTarget, removeClassStyleProperty, updateConditionalLayerStyles],
-  )
+  const handleClearProperty = (key: keyof CSSPropertyBag) => {
+    if (onCondition) {
+      // On a condition tab, "clear" removes the prop from that layer only.
+      updateConditionalLayerStyles(classId, (activeTarget as { layerId: string }).layerId, {
+        [key]: undefined,
+      } as Partial<CSSPropertyBag>)
+      return
+    }
+    removeClassStyleProperty(classId, key)
+  }
 
   // ── Condition tab handlers ───────────────────────────────────────────────
-  const handleAddCondition = useCallback(
-    (condition: StyleCondition) => {
-      const layerId = addConditionalLayer(classId, condition)
-      if (layerId) setActiveTarget({ kind: 'condition', layerId })
-    },
-    [classId, addConditionalLayer],
-  )
+  const handleAddCondition = (condition: StyleCondition) => {
+    const layerId = addConditionalLayer(classId, condition)
+    if (layerId) setActiveTarget({ kind: 'condition', layerId })
+  }
 
-  const handleRemoveCondition = useCallback(
-    (layerId: string) => {
-      removeConditionalLayer(classId, layerId)
-      setActiveTarget((cur) =>
-        cur.kind === 'condition' && cur.layerId === layerId ? { kind: 'base' } : cur,
-      )
-    },
-    [classId, removeConditionalLayer],
-  )
+  const handleRemoveCondition = (layerId: string) => {
+    removeConditionalLayer(classId, layerId)
+    setActiveTarget((cur) =>
+      cur.kind === 'condition' && cur.layerId === layerId ? { kind: 'base' } : cur,
+    )
+  }
 
   // Preview a transient style patch on the canvas while a property
   // control's hover-suggestion menu is open. The preview lives entirely
   // in store UI state — no class document mutation, no history entry.
-  const handlePreview = useCallback(
-    (patch: Partial<CSSPropertyBag>) => {
-      // The canvas preview channel is keyed by classId + optional breakpointId
-      // — it can't target a conditional layer. Skip preview while a condition
-      // tab is active rather than previewing onto the wrong (base/breakpoint)
-      // target. The actual edit still commits correctly via handleChange.
-      if (onCondition) return
-      setPreviewClassStyles({
-        classId,
-        breakpointId: activeTab !== 'base' ? activeTab : null,
-        styles: patch,
-      })
-    },
-    [classId, activeTab, onCondition, setPreviewClassStyles],
-  )
+  const handlePreview = (patch: Partial<CSSPropertyBag>) => {
+    // The canvas preview channel is keyed by classId + optional breakpointId
+    // — it can't target a conditional layer. Skip preview while a condition
+    // tab is active rather than previewing onto the wrong (base/breakpoint)
+    // target. The actual edit still commits correctly via handleChange.
+    if (onCondition) return
+    setPreviewClassStyles({
+      classId,
+      breakpointId: activeTab !== 'base' ? activeTab : null,
+      styles: patch,
+    })
+  }
 
-  const handleClearPreview = useCallback(() => {
+  const handleClearPreview = () => {
     clearPreviewClassStyles(classId)
-  }, [classId, clearPreviewClassStyles])
+  }
 
   return (
     <div className={styles.styleSections}>

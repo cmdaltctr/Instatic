@@ -17,7 +17,7 @@
  *     async) so keyboard navigation covers async rows.
  */
 
-import { use, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { use, useEffect, useRef, useState, type ReactNode } from 'react'
 import { SpotlightInternalContext } from './spotlightContext'
 import { SpotlightRow } from './SpotlightRow'
 import { SpotlightSkeleton } from './SpotlightSkeleton'
@@ -101,7 +101,7 @@ function ArgModeResults({
   const currentArg = args[argMode.argIndex]
 
   // For select type: filter options by query
-  const filteredOptions = useMemo(() => {
+  const filteredOptions = (() => {
     if (!currentArg || currentArg.type !== 'select' || !currentArg.options) return []
     const q = query.toLowerCase()
     if (!q) return [...currentArg.options]
@@ -110,7 +110,7 @@ function ArgModeResults({
         opt.label.toLowerCase().includes(q) ||
         opt.value.toLowerCase().includes(q),
     )
-  }, [currentArg, query])
+  })()
 
   return (
     <div className={styles.results} aria-label="Argument collection">
@@ -254,34 +254,22 @@ export function SpotlightResults({
   // ─── Static results ───────────────────────────────────────────────────────
   // Must be before any early returns to satisfy the Rules of Hooks.
 
-  const capped = useMemo(
-    () => argMode ? [] : getCappedResults(query, commandContext, activeScopeId),
-    [argMode, query, commandContext, activeScopeId],
-  )
+  const capped = argMode ? [] : getCappedResults(query, commandContext, activeScopeId)
 
   // ─── Async results ────────────────────────────────────────────────────────
 
-  const asyncGroups = useMemo(
-    () => argMode ? [] : getOrderedAsyncGroups(activeScopeId, asyncResults),
-    [argMode, activeScopeId, asyncResults],
-  )
+  const asyncGroups = argMode ? [] : getOrderedAsyncGroups(activeScopeId, asyncResults)
 
   // Providers still in-flight that haven't produced results yet → skeleton.
-  const skeletonProviders = useMemo(
-    () => (showSkeleton && !argMode)
-      ? getLoadingProviders(activeScopeId, loadingProviders, asyncResults)
-      : [],
-    [showSkeleton, argMode, activeScopeId, loadingProviders, asyncResults],
-  )
+  const skeletonProviders = (showSkeleton && !argMode)
+    ? getLoadingProviders(activeScopeId, loadingProviders, asyncResults)
+    : []
 
   // ─── Merged flat list for keyboard-navigation index tracking ──────────────
 
-  const mergedFlatList = useMemo(
-    () => argMode
-      ? []
-      : getMergedCommandList(query, commandContext, activeScopeId, asyncResults),
-    [argMode, query, commandContext, activeScopeId, asyncResults],
-  )
+  const mergedFlatList = argMode
+    ? []
+    : getMergedCommandList(query, commandContext, activeScopeId, asyncResults)
 
   // `dispatch` from useReducer is guaranteed stable, but the context value
   // itself is rebuilt on every state change. Only the dispatch reference is

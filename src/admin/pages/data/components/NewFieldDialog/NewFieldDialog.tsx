@@ -1,4 +1,4 @@
-import { memo, useId, useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { Input, Textarea } from '@ui/components/Input'
@@ -106,7 +106,7 @@ interface NewFieldDialogProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export const NewFieldDialog = memo(function NewFieldDialog({
+export function NewFieldDialog({
   open,
   onClose,
   existingFieldIds,
@@ -700,4 +700,4 @@ export const NewFieldDialog = memo(function NewFieldDialog({
       </form>
     </Dialog>
   )
-})
+}

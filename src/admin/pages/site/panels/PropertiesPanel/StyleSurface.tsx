@@ -21,7 +21,7 @@
  *   Module section and Module rail button are hidden.
  */
 
-import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
 import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
 import { isGeneratedClassLocked } from '@core/page-tree/classUtils'
@@ -137,7 +137,7 @@ export function StyleSurface({
   const propertiesSmoothScroll = useEditorPreference('propertiesSmoothScroll')
 
   // Scroll to the section corresponding to the clicked rail button.
-  const handleSectionClick = useCallback((sectionId: string) => {
+  function handleSectionClick(sectionId: string) {
     const container = scrollRef.current
     if (!container) return
 
@@ -158,9 +158,9 @@ export function StyleSurface({
       top: rect.top - containerRect.top + container.scrollTop,
       behavior,
     })
-  }, [propertiesSmoothScroll])
+  }
 
-  const clearStyleQuery = useCallback(() => setStyleQuery(''), [])
+  const clearStyleQuery = () => setStyleQuery('')
 
   // Rail dot badges from stored styles at the current breakpoint.
   const activeTab = getActiveStyleTab(activeBreakpointId)
@@ -299,8 +299,8 @@ interface LockedStylePreviewProps {
 const TEASER_SECTION = CLASS_STYLE_SECTIONS.find((s) => s.id === 'layout')!
 
 function LockedStylePreview({ onFocusClassPicker }: LockedStylePreviewProps) {
-  const noopChange = useCallback(() => {}, [])
-  const noopRemove = useCallback(() => {}, [])
+  const noopChange = () => {}
+  const noopRemove = () => {}
 
   return (
     <div className={styles.lockedPreview}>

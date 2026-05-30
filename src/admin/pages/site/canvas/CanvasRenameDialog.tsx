@@ -6,7 +6,7 @@
  * one-file change going forward.
  */
 
-import { useCallback, useId, useRef, type FormEvent, type RefObject } from 'react'
+import { useId, useRef, type FormEvent, type RefObject } from 'react'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { Input } from '@ui/components/Input'
@@ -29,13 +29,10 @@ export function CanvasRenameDialog({
   const inputRef = useRef<HTMLInputElement>(null) as RefObject<HTMLInputElement>
   const nameId = useId()
 
-  const handleSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault()
-      onCommit()
-    },
-    [onCommit],
-  )
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    onCommit()
+  }
 
   return (
     <Dialog

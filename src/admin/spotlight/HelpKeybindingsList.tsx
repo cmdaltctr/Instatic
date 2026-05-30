@@ -11,7 +11,7 @@
  * Used by: src/admin/modals/Settings/sections/ShortcutsSection.tsx
  */
 
-import { useMemo, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { KEYBINDINGS, isPlatformMac } from './keybindings'
 import type { KeybindingDefinition } from './keybindings'
 import { getAllCommands } from './commandRegistry'
@@ -53,25 +53,19 @@ export function HelpKeybindingsList(): ReactNode {
   const isMac = isPlatformMac()
 
   // Build commandId → title lookup once.
-  const commandTitleMap = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const cmd of getAllCommands()) {
-      map.set(cmd.id, cmd.title)
-    }
-    return map
-  }, [])
+  const commandTitleMap = new Map<string, string>()
+  for (const cmd of getAllCommands()) {
+    commandTitleMap.set(cmd.id, cmd.title)
+  }
 
   // Group bindings by scope in the defined order.
-  const grouped = useMemo<Map<Scope, KeybindingDefinition[]>>(() => {
-    const map = new Map<Scope, KeybindingDefinition[]>()
-    for (const scope of SCOPE_ORDER) {
-      map.set(scope, [])
-    }
-    for (const kb of KEYBINDINGS) {
-      map.get(kb.scope)?.push(kb)
-    }
-    return map
-  }, [])
+  const grouped = new Map<Scope, KeybindingDefinition[]>()
+  for (const scope of SCOPE_ORDER) {
+    grouped.set(scope, [])
+  }
+  for (const kb of KEYBINDINGS) {
+    grouped.get(kb.scope)?.push(kb)
+  }
 
   return (
     <div className={styles.list}>

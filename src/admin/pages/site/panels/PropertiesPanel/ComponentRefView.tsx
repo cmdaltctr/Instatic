@@ -13,7 +13,6 @@
  * Icons from pixel-art-icons (Guideline #350).
  */
 
-import { useCallback } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { WarningDiamondSolidIcon } from 'pixel-art-icons/icons/warning-diamond-solid'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
@@ -36,10 +35,7 @@ export function ComponentRefView({ nodeId, componentId, propOverrides }: Compone
   const updateNodeProps = useEditorStore((s) => s.updateNodeProps)
 
   const vc = useEditorStore(
-    useCallback(
-      (s) => s.site?.visualComponents?.find((v) => v.id === componentId) ?? null,
-      [componentId],
-    ),
+    (s) => s.site?.visualComponents?.find((v) => v.id === componentId) ?? null,
   )
 
   function handleOpenInCanvas() {

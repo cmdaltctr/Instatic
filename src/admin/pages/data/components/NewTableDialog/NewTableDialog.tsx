@@ -1,4 +1,4 @@
-import { memo, useId, useRef, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { Input } from '@ui/components/Input'
@@ -51,7 +51,7 @@ const FORM_ID = 'new-table-dialog-form'
 // Component
 // ---------------------------------------------------------------------------
 
-export const NewTableDialog = memo(function NewTableDialog({
+export function NewTableDialog({
   open,
   onClose,
   onCreate,
@@ -255,4 +255,4 @@ export const NewTableDialog = memo(function NewTableDialog({
       </form>
     </Dialog>
   )
-})
+}

@@ -16,12 +16,7 @@
  *   • Plugin component throws → caught by ErrorBoundary so the editor
  *     shell stays alive even if a plugin crashes.
  */
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react'
+import { useEffect, useState } from 'react'
 import { ErrorBoundary } from '@ui/components/ErrorBoundary'
 import { Panel } from '@admin/shared/Panel'
 import { useEditorStore } from '@site/store/store'
@@ -61,9 +56,9 @@ function PluginEditorPanelContent({ panelId }: PluginEditorPanelProps) {
   const panel = pluginRuntime.getPanel(panelId)
   const manifest = pluginRuntime.getPanelManifest(panelId)
 
-  const handleClose = useCallback(() => {
+  const handleClose = () => {
     setActivePluginPanel(null)
-  }, [setActivePluginPanel])
+  }
 
   if (!panel || !manifest) {
     return (
@@ -123,7 +118,7 @@ function PluginPanelSubtree({
   settings: Record<string, string | number | boolean>
   PanelComponent: import('@core/plugin-sdk').PluginEditorPanelComponent
 }) {
-  const contextValue = useMemo<PluginContextValue>(() => ({
+  const contextValue: PluginContextValue = {
     pluginId,
     pluginVersion,
     surfaceId: panelId,
@@ -131,7 +126,7 @@ function PluginPanelSubtree({
     settings,
     routes: buildPluginRoutesHelper(pluginId),
     runCommand: (commandId) => pluginRuntime.runCommand(commandId),
-  }), [panelId, pluginId, pluginVersion, label, settings])
+  }
 
   return (
     <PluginContext.Provider value={contextValue}>

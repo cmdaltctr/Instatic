@@ -22,9 +22,7 @@
 
 import {
   use,
-  useCallback,
   useEffect,
-  useMemo,
   useRef,
   type ChangeEvent,
   type KeyboardEvent,
@@ -81,16 +79,13 @@ export function Spotlight({ isClosing = false }: SpotlightProps): ReactNode {
 
   // Compute the highlighted row id for aria-activedescendant.
   // Phase 3: pass asyncResults so the index covers provider result rows too.
-  const highlightedRowId = useMemo(
-    () => isOpen
-      ? computeHighlightedRowId(
-          query, commandContext, highlightedIndex,
-          argMode ? undefined : activeScopeId,
-          argMode ? undefined : asyncResults,
-        )
-      : null,
-    [isOpen, query, commandContext, highlightedIndex, activeScopeId, argMode, asyncResults],
-  )
+  const highlightedRowId = isOpen
+    ? computeHighlightedRowId(
+        query, commandContext, highlightedIndex,
+        argMode ? undefined : activeScopeId,
+        argMode ? undefined : asyncResults,
+      )
+    : null
 
   // ─── Focus management: capture on open, restore on close ─────────────────
 
@@ -144,85 +139,19 @@ export function Spotlight({ isClosing = false }: SpotlightProps): ReactNode {
   const runCommand = ctx?.runCommand
   const runCommandWithArgs = ctx?.runCommandWithArgs
 
-  const handleChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      dispatch?.({ type: 'SET_QUERY', query: e.target.value })
-    },
-    [dispatch],
-  )
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    dispatch?.({ type: 'SET_QUERY', query: e.target.value })
+  }
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (!dispatch || !runCommand || !runCommandWithArgs) return
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!dispatch || !runCommand || !runCommandWithArgs) return
 
-      // ── Arg mode keyboard ─────────────────────────────────────────────────
-      if (argMode) {
-        const args = argMode.command.args ?? []
-        const currentArg = args[argMode.argIndex]
-        if (!currentArg) return
+    // ── Arg mode keyboard ─────────────────────────────────────────────────
+    if (argMode) {
+      const args = argMode.command.args ?? []
+      const currentArg = args[argMode.argIndex]
+      if (!currentArg) return
 
-        switch (e.key) {
-          case 'ArrowDown':
-            e.preventDefault()
-            dispatch({ type: 'HIGHLIGHT_NEXT' })
-            break
-
-          case 'ArrowUp':
-            e.preventDefault()
-            dispatch({ type: 'HIGHLIGHT_PREV' })
-            break
-
-          case 'Enter': {
-            e.preventDefault()
-
-            // For select type: get highlighted option value
-            let value = query
-            if (currentArg.type === 'select' && currentArg.options) {
-              const filtered = currentArg.options.filter(
-                (opt) => !query || opt.label.toLowerCase().includes(query.toLowerCase()) ||
-                  opt.value.toLowerCase().includes(query.toLowerCase())
-              )
-              const highlighted = filtered[highlightedIndex]
-              if (highlighted) value = highlighted.value
-              else if (filtered.length > 0) value = filtered[0]!.value
-            }
-
-            const isLastArg = argMode.argIndex >= args.length - 1
-
-            if (isLastArg) {
-              // All args filled — run the command
-              const fullArgs = { ...argMode.values, [currentArg.id]: value }
-              dispatch({ type: 'EXIT_ARG_MODE' })
-              void runCommandWithArgs(argMode.command, fullArgs)
-            } else {
-              dispatch({ type: 'SAVE_ARG_AND_ADVANCE', argId: currentArg.id, value })
-            }
-            break
-          }
-
-          case 'Backspace': {
-            if (query === '') {
-              e.preventDefault()
-              dispatch({ type: 'BACK_ARG' })
-            }
-            break
-          }
-
-          case 'ArrowLeft': {
-            if (query === '') {
-              e.preventDefault()
-              dispatch({ type: 'BACK_ARG' })
-            }
-            break
-          }
-
-          default:
-            break
-        }
-        return
-      }
-
-      // ── Normal / scope mode keyboard ──────────────────────────────────────
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault()
@@ -236,96 +165,145 @@ export function Spotlight({ isClosing = false }: SpotlightProps): ReactNode {
 
         case 'Enter': {
           e.preventDefault()
-          // Phase 3: pass asyncResults so Enter works on provider result rows.
-          const cmd = getCommandAtIndex(query, commandContext, highlightedIndex, activeScopeId, asyncResults)
-          if (!cmd) break
 
-          // Destructive confirm: first Enter → show confirm; second → run
-          if (cmd.destructive && pendingConfirm !== cmd.id) {
-            dispatch({ type: 'SET_PENDING_CONFIRM', commandId: cmd.id })
-            break
+          // For select type: get highlighted option value
+          let value = query
+          if (currentArg.type === 'select' && currentArg.options) {
+            const filtered = currentArg.options.filter(
+              (opt) => !query || opt.label.toLowerCase().includes(query.toLowerCase()) ||
+                opt.value.toLowerCase().includes(query.toLowerCase())
+            )
+            const highlighted = filtered[highlightedIndex]
+            if (highlighted) value = highlighted.value
+            else if (filtered.length > 0) value = filtered[0]!.value
           }
 
-          // Clear any existing confirm state
-          if (pendingConfirm) {
-            dispatch({ type: 'CLEAR_PENDING_CONFIRM' })
-          }
+          const isLastArg = argMode.argIndex >= args.length - 1
 
-          void runCommand(cmd)
+          if (isLastArg) {
+            // All args filled — run the command
+            const fullArgs = { ...argMode.values, [currentArg.id]: value }
+            dispatch({ type: 'EXIT_ARG_MODE' })
+            void runCommandWithArgs(argMode.command, fullArgs)
+          } else {
+            dispatch({ type: 'SAVE_ARG_AND_ADVANCE', argId: currentArg.id, value })
+          }
           break
         }
 
-        case 'Tab':
-        case 'ArrowRight': {
-          e.preventDefault()
-          // Phase 3: pass asyncResults so Tab/→ works on provider result rows.
-          const cmd = getCommandAtIndex(query, commandContext, highlightedIndex, activeScopeId, asyncResults)
-          if (!cmd) break
-          // If the command has args, enter arg mode
-          if (cmd.args && cmd.args.length > 0) {
-            dispatch({ type: 'ENTER_ARG_MODE', command: cmd })
-            break
-          }
-          // If the command's run returns a scope push, handle it by running (run() will pushScope)
-          // Try to drill into scope: run the command (it may call ctx.pushScope)
-          void runCommand(cmd)
-          break
-        }
-
-        case 'ArrowLeft':
         case 'Backspace': {
-          // Pop scope when at start of empty query
-          if (e.key === 'ArrowLeft' || query === '') {
-            if (scopeStack.length > 1) {
-              e.preventDefault()
-              dispatch({ type: 'POP_SCOPE' })
-            }
+          if (query === '') {
+            e.preventDefault()
+            dispatch({ type: 'BACK_ARG' })
           }
-          // Clear pending confirm on any navigation
-          if (pendingConfirm) {
-            dispatch({ type: 'CLEAR_PENDING_CONFIRM' })
+          break
+        }
+
+        case 'ArrowLeft': {
+          if (query === '') {
+            e.preventDefault()
+            dispatch({ type: 'BACK_ARG' })
           }
           break
         }
 
         default:
-          // Typing clears any pending confirm
-          if (pendingConfirm && e.key.length === 1) {
-            dispatch({ type: 'CLEAR_PENDING_CONFIRM' })
-          }
           break
       }
-    },
-    [
-      dispatch, runCommand, runCommandWithArgs,
-      query, commandContext, highlightedIndex,
-      activeScopeId, scopeStack.length,
-      argMode, pendingConfirm, asyncResults,
-    ],
-  )
+      return
+    }
 
-  const handleHighlightChange = useCallback(
-    (index: number) => {
-      dispatch?.({ type: 'SET_HIGHLIGHTED', index })
-    },
-    [dispatch],
-  )
+    // ── Normal / scope mode keyboard ──────────────────────────────────────
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        dispatch({ type: 'HIGHLIGHT_NEXT' })
+        break
 
-  const handleRun = useCallback(
-    (cmd: Parameters<NonNullable<typeof runCommand>>[0]) => {
-      if (!runCommand || !dispatch) return
-      if (cmd.destructive && pendingConfirm !== cmd.id) {
-        dispatch({ type: 'SET_PENDING_CONFIRM', commandId: cmd.id })
-        return
+      case 'ArrowUp':
+        e.preventDefault()
+        dispatch({ type: 'HIGHLIGHT_PREV' })
+        break
+
+      case 'Enter': {
+        e.preventDefault()
+        // Phase 3: pass asyncResults so Enter works on provider result rows.
+        const cmd = getCommandAtIndex(query, commandContext, highlightedIndex, activeScopeId, asyncResults)
+        if (!cmd) break
+
+        // Destructive confirm: first Enter → show confirm; second → run
+        if (cmd.destructive && pendingConfirm !== cmd.id) {
+          dispatch({ type: 'SET_PENDING_CONFIRM', commandId: cmd.id })
+          break
+        }
+
+        // Clear any existing confirm state
+        if (pendingConfirm) {
+          dispatch({ type: 'CLEAR_PENDING_CONFIRM' })
+        }
+
+        void runCommand(cmd)
+        break
       }
-      if (pendingConfirm) dispatch({ type: 'CLEAR_PENDING_CONFIRM' })
-      void runCommand(cmd)
-    },
-    [runCommand, dispatch, pendingConfirm],
-  )
+
+      case 'Tab':
+      case 'ArrowRight': {
+        e.preventDefault()
+        // Phase 3: pass asyncResults so Tab/→ works on provider result rows.
+        const cmd = getCommandAtIndex(query, commandContext, highlightedIndex, activeScopeId, asyncResults)
+        if (!cmd) break
+        // If the command has args, enter arg mode
+        if (cmd.args && cmd.args.length > 0) {
+          dispatch({ type: 'ENTER_ARG_MODE', command: cmd })
+          break
+        }
+        // If the command's run returns a scope push, handle it by running (run() will pushScope)
+        // Try to drill into scope: run the command (it may call ctx.pushScope)
+        void runCommand(cmd)
+        break
+      }
+
+      case 'ArrowLeft':
+      case 'Backspace': {
+        // Pop scope when at start of empty query
+        if (e.key === 'ArrowLeft' || query === '') {
+          if (scopeStack.length > 1) {
+            e.preventDefault()
+            dispatch({ type: 'POP_SCOPE' })
+          }
+        }
+        // Clear pending confirm on any navigation
+        if (pendingConfirm) {
+          dispatch({ type: 'CLEAR_PENDING_CONFIRM' })
+        }
+        break
+      }
+
+      default:
+        // Typing clears any pending confirm
+        if (pendingConfirm && e.key.length === 1) {
+          dispatch({ type: 'CLEAR_PENDING_CONFIRM' })
+        }
+        break
+    }
+  }
+
+  const handleHighlightChange = (index: number) => {
+    dispatch?.({ type: 'SET_HIGHLIGHTED', index })
+  }
+
+  const handleRun = (cmd: Parameters<NonNullable<typeof runCommand>>[0]) => {
+    if (!runCommand || !dispatch) return
+    if (cmd.destructive && pendingConfirm !== cmd.id) {
+      dispatch({ type: 'SET_PENDING_CONFIRM', commandId: cmd.id })
+      return
+    }
+    if (pendingConfirm) dispatch({ type: 'CLEAR_PENDING_CONFIRM' })
+    void runCommand(cmd)
+  }
 
   // Derive input placeholder
-  const placeholder = useMemo(() => {
+  const placeholder = (() => {
     if (argMode) {
       const args = argMode.command.args ?? []
       const currentArg = args[argMode.argIndex]
@@ -341,13 +319,12 @@ export function Spotlight({ isClosing = false }: SpotlightProps): ReactNode {
       }
     }
     return 'Type a command or search…'
-  }, [argMode, scopeStack, ctx?.state.phase])
+  })()
 
   // Count results for aria — includes both static + async provider results.
-  const resultCount = useMemo(() => {
-    if (argMode) return 0
-    return getMergedCommandList(query, commandContext, activeScopeId, asyncResults).length
-  }, [query, commandContext, activeScopeId, asyncResults, argMode])
+  const resultCount = argMode
+    ? 0
+    : getMergedCommandList(query, commandContext, activeScopeId, asyncResults).length
 
   // ─── Guard — render nothing when fully closed (not during close animation) ─
 

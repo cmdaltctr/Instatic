@@ -14,7 +14,7 @@
  * surfaces a row of breakpoint icon buttons inline so the user can switch the
  * previewed device without leaving the canvas chrome.
  */
-import { useCallback, type SyntheticEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { Breakpoint } from '@core/page-tree'
 import { CursorMinimalSolidIcon } from 'pixel-art-icons/icons/cursor-minimal-solid'
@@ -40,9 +40,9 @@ export function CanvasModeToggle() {
   // The toggle lives inside the canvas surface, which has its own click /
   // keyboard handlers (deselect, shortcuts, etc.). Stop propagation so the
   // tab buttons feel like chrome, not "clicks on empty canvas".
-  const stopCanvasInteraction = useCallback((event: SyntheticEvent) => {
+  const stopCanvasInteraction = (event: SyntheticEvent) => {
     event.stopPropagation()
-  }, [])
+  }
 
   return (
     <div

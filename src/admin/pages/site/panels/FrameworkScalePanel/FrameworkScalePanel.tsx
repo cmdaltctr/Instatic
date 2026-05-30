@@ -18,7 +18,7 @@
  * (extras → Scales → Utilities → extras).
  */
 
-import { type MouseEvent, useMemo, useState } from 'react'
+import { type MouseEvent, useState } from 'react'
 import { Button } from '@ui/components/Button'
 import {
   ContextMenu,
@@ -49,17 +49,13 @@ export function FrameworkScalePanel<G extends GroupShape, C extends GeneratorSha
   const classGenerators = useEditorStore(adapter.selectClasses)
   const isDisabled = useEditorStore(adapter.selectIsDisabled)
   const preferencesRaw = useEditorStore((s) => s.site?.settings.framework?.preferences ?? null)
-  const preferences = useMemo(() => resolveFrameworkPreferences(preferencesRaw), [preferencesRaw])
+  const preferences = resolveFrameworkPreferences(preferencesRaw)
 
-  const sortedGroups = useMemo(
-    () => [...groups].sort((a, b) => a.order - b.order),
-    [groups],
-  )
+  const sortedGroups = [...groups].sort((a, b) => a.order - b.order)
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
-  const activeGroup = useMemo(() => {
-    if (!sortedGroups.length) return null
-    return sortedGroups.find((g) => g.id === activeTabId) ?? sortedGroups[0]
-  }, [activeTabId, sortedGroups])
+  const activeGroup = sortedGroups.length
+    ? sortedGroups.find((g) => g.id === activeTabId) ?? sortedGroups[0]
+    : null
 
   const [contextMenu, setContextMenu] = useState<{
     x: number

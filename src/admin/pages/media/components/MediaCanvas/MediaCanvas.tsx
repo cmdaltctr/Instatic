@@ -6,8 +6,6 @@
  * navigation land in M3/M4 — this component is the first interactive surface.
  */
 import {
-  useCallback,
-  useMemo,
   useState,
   type ChangeEvent,
   type DragEvent,
@@ -120,10 +118,10 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   const [renameTarget, setRenameTarget] = useState<CmsMediaAsset | null>(null)
   const [dragActive, setDragActive] = useState(false)
 
-  const setViewMode = useCallback((mode: ViewMode) => {
+  function setViewMode(mode: ViewMode) {
     setViewModeState(mode)
     writeStoredViewMode(mode)
-  }, [])
+  }
 
   const trashView = workspace.folderSelection === FOLDER_TRASH
 
@@ -133,7 +131,7 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   //   - Shift-click → range-select between the current primary and this row
   // Mirrors the convention every grid-style file manager (Finder, Explorer,
   // Photos, Drive, …) uses, so the muscle memory is free.
-  const handleAssetClick = useCallback((asset: CmsMediaAsset, event: MouseEvent<HTMLButtonElement>) => {
+  function handleAssetClick(asset: CmsMediaAsset, event: MouseEvent<HTMLButtonElement>) {
     const meta = isMacLike() ? event.metaKey : event.ctrlKey
     if (event.shiftKey && workspace.selectedAssetId) {
       event.preventDefault()
@@ -146,23 +144,23 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
       return
     }
     workspace.setSelectedAssetId(asset.id)
-  }, [workspace])
+  }
 
-  const handleUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? [])
     event.target.value = ''
     if (files.length === 0) return
     await workspace.uploadFiles(files)
-  }, [workspace])
+  }
 
-  const handleDrop = useCallback(async (event: DragEvent<HTMLElement>) => {
+  async function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault()
     setDragActive(false)
     if (trashView) return
     const files = Array.from(event.dataTransfer.files ?? [])
     if (files.length === 0) return
     await workspace.uploadFiles(files)
-  }, [workspace, trashView])
+  }
 
   function handleDragEnter(event: DragEvent<HTMLElement>) {
     if (trashView) return
@@ -235,12 +233,12 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   // While loading we leave the label empty — the canvas's own skeleton
   // (or the empty grid) carries the "loading" signal visually; doubling
   // it up with a text label is redundant.
-  const headerLabel = useMemo(() => {
+  const headerLabel = (() => {
     if (workspace.loading) return null
     if (workspace.error) return workspace.error
     if (showingMatching === 0) return null
     return `${showingMatching} ${showingMatching === 1 ? 'item' : 'items'}`
-  }, [workspace.loading, workspace.error, showingMatching])
+  })()
 
   return (
     <section

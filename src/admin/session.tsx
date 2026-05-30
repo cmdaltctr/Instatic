@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { CmsCurrentUser } from '@core/persistence'
 import { AdminSessionContext } from './sessionContext'
 
@@ -24,7 +24,7 @@ export function AdminSessionProvider({
   children: ReactNode
 }) {
   const [user, setUser] = useState<CmsCurrentUser>(initialUser)
-  const value = useMemo(() => ({ user, setUser }), [user])
+  const value = { user, setUser }
   return (
     <AdminSessionContext.Provider value={value}>
       {children}

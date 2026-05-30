@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   listCmsMediaAssets,
   type CmsMediaAsset,
@@ -59,11 +59,8 @@ export function useContentMediaPicker({
   // affordance works without leaving the Content page.
   const [viewerAssetId, setViewerAssetId] = useState<string | null>(null)
 
-  const assetsById = useMemo(() => {
-    const map = new Map<string, CmsMediaAsset>()
-    for (const asset of mediaAssets) map.set(asset.id, asset)
-    return map
-  }, [mediaAssets])
+  const assetsById = new Map<string, CmsMediaAsset>()
+  for (const asset of mediaAssets) assetsById.set(asset.id, asset)
 
   const featuredMediaAsset = featuredMediaId ? assetsById.get(featuredMediaId) ?? null : null
 
@@ -100,35 +97,31 @@ export function useContentMediaPicker({
     return () => { cancelled = true }
   }, [needsAssetList, mediaAssetsLoaded])
 
-  const getFeaturedMediaAssetForEntry = useCallback(
-    (entry: DataRow): CmsMediaAsset | null => {
-      const mediaId = readFeaturedMediaCell(entry.cells)
-      if (!mediaId) return null
-      return assetsById.get(mediaId) ?? null
-    },
-    [assetsById],
-  )
+  const getFeaturedMediaAssetForEntry = (entry: DataRow): CmsMediaAsset | null => {
+    const mediaId = readFeaturedMediaCell(entry.cells)
+    if (!mediaId) return null
+    return assetsById.get(mediaId) ?? null
+  }
 
-  const openMediaPicker = useCallback((kind: MediaPickerKind) => {
+  const openMediaPicker = (kind: MediaPickerKind) => {
     setMediaPicker({ kind })
-  }, [])
+  }
 
-  const closeMediaPicker = useCallback(() => {
+  const closeMediaPicker = () => {
     setMediaPicker(null)
-  }, [])
+  }
 
-  const openMediaViewer = useCallback((assetId: string) => {
+  const openMediaViewer = (assetId: string) => {
     setViewerAssetId(assetId)
-  }, [])
+  }
 
-  const closeMediaViewer = useCallback(() => {
+  const closeMediaViewer = () => {
     setViewerAssetId(null)
-  }, [])
+  }
 
-  const viewerAsset = useMemo(
-    () => (viewerAssetId ? mediaAssets.find((asset) => asset.id === viewerAssetId) ?? null : null),
-    [mediaAssets, viewerAssetId],
-  )
+  const viewerAsset = viewerAssetId
+    ? mediaAssets.find((asset) => asset.id === viewerAssetId) ?? null
+    : null
 
   const viewerEditor: MediaAssetEditor | null = useStandaloneMediaEditor({
     asset: viewerAsset,
@@ -141,7 +134,7 @@ export function useContentMediaPicker({
     },
   })
 
-  const pickMedia = useCallback((asset: CmsMediaAsset) => {
+  const pickMedia = (asset: CmsMediaAsset) => {
     if (!mediaPicker) return
 
     // Keep the local asset cache in sync so the featured-media preview can
@@ -165,7 +158,7 @@ export function useContentMediaPicker({
       alt: mediaType === 'image' ? asset.filename : '',
     })
     setMediaPicker(null)
-  }, [insertBodyMedia, mediaPicker, setFeaturedMediaId])
+  }
 
   return {
     mediaError,

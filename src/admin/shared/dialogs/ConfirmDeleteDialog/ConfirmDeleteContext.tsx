@@ -16,12 +16,7 @@
  * component files to export only components).
  */
 
-import {
-  useCallback,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useState, type ReactNode } from 'react'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog'
 import {
@@ -35,31 +30,25 @@ export function ConfirmDeleteProvider({ children }: { children: ReactNode }) {
   const confirmBeforeDelete = useEditorPreference('confirmBeforeDelete')
   const [pending, setPending] = useState<PendingConfirmState | null>(null)
 
-  const confirmDelete = useCallback(
-    (request: ConfirmDeleteRequest) => {
-      if (!confirmBeforeDelete) {
-        request.commit()
-        return
-      }
-      setPending({ request })
-    },
-    [confirmBeforeDelete],
-  )
+  const confirmDelete = (request: ConfirmDeleteRequest) => {
+    if (!confirmBeforeDelete) {
+      request.commit()
+      return
+    }
+    setPending({ request })
+  }
 
-  const value = useMemo<ConfirmDeleteContextValue>(
-    () => ({ confirmDelete }),
-    [confirmDelete],
-  )
+  const value: ConfirmDeleteContextValue = { confirmDelete }
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = () => {
     setPending(null)
-  }, [])
+  }
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = () => {
     if (!pending) return
     pending.request.commit()
     setPending(null)
-  }, [pending])
+  }
 
   return (
     <ConfirmDeleteContext.Provider value={value}>

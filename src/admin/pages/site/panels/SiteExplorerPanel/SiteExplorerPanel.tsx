@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { useEditorStore } from '@site/store/store'
 import type { SiteFile } from '@core/files/schemas'
@@ -116,7 +116,7 @@ export function SiteExplorerPanel({
   const panelRef = useRef<HTMLElement>(null)
 
   const files = site?.files ?? EMPTY_FILES
-  const fileBuckets = useMemo(() => groupSiteFiles(files), [files])
+  const fileBuckets = groupSiteFiles(files)
 
   useAutoFocusPanel(panelRef, isOpen)
 

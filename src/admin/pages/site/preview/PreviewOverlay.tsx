@@ -16,7 +16,7 @@
  * data-testid="preview-overlay" and data-testid="preview-iframe" for Playwright
  */
 
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 import { useEditorStore, selectActivePage } from '@site/store/store'
 import { publishPage } from '@core/publisher/render'
 import { registry } from '@core/module-engine/registry'
@@ -50,15 +50,12 @@ export function PreviewOverlay() {
   }, [open])
 
   // Esc closes the overlay
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        closePreview()
-      }
-    },
-    [closePreview],
-  )
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      closePreview()
+    }
+  }
 
   if (!open || !site || !activePage) return null
 

@@ -9,7 +9,7 @@
  * Generated utility classes (those gated by `isGeneratedClassLocked`) render
  * a locked-state empty card instead of editable surfaces.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { SearchBar } from '@ui/components/SearchBar'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { isGeneratedClassLocked } from '@core/page-tree/classUtils'
@@ -35,7 +35,7 @@ export function SelectorInspector({ cls, activeBreakpointId }: SelectorInspector
   const scrollRef = useRef<HTMLDivElement>(null)
   const [activeAnchorId, setActiveAnchorId] = useState<string>(FIRST_STYLE_SECTION_ID)
   const [styleQuery, setStyleQuery] = useState('')
-  const clearStyleQuery = useCallback(() => setStyleQuery(''), [])
+  const clearStyleQuery = () => setStyleQuery('')
   // Smooth-scroll behaviour gated by the `propertiesSmoothScroll` preference.
   const propertiesSmoothScroll = useEditorPreference('propertiesSmoothScroll')
 
@@ -66,7 +66,7 @@ export function SelectorInspector({ cls, activeBreakpointId }: SelectorInspector
     return () => container.removeEventListener('scroll', updateActive)
   }, [])
 
-  const handleSectionClick = useCallback((sectionId: string) => {
+  const handleSectionClick = (sectionId: string) => {
     const container = scrollRef.current
     if (!container) return
     const behavior: ScrollBehavior = propertiesSmoothScroll ? 'smooth' : 'auto'
@@ -76,7 +76,7 @@ export function SelectorInspector({ cls, activeBreakpointId }: SelectorInspector
     const containerRect = container.getBoundingClientRect()
     const rect = el.getBoundingClientRect()
     container.scrollTo({ top: rect.top - containerRect.top + container.scrollTop, behavior })
-  }, [propertiesSmoothScroll])
+  }
 
   if (isGeneratedClassLocked(cls)) {
     return (

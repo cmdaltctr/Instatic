@@ -1,7 +1,5 @@
 import {
-  useCallback,
   useId,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -86,10 +84,7 @@ export function Select({
   const triggerId = id ?? `select-${generatedId}`
   const menuId = `${triggerId}-menu`
 
-  const normalizedOptions = useMemo(
-    () => normalizeOptions(options, children),
-    [options, children],
-  )
+  const normalizedOptions = normalizeOptions(options, children)
 
   const {
     isControlled,
@@ -139,22 +134,19 @@ export function Select({
   const activeOptionId =
     open && resolvedActiveIndex >= 0 ? getOptionId(menuId, resolvedActiveIndex) : undefined
 
-  const setSelectRef = useCallback(
-    (node: HTMLSelectElement | null) => {
-      nativeSelectRef.current = node
-      assignRef(ref, node)
-    },
-    [ref],
-  )
+  function setSelectRef(node: HTMLSelectElement | null) {
+    nativeSelectRef.current = node
+    assignRef(ref, node)
+  }
 
-  const closeMenu = useCallback(() => {
+  function closeMenu() {
     setOpen(false)
     setActiveIndex(-1)
     clearMenuSizing()
     resolvedAnchorRef.current = null
-  }, [clearMenuSizing])
+  }
 
-  const openMenu = useCallback(() => {
+  function openMenu() {
     if (disabled) return
     // The dismiss anchor is always the Select itself. See comment on
     // `resolvedAnchorRef` for why this matters.
@@ -162,24 +154,21 @@ export function Select({
     updateMenuSizing()
     setActiveIndex(getInitialActiveIndex(normalizedOptions, selectedValue))
     setOpen(true)
-  }, [disabled, normalizedOptions, selectedValue, updateMenuSizing])
+  }
 
-  const commitValue = useCallback(
-    (nextValue: string) => {
-      if (disabled) return
-      if (!isControlled) setInternalValue(nextValue)
-      closeMenu()
+  function commitValue(nextValue: string) {
+    if (disabled) return
+    if (!isControlled) setInternalValue(nextValue)
+    closeMenu()
 
-      const select = nativeSelectRef.current
-      if (select) select.value = nextValue
-      onChange?.({
-        target: select ?? ({ value: nextValue, name } as HTMLSelectElement),
-        currentTarget: select ?? ({ value: nextValue, name } as HTMLSelectElement),
-      } as ChangeEvent<HTMLSelectElement>)
-      requestAnimationFrame(() => triggerRef.current?.focus())
-    },
-    [closeMenu, disabled, isControlled, name, onChange, setInternalValue],
-  )
+    const select = nativeSelectRef.current
+    if (select) select.value = nextValue
+    onChange?.({
+      target: select ?? ({ value: nextValue, name } as HTMLSelectElement),
+      currentTarget: select ?? ({ value: nextValue, name } as HTMLSelectElement),
+    } as ChangeEvent<HTMLSelectElement>)
+    requestAnimationFrame(() => triggerRef.current?.focus())
+  }
 
   function handleNativeChange(event: ChangeEvent<HTMLSelectElement>) {
     if (!isControlled) setInternalValue(event.target.value)

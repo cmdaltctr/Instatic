@@ -20,10 +20,8 @@
  */
 
 import {
-  useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -139,40 +137,33 @@ export function TokenAwareInput({
     // Filter tokens by typed prefix for the autocomplete dropdown.
     // When there's no query, the "Suggested" section is hidden entirely —
     // returning [] here lets the "Tokens" section render the full scale.
-    const suggestions = useMemo(() => {
-      const q = draft.trim().toLowerCase()
-      if (!q) return []
-      return tokens
-        .filter(
-          (t) =>
-            t.step.toLowerCase().startsWith(q) ||
-            t.step.toLowerCase().includes(q),
-        )
-        .slice(0, 8)
-    }, [draft, tokens])
+    const q = draft.trim().toLowerCase()
+    const suggestions = !q
+      ? []
+      : tokens
+          .filter(
+            (t) =>
+              t.step.toLowerCase().startsWith(q) ||
+              t.step.toLowerCase().includes(q),
+          )
+          .slice(0, 8)
 
-    const commit = useCallback(
-      (raw: string) => {
-        const resolved = resolveTokenValue(raw, tokens)
-        onClearPreview?.()
-        onCommit(resolved)
-        setIsEditing(false)
-      },
-      [tokens, onCommit, onClearPreview],
-    )
+    const commit = (raw: string) => {
+      const resolved = resolveTokenValue(raw, tokens)
+      onClearPreview?.()
+      onCommit(resolved)
+      setIsEditing(false)
+    }
 
     // Preview a hovered token's value on the canvas. Gated by the
     // hoverPreview editor preference so users who don't want flicker can
     // opt out. Note: the as-you-type preview below is intentionally always
     // on, since it reflects an explicit edit the user is making.
-    const previewToken = useCallback(
-      (rawValue: string) => {
-        if (!hoverPreviewEnabled || !onPreview) return
-        const resolved = resolveTokenValue(rawValue, tokens)
-        onPreview(resolved)
-      },
-      [hoverPreviewEnabled, tokens, onPreview],
-    )
+    const previewToken = (rawValue: string) => {
+      if (!hoverPreviewEnabled || !onPreview) return
+      const resolved = resolveTokenValue(rawValue, tokens)
+      onPreview(resolved)
+    }
 
     // Defensive: if the preference is toggled off while a hover preview is
     // active (e.g. user flips it in another tab), clear the canvas preview
@@ -187,15 +178,12 @@ export function TokenAwareInput({
     // current draft is provably incomplete (e.g. `var(--spa`), we skip the
     // update and keep the last valid preview on screen instead of writing
     // garbage to the engine.
-    const previewDraft = useCallback(
-      (rawValue: string) => {
-        if (!onPreview) return
-        if (!isLivePreviewable(rawValue)) return
-        const resolved = resolveTokenValue(rawValue, tokens)
-        onPreview(resolved)
-      },
-      [tokens, onPreview],
-    )
+    const previewDraft = (rawValue: string) => {
+      if (!onPreview) return
+      if (!isLivePreviewable(rawValue)) return
+      const resolved = resolveTokenValue(rawValue, tokens)
+      onPreview(resolved)
+    }
 
     // Hide the dropdown when the user is typing a direct CSS value
     // (numbers, units, `auto`, `calc(...)`, etc.) — non-token typing should

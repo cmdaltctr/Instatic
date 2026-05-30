@@ -1,7 +1,5 @@
 import {
-  useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -200,10 +198,8 @@ export function MediaExplorerPanel({
   // viewer is the same MediaViewerWindow the Media page uses, so editing
   // (alt text, caption, tags, replace file, …) works identically here.
   const [viewerAssetId, setViewerAssetId] = useState<string | null>(null)
-  const viewerAsset = useMemo(
-    () => cmsAssets.find((asset) => asset.id === viewerAssetId) ?? null,
-    [cmsAssets, viewerAssetId],
-  )
+  const viewerAsset =
+    cmsAssets.find((asset) => asset.id === viewerAssetId) ?? null
   const viewerEditor = useStandaloneMediaEditor({
     asset: viewerAsset,
     assets: cmsAssets,
@@ -212,9 +208,9 @@ export function MediaExplorerPanel({
     onAssetRemoved: (id) =>
       setCmsAssets((current) => current.filter((item) => item.id !== id)),
   })
-  const openMediaAssetPreview = useCallback((asset: CmsMediaAsset) => {
+  const openMediaAssetPreview = (asset: CmsMediaAsset) => {
     setViewerAssetId(asset.id)
-  }, [])
+  }
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renameTarget, setRenameTarget] = useState<CmsMediaAsset | null>(null)
   const [mediaError, setMediaError] = useState<string | null>(null)
@@ -222,25 +218,26 @@ export function MediaExplorerPanel({
   const [searchQuery, setSearchQuery] = useState('')
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all')
   const [viewMode, setViewModeState] = useState<MediaViewMode>(readStoredViewMode)
-  const setViewMode = useCallback((mode: MediaViewMode) => {
+  const setViewMode = (mode: MediaViewMode) => {
     setViewModeState(mode)
     writeStoredViewMode(mode)
-  }, [])
+  }
   const panelRef = useRef<HTMLElement>(null)
 
-  const cmsBuckets = useMemo(() => groupCmsMediaAssets(cmsAssets), [cmsAssets])
-  const visibleCmsBuckets = useMemo(
-    () => filterCmsMediaBuckets(cmsBuckets, mediaFilter, searchQuery),
-    [cmsBuckets, mediaFilter, searchQuery],
+  const cmsBuckets = groupCmsMediaAssets(cmsAssets)
+  const visibleCmsBuckets = filterCmsMediaBuckets(
+    cmsBuckets,
+    mediaFilter,
+    searchQuery,
   )
   const counts = visibleCmsBuckets
   const hasFilters = searchQuery.trim().length > 0 || mediaFilter !== 'all'
   const emptyLabel = mediaError ?? (hasFilters ? 'No matching media' : 'None yet')
-  const selectedNode = useMemo(() => {
+  const selectedNode = (() => {
     if (!site || !activePageId || !selectedNodeId) return null
     const activePage = site.pages.find((page) => page.id === activePageId)
     return activePage?.nodes[selectedNodeId] ?? null
-  }, [site, activePageId, selectedNodeId])
+  })()
 
   function closePanel() {
     if (onOpenChange) {

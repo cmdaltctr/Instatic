@@ -7,7 +7,7 @@
  * rename UX can evolve without touching the canvas component.
  */
 
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { registry } from '@core/module-engine/registry'
 import { getNodeDisplayName } from '@core/page-tree/nodeDisplayName'
@@ -32,7 +32,7 @@ export function useCanvasRenameDialog(
 ): CanvasRenameDialogApi {
   const [state, setState] = useState<CanvasRenameDialogState | null>(null)
 
-  const open = useCallback((nodeId: string) => {
+  const open = (nodeId: string) => {
     const storeState = useEditorStore.getState()
     const node = selectActiveCanvasPage(storeState)?.nodes[nodeId]
     if (!node) return
@@ -40,13 +40,13 @@ export function useCanvasRenameDialog(
     const definition = registry.get(node.moduleId)
     const currentName = getNodeDisplayName(node, definition, storeState.site?.visualComponents)
     setState({ nodeId, currentName, value: currentName, error: null })
-  }, [])
+  }
 
-  const close = useCallback(() => {
+  const close = () => {
     setState(null)
-  }, [])
+  }
 
-  const commit = useCallback(() => {
+  const commit = () => {
     setState((current) => {
       if (!current) return current
       const nextName = current.value.trim()
@@ -58,11 +58,11 @@ export function useCanvasRenameDialog(
       }
       return null
     })
-  }, [renameNode])
+  }
 
-  const replace = useCallback((next: CanvasRenameDialogState) => {
+  const replace = (next: CanvasRenameDialogState) => {
     setState(next)
-  }, [])
+  }
 
   return { state, open, close, commit, replace }
 }

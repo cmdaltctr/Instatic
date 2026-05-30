@@ -102,6 +102,8 @@ export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanv
    * `animated=false` and remain instant — animating them would visibly
    * lag the cursor.
    */
+  // Exception #1: referenced in useEffect dep arrays (mount sync, external
+  // store-subscription sync) — exhaustive-deps needs a stable identity here.
   const applyTransformToDOM = useCallback((t: Transform, animated = false) => {
     const el = transformLayerRef.current
     if (!el) return
@@ -151,6 +153,8 @@ export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanv
    * Schedule a DOM write for the next animation frame.
    * Coalesces multiple updates within the same frame into a single DOM write.
    */
+  // Exception #1: transitive dep of updateTransform, which feeds the wheel
+  // listener's useEffect dep array — needs a stable identity.
   const scheduleTransformWrite = useCallback((t: Transform) => {
     transformRef.current = t
     if (rafRef.current !== null) return // already scheduled
@@ -164,6 +168,8 @@ export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanv
    * Debounced Zustand commit — fires 100ms after the last interaction event.
    * Keeps the store consistent without updating on every frame.
    */
+  // Exception #1: transitive dep of updateTransform, which feeds the wheel
+  // listener's useEffect dep array — needs a stable identity.
   const scheduleStoreCommit = useCallback((t: Transform) => {
     if (commitTimerRef.current) clearTimeout(commitTimerRef.current)
     commitTimerRef.current = setTimeout(() => {
@@ -171,17 +177,19 @@ export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanv
     }, 100)
   }, [setCanvasTransform])
 
+  // Exception #1: referenced in the native wheel listener's useEffect dep array.
   const updateTransform = useCallback((t: Transform) => {
     scheduleTransformWrite(t)
     scheduleStoreCommit(t)
   }, [scheduleTransformWrite, scheduleStoreCommit])
 
-  const panBy = useCallback((dx: number, dy: number) => {
+  const panBy = (dx: number, dy: number) => {
     const t = transformRef.current
     const next = applyPan(t.panX, t.panY, dx, dy)
     updateTransform({ zoom: t.zoom, ...next })
-  }, [updateTransform])
+  }
 
+  // Exception #1: referenced in the Cmd/Ctrl+0 reset shortcut's useEffect dep array.
   const resetCanvasView = useCallback(() => {
     resetView()
     transformRef.current = { zoom: 1, panX: 0, panY: 0 }
@@ -289,47 +297,44 @@ export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanv
    * Used as the zoom origin for keyboard +/− shortcuts so the zoom is
    * anchored to the middle of the visible area, not the document top-left.
    */
-  const getViewportCenter = useCallback((): { x: number; y: number } | null => {
+  const getViewportCenter = (): { x: number; y: number } | null => {
     const el = canvasRootRef.current
     if (!el) return null
     const rect = el.getBoundingClientRect()
     return { x: rect.width / 2, y: rect.height / 2 }
-  }, [canvasRootRef])
+  }
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      // Don't intercept typing — let inputs and contenteditables consume keys.
-      const target = e.target as HTMLElement | null
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
-      ) return
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Don't intercept typing — let inputs and contenteditables consume keys.
+    const target = e.target as HTMLElement | null
+    if (
+      target &&
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable)
+    ) return
 
-      // Zoom in/out with +/- keys — zoom around the canvas viewport center
-      if (e.key === '=' || e.key === '+') {
-        e.preventDefault()
-        const c = getViewportCenter()
-        if (c) zoomIn(c.x, c.y)
-        else zoomIn()
-      } else if (e.key === '-') {
-        e.preventDefault()
-        const c = getViewportCenter()
-        if (c) zoomOut(c.x, c.y)
-        else zoomOut()
-      } else if ((e.metaKey || e.ctrlKey) && e.key === '0') {
-        e.preventDefault()
-        resetCanvasView()
-      } else if (e.key === '1' && e.shiftKey) {
-        // `Shift+1` → Reset to 100% zoom (legacy muscle-memory shortcut).
-        e.preventDefault()
-        resetCanvasView()
-      }
-      // Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z handled by App-level listener
-    },
-    [zoomIn, zoomOut, resetCanvasView, getViewportCenter],
-  )
+    // Zoom in/out with +/- keys — zoom around the canvas viewport center
+    if (e.key === '=' || e.key === '+') {
+      e.preventDefault()
+      const c = getViewportCenter()
+      if (c) zoomIn(c.x, c.y)
+      else zoomIn()
+    } else if (e.key === '-') {
+      e.preventDefault()
+      const c = getViewportCenter()
+      if (c) zoomOut(c.x, c.y)
+      else zoomOut()
+    } else if ((e.metaKey || e.ctrlKey) && e.key === '0') {
+      e.preventDefault()
+      resetCanvasView()
+    } else if (e.key === '1' && e.shiftKey) {
+      // `Shift+1` → Reset to 100% zoom (legacy muscle-memory shortcut).
+      e.preventDefault()
+      resetCanvasView()
+    }
+    // Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z handled by App-level listener
+  }
 
   // ─── External zoom/pan sync ───────────────────────────────────────────────
   //

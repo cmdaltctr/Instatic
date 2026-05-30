@@ -41,7 +41,7 @@
  * thrown errors which we log and recover from by keeping the in-memory
  * default.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getUserPreference,
   setUserPreference,
@@ -433,48 +433,45 @@ export function useDashboardLayout(): DashboardLayoutApi {
     }
   }, [layout])
 
-  const addWidget = useCallback(
-    (id: string, size: number, rows: number = 3, col?: number, row?: number) => {
-      setLayout((curr) => {
-        if (curr.items.some((i) => i.id === id)) return curr
-        // Click-to-add (no explicit cell): append at the first row below
-        // every existing widget — that's always empty space by definition,
-        // so the drop succeeds with no overlap check needed.
-        if (col === undefined || row === undefined) {
-          const bottomRow = curr.items.reduce(
-            (max, item) => Math.max(max, item.row + item.rows),
-            1,
-          )
-          const nextItems = [
-            ...curr.items,
-            { id, size, rows, col: 1, row: bottomRow },
-          ]
-          return { ...curr, items: nextItems }
-        }
-        // Explicit cell (drag-and-drop from library): the new widget must
-        // fit in empty space without pushing siblings. If the proposed
-        // rectangle overlaps anything, reject the drop entirely — the
-        // page-level dragEnd handler only invokes addWidget when the
-        // pre-drop preview was valid, but we re-verify here so the layout
-        // model itself is the source of truth.
-        const proposed = { col, row, size, rows }
-        if (hasOverlapAt(curr.items, proposed, null)) return curr
-        const nextItems = [...curr.items, { id, size, rows, col, row }]
+  const addWidget = (id: string, size: number, rows: number = 3, col?: number, row?: number) => {
+    setLayout((curr) => {
+      if (curr.items.some((i) => i.id === id)) return curr
+      // Click-to-add (no explicit cell): append at the first row below
+      // every existing widget — that's always empty space by definition,
+      // so the drop succeeds with no overlap check needed.
+      if (col === undefined || row === undefined) {
+        const bottomRow = curr.items.reduce(
+          (max, item) => Math.max(max, item.row + item.rows),
+          1,
+        )
+        const nextItems = [
+          ...curr.items,
+          { id, size, rows, col: 1, row: bottomRow },
+        ]
         return { ...curr, items: nextItems }
-      })
-    },
-    [],
-  )
+      }
+      // Explicit cell (drag-and-drop from library): the new widget must
+      // fit in empty space without pushing siblings. If the proposed
+      // rectangle overlaps anything, reject the drop entirely — the
+      // page-level dragEnd handler only invokes addWidget when the
+      // pre-drop preview was valid, but we re-verify here so the layout
+      // model itself is the source of truth.
+      const proposed = { col, row, size, rows }
+      if (hasOverlapAt(curr.items, proposed, null)) return curr
+      const nextItems = [...curr.items, { id, size, rows, col, row }]
+      return { ...curr, items: nextItems }
+    })
+  }
 
-  const removeWidget = useCallback((id: string) => {
+  const removeWidget = (id: string) => {
     setLayout((curr) => ({ ...curr, items: curr.items.filter((i) => i.id !== id) }))
-  }, [])
+  }
 
-  const setItems = useCallback((next: readonly DashboardItem[]) => {
+  const setItems = (next: readonly DashboardItem[]) => {
     setLayout((curr) => ({ ...curr, items: [...next] }))
-  }, [])
+  }
 
-  const moveWidget = useCallback((id: string, col: number, row: number) => {
+  const moveWidget = (id: string, col: number, row: number) => {
     setLayout((curr) => {
       const target = curr.items.find((i) => i.id === id)
       if (!target) return curr
@@ -492,9 +489,9 @@ export function useDashboardLayout(): DashboardLayoutApi {
       )
       return { ...curr, items: nextItems }
     })
-  }, [])
+  }
 
-  const resize = useCallback((id: string, size: number) => {
+  const resize = (id: string, size: number) => {
     setLayout((curr) => {
       const target = curr.items.find((i) => i.id === id)
       if (!target || target.size === size) return curr
@@ -504,9 +501,9 @@ export function useDashboardLayout(): DashboardLayoutApi {
       )
       return { ...curr, items: resolveCollisions(nextItems, id) }
     })
-  }, [])
+  }
 
-  const resizeRows = useCallback((id: string, rows: number) => {
+  const resizeRows = (id: string, rows: number) => {
     setLayout((curr) => {
       const target = curr.items.find((i) => i.id === id)
       if (!target || target.rows === rows) return curr
@@ -516,23 +513,23 @@ export function useDashboardLayout(): DashboardLayoutApi {
       )
       return { ...curr, items: resolveCollisions(nextItems, id) }
     })
-  }, [])
+  }
 
-  const dismissOnboarding = useCallback(() => {
+  const dismissOnboarding = () => {
     setLayout((curr) => ({ ...curr, onboardingDismissed: true }))
-  }, [])
+  }
 
-  const restoreOnboarding = useCallback(() => {
+  const restoreOnboarding = () => {
     setLayout((curr) => ({ ...curr, onboardingDismissed: false }))
-  }, [])
+  }
 
-  const setLibraryHeight = useCallback((next: number) => {
+  const setLibraryHeight = (next: number) => {
     setLayout((curr) => {
       const clamped = clampLibraryHeight(next)
       if (curr.libraryHeight === clamped) return curr
       return { ...curr, libraryHeight: clamped }
     })
-  }, [])
+  }
 
   return {
     layout,

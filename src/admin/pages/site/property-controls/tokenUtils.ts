@@ -17,7 +17,6 @@
  * spacing, typography, sizing, color (eventually), and any future scale type.
  */
 
-import { useMemo } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type {
   FrameworkSpacingGroup,
@@ -89,7 +88,7 @@ export function useSpacingTokens(): ReadonlyArray<Token> {
     (s): ReadonlyArray<FrameworkSpacingGroup> | undefined =>
       s.site?.settings.framework?.spacing?.groups,
   )
-  return useMemo(() => expandTokensFromGroups(groups), [groups])
+  return expandTokensFromGroups(groups)
 }
 
 /** All enabled typography tokens for the active site. */
@@ -98,7 +97,7 @@ export function useTypographyTokens(): ReadonlyArray<Token> {
     (s): ReadonlyArray<FrameworkTypographyGroup> | undefined =>
       s.site?.settings.framework?.typography?.groups,
   )
-  return useMemo(() => expandTokensFromGroups(groups), [groups])
+  return expandTokensFromGroups(groups)
 }
 
 // ---------------------------------------------------------------------------

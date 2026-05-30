@@ -24,7 +24,7 @@
  *     follow-up work will let plugins declare a server fetch endpoint).
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { loopSourceRegistry } from '@core/loops/registry'
 import type { LoopItem } from '@core/loops/types'
@@ -246,60 +246,45 @@ export function useLoopPreviewItems(node: PageNode): LoopItem[] {
   }, [sourceId])
 
   // ── Sort + offset + limit pipeline ──────────────────────────────────
-  return useMemo(() => {
-    if (!sourceId) return []
+  if (!sourceId) return []
 
-    if (sourceId === 'data.rows') {
-      // Prefer real published rows (server already applied orderBy /
-      // direction / offset / limit via `fetchPublishedDataRowItems`).
-      if (asyncDataRowItems.length > 0) return asyncDataRowItems
-      // No published rows yet (or fetch in flight) — synthesise placeholder
-      // items from the table's field definitions so the loop body stays
-      // visible in the canvas. The author can lay out the template; once
-      // rows are published the preview switches over automatically.
-      if (!asyncDataTable) return []
-      const previewItem = dataTablePreviewToLoopItem(asyncDataTable)
-      return Array.from({ length: Math.min(limit, 3) }, () => previewItem)
-    }
+  if (sourceId === 'data.rows') {
+    // Prefer real published rows (server already applied orderBy /
+    // direction / offset / limit via `fetchPublishedDataRowItems`).
+    if (asyncDataRowItems.length > 0) return asyncDataRowItems
+    // No published rows yet (or fetch in flight) — synthesise placeholder
+    // items from the table's field definitions so the loop body stays
+    // visible in the canvas. The author can lay out the template; once
+    // rows are published the preview switches over automatically.
+    if (!asyncDataTable) return []
+    const previewItem = dataTablePreviewToLoopItem(asyncDataTable)
+    return Array.from({ length: Math.min(limit, 3) }, () => previewItem)
+  }
 
-    if (sourceId === 'site.media') {
-      if (asyncMedia.length === 0) return []
-      const filtered = mimePrefix
-        ? asyncMedia.filter((a) => a.mimeType.startsWith(mimePrefix))
-        : asyncMedia
-      const sorted = sortMedia(filtered, orderBy || 'createdAt', direction)
-      return sorted.slice(offset, offset + limit).map(mediaAssetToLoopItem)
-    }
+  if (sourceId === 'site.media') {
+    if (asyncMedia.length === 0) return []
+    const filtered = mimePrefix
+      ? asyncMedia.filter((a) => a.mimeType.startsWith(mimePrefix))
+      : asyncMedia
+    const sorted = sortMedia(filtered, orderBy || 'createdAt', direction)
+    return sorted.slice(offset, offset + limit).map(mediaAssetToLoopItem)
+  }
 
-    if (sourceId === 'site.pages') {
-      if (!sitePages) return []
-      const filtered = filterPagesForLoop(sitePages, filters)
-      const sorted = sortPages(filtered, orderBy || 'definition', direction)
-      return sorted.slice(offset, offset + limit).map(pageToLoopItem)
-    }
+  if (sourceId === 'site.pages') {
+    if (!sitePages) return []
+    const filtered = filterPagesForLoop(sitePages, filters)
+    const sorted = sortPages(filtered, orderBy || 'definition', direction)
+    return sorted.slice(offset, offset + limit).map(pageToLoopItem)
+  }
 
-    // Plugin source fallback — synchronous preview() with no client-side
-    // sort. Plugins that need ordering should apply it inside their own
-    // preview() implementation.
-    const source = loopSourceRegistry.get(sourceId)
-    if (!source || !site) return []
-    try {
-      return source.preview({ site, filters, limit }).slice(offset, offset + limit)
-    } catch {
-      return []
-    }
-  }, [
-    sourceId,
-    asyncDataTable,
-    asyncDataRowItems,
-    asyncMedia,
-    sitePages,
-    site,
-    filters,
-    orderBy,
-    direction,
-    offset,
-    limit,
-    mimePrefix,
-  ])
+  // Plugin source fallback — synchronous preview() with no client-side
+  // sort. Plugins that need ordering should apply it inside their own
+  // preview() implementation.
+  const source = loopSourceRegistry.get(sourceId)
+  if (!source || !site) return []
+  try {
+    return source.preview({ site, filters, limit }).slice(offset, offset + limit)
+  } catch {
+    return []
+  }
 }

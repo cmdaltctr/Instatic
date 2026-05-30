@@ -11,7 +11,7 @@
  * see `TypographyPanel.tsx` for the wiring.
  */
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
@@ -33,10 +33,7 @@ export function FontsSection() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const installedFamiliesLower = useMemo(
-    () => new Set(fonts.map((f) => f.family.toLowerCase())),
-    [fonts],
-  )
+  const installedFamiliesLower = new Set(fonts.map((f) => f.family.toLowerCase()))
 
   async function handleRemove(entry: FontEntry) {
     setActionError(null)
@@ -124,12 +121,13 @@ interface FontRowProps {
 }
 
 function FontRow({ entry, onRemove }: FontRowProps) {
-  const variantSummary = useMemo(() => {
-    const variants = [...entry.variants].sort(compareVariants)
-    if (variants.length === 0) return ''
-    if (variants.length <= 3) return variants.join(', ')
-    return `${variants.slice(0, 3).join(', ')}, +${variants.length - 3}`
-  }, [entry.variants])
+  const variants = [...entry.variants].sort(compareVariants)
+  const variantSummary =
+    variants.length === 0
+      ? ''
+      : variants.length <= 3
+        ? variants.join(', ')
+        : `${variants.slice(0, 3).join(', ')}, +${variants.length - 3}`
 
   return (
     <li className={styles.row}>

@@ -18,7 +18,6 @@ import {
   Fragment,
   useDeferredValue,
   useEffect,
-  useMemo,
   useState,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
@@ -199,21 +198,23 @@ export function DataGrid({
   // ── Field ordering ────────────────────────────────────────────────────────
   // Primary field first; subtitle field (slug, when present and distinct from
   // the primary) is collapsed into the primary cell as a subtitle.
-  const subtitleFieldId = useMemo<string | null>(() => {
-    if (table.primaryFieldId === 'slug') return null
-    return table.fields.some((f) => f.id === 'slug') ? 'slug' : null
-  }, [table.fields, table.primaryFieldId])
+  const subtitleFieldId: string | null =
+    table.primaryFieldId === 'slug'
+      ? null
+      : table.fields.some((f) => f.id === 'slug')
+        ? 'slug'
+        : null
 
-  const orderedFields = useMemo<DataField[]>(() => {
+  const orderedFields: DataField[] = (() => {
     const primary = table.fields.find((f) => f.id === table.primaryFieldId)
     const rest = table.fields.filter(
       (f) => f.id !== table.primaryFieldId && f.id !== subtitleFieldId,
     )
     return primary == null ? rest : [primary, ...rest]
-  }, [table.fields, table.primaryFieldId, subtitleFieldId])
+  })()
 
   // ── Filtered + sorted rows ────────────────────────────────────────────────
-  const visibleRows = useMemo<DataRow[]>(() => {
+  const visibleRows: DataRow[] = (() => {
     let r = rows
 
     if (hasPublishWorkflow && statusFilter !== 'all') {
@@ -251,7 +252,7 @@ export function DataGrid({
     }
 
     return r
-  }, [rows, hasPublishWorkflow, statusFilter, deferredQuery, sort, table.fields])
+  })()
 
   // ── Group rows by status (publish-workflow kinds, when scope is 'all'/'pages'/'templates') ─
   //
@@ -260,7 +261,7 @@ export function DataGrid({
   // Archived section headers. Specific status chips (draft / published /
   // unpublished) flatten the list since by definition all rows share one
   // status.
-  const groups = useMemo<RowGroup[]>(() => {
+  const groups: RowGroup[] = (() => {
     const groupable = hasPublishWorkflow && (
       statusFilter === 'all' || statusFilter === 'pages' || statusFilter === 'templates'
     )
@@ -284,14 +285,14 @@ export function DataGrid({
     if (buckets.unpublished.length > 0)
       out.push({ key: 'unpublished', label: 'Archived', status: 'unpublished', rows: buckets.unpublished })
     return out
-  }, [visibleRows, hasPublishWorkflow, statusFilter])
+  })()
 
   // ── Filter chip counts ────────────────────────────────────────────────────
   //
   // For pages, the 'Pages' and 'Templates' chips count by template-flag
   // (cross-cut by status). For posts/components those chips don't appear,
   // so their counts default to 0 and are never read.
-  const statusCounts = useMemo(() => {
+  const statusCounts = (() => {
     const counts = {
       all: rows.length,
       published: 0,
@@ -307,15 +308,15 @@ export function DataGrid({
       else counts.pages += 1
     }
     return counts
-  }, [rows])
+  })()
 
   // ── Selection helpers ─────────────────────────────────────────────────────
-  const visibleIdSet = useMemo(() => new Set(visibleRows.map((r) => r.id)), [visibleRows])
-  const checkedVisibleCount = useMemo(() => {
+  const visibleIdSet = new Set(visibleRows.map((r) => r.id))
+  const checkedVisibleCount = (() => {
     let n = 0
     for (const id of checkedIds) if (visibleIdSet.has(id)) n += 1
     return n
-  }, [checkedIds, visibleIdSet])
+  })()
   const allChecked = checkedVisibleCount > 0 && checkedVisibleCount === visibleRows.length
   const someChecked = checkedVisibleCount > 0 && checkedVisibleCount < visibleRows.length
   // The Checkbox primitive doesn't style `:indeterminate`, so we render the

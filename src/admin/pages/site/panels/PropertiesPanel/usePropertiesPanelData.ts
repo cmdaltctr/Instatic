@@ -12,7 +12,7 @@
  * digits and gives every future "add another derived prop / store field"
  * change a single place to land.
  */
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditorStore, selectSelectedNode } from '@site/store/store'
 import { registry } from '@core/module-engine/registry'
@@ -179,42 +179,32 @@ export function usePropertiesPanelData(): PropertiesPanelData {
   // class breakpoint styles, not in module props.
   //
   // The schema lookup is intentionally performed via `registry.get()` inside
-  // the callback rather than closing over the `definition` object — that
-  // keeps the callback's deps array referentially stable and lets the
-  // memoization survive parent re-renders that recompute `definition`.
+  // the handler rather than closing over the `definition` object, so it always
+  // reflects the current selection without depending on a recomputed value.
   const moduleId = selectedNode?.moduleId
-  const handleChange = useCallback(
-    (propKey: string, value: unknown) => {
-      if (!selectedNodeId) return
-      const def = moduleId ? registry.get(moduleId) : null
-      const isOverridable = def?.schema[propKey]?.breakpointOverridable === true
-      if (activeBreakpointId && activeBreakpointId !== 'desktop' && isOverridable) {
-        setBreakpointOverride(selectedNodeId, activeBreakpointId, { [propKey]: value })
-      } else {
-        updateNodeProps(selectedNodeId, { [propKey]: value })
-      }
-      setStatusMessage(`${propKey} updated`)
-    },
-    [selectedNodeId, moduleId, activeBreakpointId, updateNodeProps, setBreakpointOverride],
-  )
+  const handleChange = (propKey: string, value: unknown) => {
+    if (!selectedNodeId) return
+    const def = moduleId ? registry.get(moduleId) : null
+    const isOverridable = def?.schema[propKey]?.breakpointOverridable === true
+    if (activeBreakpointId && activeBreakpointId !== 'desktop' && isOverridable) {
+      setBreakpointOverride(selectedNodeId, activeBreakpointId, { [propKey]: value })
+    } else {
+      updateNodeProps(selectedNodeId, { [propKey]: value })
+    }
+    setStatusMessage(`${propKey} updated`)
+  }
 
-  const handleSetDynamicBinding = useCallback(
-    (propKey: string, binding: DynamicPropBinding) => {
-      if (!selectedNodeId) return
-      setNodeDynamicBinding(selectedNodeId, propKey, binding)
-      setStatusMessage(`${propKey} bound`)
-    },
-    [selectedNodeId, setNodeDynamicBinding],
-  )
+  const handleSetDynamicBinding = (propKey: string, binding: DynamicPropBinding) => {
+    if (!selectedNodeId) return
+    setNodeDynamicBinding(selectedNodeId, propKey, binding)
+    setStatusMessage(`${propKey} bound`)
+  }
 
-  const handleClearDynamicBinding = useCallback(
-    (propKey: string) => {
-      if (!selectedNodeId) return
-      clearNodeDynamicBinding(selectedNodeId, propKey)
-      setStatusMessage(`${propKey} binding removed`)
-    },
-    [selectedNodeId, clearNodeDynamicBinding],
-  )
+  const handleClearDynamicBinding = (propKey: string) => {
+    if (!selectedNodeId) return
+    clearNodeDynamicBinding(selectedNodeId, propKey)
+    setStatusMessage(`${propKey} binding removed`)
+  }
 
   const collapsed = panelState.collapsed
   const width = Math.max(panelState.width || DEFAULT_WIDTH, MIN_WIDTH)

@@ -12,7 +12,7 @@
  *
  * Deletion goes through `useConfirmDelete` instead of bespoke inline confirm.
  */
-import { memo, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import type { ReactElement, DragEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { Input, Textarea } from '@ui/components/Input'
@@ -632,7 +632,7 @@ function FieldEditForm({
 // FieldsSection
 // ---------------------------------------------------------------------------
 
-export const FieldsSection = memo(function FieldsSection({
+export function FieldsSection({
   table,
   tables,
   rowCount,
@@ -958,4 +958,4 @@ export const FieldsSection = memo(function FieldsSection({
       />
     </div>
   )
-})
+}

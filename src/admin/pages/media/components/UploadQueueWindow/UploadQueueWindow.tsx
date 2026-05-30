@@ -4,7 +4,6 @@
  * outside the Media page's main canvas so it persists across folder
  * navigation.
  */
-import { useCallback } from 'react'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { CheckIcon } from 'pixel-art-icons/icons/check'
@@ -47,7 +46,7 @@ export function UploadQueueWindow({ queue, open, onClose, onRevealAsset }: Uploa
     item.status === 'succeeded' || item.status === 'failed' || item.status === 'cancelled',
   )
 
-  const handleClear = useCallback(() => queue.clearFinished(), [queue])
+  const handleClear = () => queue.clearFinished()
 
   return (
     <FloatingWindow

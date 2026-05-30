@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { selectActivePage, useEditorStore } from '@site/store/store'
 import { getCmsPublishStatus, publishCmsDraft } from '@core/persistence'
 import { LoaderIcon } from 'pixel-art-icons/icons/loader'
@@ -74,24 +74,24 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
     return () => clearTimeout(resetTimer)
   }, [hasUnsavedChanges, state])
 
-  const resetErrorLater = useCallback(() => {
+  const resetErrorLater = () => {
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
     statusTimerRef.current = setTimeout(() => {
       setState('idle')
       setMessage(null)
       statusTimerRef.current = null
     }, 5000)
-  }, [])
+  }
 
-  const clearMessageLater = useCallback(() => {
+  const clearMessageLater = () => {
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
     statusTimerRef.current = setTimeout(() => {
       setMessage(null)
       statusTimerRef.current = null
     }, 5000)
-  }, [])
+  }
 
-  const handlePublish = useCallback(async () => {
+  const handlePublish = async () => {
     if (!site || !enabled || state === 'publishing') return
 
     if (statusTimerRef.current) {
@@ -131,9 +131,9 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
       setMessage(err instanceof Error ? err.message : 'Unknown publish error')
       resetErrorLater()
     }
-  }, [clearMessageLater, enabled, onSave, runStepUp, site, resetErrorLater, state])
+  }
 
-  const handleManualSave = useCallback(async () => {
+  const handleManualSave = async () => {
     if (!onSave || isSaving || isStatusSaving) return
     setIsSaving(true)
     try {
@@ -143,7 +143,7 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
     } finally {
       setIsSaving(false)
     }
-  }, [isSaving, isStatusSaving, onSave])
+  }
 
   const isPublishing = state === 'publishing'
   const disabled = !site || !enabled || isPublishing

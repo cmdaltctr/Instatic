@@ -13,7 +13,7 @@
  * Component-only file so React Fast Refresh can hot-patch edits without
  * re-running module registration.
  */
-import React, { useMemo } from 'react'
+import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
 import {
   blurHashToDataUrl,
@@ -42,17 +42,16 @@ export const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props,
   // raw src in the meantime so there's no flash of "No image selected".
   const asset = useCmsMediaAssetByPath(props.src || null)
 
-  const responsive = useMemo(() => {
-    if (!asset) return null
-    return {
-      src: pickVariantUrl(asset, CANVAS_CSS_WIDTH),
-      srcset: buildVariantSrcset(asset),
-      blurUrl: blurHashToDataUrl(asset.blurHash),
-      width: asset.width,
-      height: asset.height,
-      libraryAlt: asset.altText,
-    }
-  }, [asset])
+  const responsive = !asset
+    ? null
+    : {
+        src: pickVariantUrl(asset, CANVAS_CSS_WIDTH),
+        srcset: buildVariantSrcset(asset),
+        blurUrl: blurHashToDataUrl(asset.blurHash),
+        width: asset.width,
+        height: asset.height,
+        libraryAlt: asset.altText,
+      }
 
   if (!props.src) {
     return (

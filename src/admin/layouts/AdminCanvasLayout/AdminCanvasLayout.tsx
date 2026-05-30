@@ -69,7 +69,7 @@ import { usePluginEventBridge } from '@admin/pages/plugins/hooks/usePluginEventB
 import { AppLoadingScreen } from '@admin/AppLoadingScreen'
 import { AdminSectionNavigation } from '@admin/shared/AdminSectionNavigation'
 import styles from './AdminCanvasLayout.module.css'
-import { lazy, Suspense, useCallback, useEffect, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import type { AdminWorkspace } from '@admin/workspace'
 import { useCurrentAdminUser } from '@admin/sessionContext'
 import {
@@ -282,7 +282,7 @@ export function AdminCanvasLayout({
     }),
   )
 
-  const handleCanvasDragEnd = useCallback((event: DragEndEvent) => {
+  const handleCanvasDragEnd = (event: DragEndEvent) => {
     if (!canEditDraftSite) return
 
     const payload = event.active.data.current
@@ -315,7 +315,7 @@ export function AdminCanvasLayout({
     if (result === null) {
       console.warn('[component-system] insertComponentRef returned null — cycle prevented or empty componentId')
     }
-  }, [canEditDraftSite])
+  }
 
   // UI density preference — `data-editor-density` on the editor root drives
   // CSS variables consumed by tree rows, toolbar buttons, and other density-

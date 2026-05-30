@@ -1,4 +1,4 @@
-import { useCallback, type ChangeEvent, type SyntheticEvent } from "react";
+import type { ChangeEvent, SyntheticEvent } from "react";
 import type { Breakpoint } from '@core/page-tree'
 import { Select } from "@ui/components/Select";
 import { SmartphoneSolidIcon } from "pixel-art-icons/icons/smartphone-solid";
@@ -24,16 +24,13 @@ export function CanvasBreakpointSelector({
   );
   const selectedBreakpointId = activeBreakpoint?.id ?? breakpoints[0]?.id ?? "";
 
-  const stopCanvasInteraction = useCallback((event: SyntheticEvent) => {
+  const stopCanvasInteraction = (event: SyntheticEvent) => {
     event.stopPropagation();
-  }, []);
+  };
 
-  const handleChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      onBreakpointChange(event.target.value);
-    },
-    [onBreakpointChange],
-  );
+  const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    onBreakpointChange(event.target.value);
+  };
 
   if (breakpoints.length === 0) return null;
 

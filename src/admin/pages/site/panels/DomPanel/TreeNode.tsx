@@ -20,7 +20,7 @@
  *   NOT required for editor chrome per user directive / Guideline #357).
  * - Context menu focuses first item on mount.
  */
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { registry } from '@core/module-engine/registry'
@@ -49,6 +49,9 @@ import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import styles from './TreeNode.module.css'
 
+// Stable empty fallback for the children selector (keeps referential equality).
+const EMPTY_CHILDREN: string[] = []
+
 interface TreeNodeProps {
   nodeId: string
   depth: number
@@ -60,17 +63,18 @@ interface ContextMenuState {
   y: number
 }
 
+// React.memo re-render bailout — exception #2: hot, recursive per-node tree row
+// rendered for every node in the document; skipping equal-prop re-renders here is
+// an O(N) critical path the React Compiler's within-render memoization can't cover.
 export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true }: TreeNodeProps) {
   // ── Per-node selectors — only THIS node re-renders on its own changes ──────
-  const node = useEditorStore(
-    useCallback((s) => selectActiveCanvasPage(s)?.nodes[nodeId] ?? null, [nodeId]),
-  )
+  const node = useEditorStore((s) => selectActiveCanvasPage(s)?.nodes[nodeId] ?? null)
   // Per-node selection: only the rows whose membership flips re-render per
   // selection event. With multi-select, several rows may flip in one event
   // (e.g. shift-click range), but each row still reads only its own boolean.
-  const isSelected = useEditorStore(useCallback((s) => s.selectedNodeIds.includes(nodeId), [nodeId]))
-  const isHovered = useEditorStore(useCallback((s) => s.hoveredNodeId === nodeId, [nodeId]))
-  const isRoot = useEditorStore(useCallback((s) => selectActiveCanvasPage(s)?.rootNodeId === nodeId, [nodeId]))
+  const isSelected = useEditorStore((s) => s.selectedNodeIds.includes(nodeId))
+  const isHovered = useEditorStore((s) => s.hoveredNodeId === nodeId)
+  const isRoot = useEditorStore((s) => selectActiveCanvasPage(s)?.rootNodeId === nodeId)
   // Subscribe to visualComponents so VC renames re-render every ref's tree row
   // (the VC name is part of the resolved displayName for visual-component-ref nodes).
   const visualComponents = useEditorStore((s) => s.site?.visualComponents)
@@ -125,11 +129,11 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
     disabled: !editable || !node || isRoot || node.locked || isRenaming,
   })
 
-  const setRowNodeRef = useCallback((element: HTMLDivElement | null) => {
+  const setRowNodeRef = (element: HTMLDivElement | null) => {
     rowRef.current = element
     setNodeRef(element)
     registerRow(nodeId, element)
-  }, [nodeId, registerRow, setNodeRef])
+  }
 
   // ── Guard against unmounted nodes ─────────────────────────────────────────
   if (!node) return null
@@ -452,9 +456,9 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
 import { useEditorStore as useStore } from '@site/store/store'
 
 function ChildrenGroup({ nodeId, depth, editable }: { nodeId: string; depth: number; editable: boolean }) {
-  const children = useStore(
-    useCallback((s) => selectActiveCanvasPage(s)?.nodes[nodeId]?.children ?? [], [nodeId]),
-  )
+  // Fall back to a module-level stable empty array: returning a fresh [] from
+  // the selector would break referential equality every render (Guideline #239).
+  const children = useStore((s) => selectActiveCanvasPage(s)?.nodes[nodeId]?.children) ?? EMPTY_CHILDREN
 
   return (
     <div role="group">

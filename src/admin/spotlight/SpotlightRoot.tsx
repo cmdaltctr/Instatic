@@ -31,9 +31,7 @@
 import {
   lazy,
   Suspense,
-  useCallback,
   useEffect,
-  useMemo,
   useReducer,
   useRef,
   useState,
@@ -234,7 +232,7 @@ export function SpotlightRoot({ children }: { children: ReactNode }) {
 
   // ─── Build CommandContext ─────────────────────────────────────────────────
 
-  const commandContext = useMemo<CommandContext | null>(() => {
+  const commandContext: CommandContext | null = (() => {
     if (!user) return null
     const ctx: CommandContext = {
       workspace: workspaceFromPathname(pathname),
@@ -243,7 +241,7 @@ export function SpotlightRoot({ children }: { children: ReactNode }) {
     }
     if (editorCtx) ctx.editor = editorCtx
     return ctx
-  }, [user, pathname, editorCtx])
+  })()
 
   // Keep commandContextRef in sync so the runner's getContext() is always fresh.
   useEffect(() => { commandContextRef.current = commandContext }, [commandContext])
@@ -271,7 +269,7 @@ export function SpotlightRoot({ children }: { children: ReactNode }) {
   // ─── runCommandWithArgs ───────────────────────────────────────────────────
   // Core execution function: always called with the full args map.
 
-  const runCommandWithArgs = useCallback(async (
+  const runCommandWithArgs = async (
     command: Command,
     args: Record<string, string>,
   ): Promise<void> => {
@@ -322,19 +320,19 @@ export function SpotlightRoot({ children }: { children: ReactNode }) {
     if (!drilledScope && !command.keepOpenAfterRun) {
       dispatch({ type: 'CLOSE' })
     }
-  }, [commandContext])
+  }
 
   // ─── runCommand ──────────────────────────────────────────────────────────
   // Convenience wrapper: starts arg collection if command has args,
   // otherwise runs immediately with empty args.
 
-  const runCommand = useCallback(async (command: Command): Promise<void> => {
+  const runCommand = async (command: Command): Promise<void> => {
     if (command.args && command.args.length > 0) {
       dispatch({ type: 'ENTER_ARG_MODE', command })
       return
     }
     await runCommandWithArgs(command, {})
-  }, [runCommandWithArgs])
+  }
 
   // ─── Global Cmd+K / Ctrl+K listener ──────────────────────────────────────
   // Capture phase so the listener fires before editor keydown handlers.
@@ -387,25 +385,25 @@ export function SpotlightRoot({ children }: { children: ReactNode }) {
 
   // ─── Public SpotlightControls context value ───────────────────────────────
 
-  const controls = useMemo<SpotlightControls>(
-    () => ({
-      state,
-      open: () => dispatch({ type: 'OPEN' }),
-      close: () => dispatch({ type: 'CLOSE' }),
-      toggle: () => dispatch({ type: 'TOGGLE' }),
-      pushScope: (scopeId, args) =>
-        dispatch({ type: 'PUSH_SCOPE', scopeId, pendingArgs: args }),
-      popScope: () => dispatch({ type: 'POP_SCOPE' }),
-    }),
-    [state],
-  )
+  const controls: SpotlightControls = {
+    state,
+    open: () => dispatch({ type: 'OPEN' }),
+    close: () => dispatch({ type: 'CLOSE' }),
+    toggle: () => dispatch({ type: 'TOGGLE' }),
+    pushScope: (scopeId, args) =>
+      dispatch({ type: 'PUSH_SCOPE', scopeId, pendingArgs: args }),
+    popScope: () => dispatch({ type: 'POP_SCOPE' }),
+  }
 
   // ─── Internal context value for <Spotlight> ───────────────────────────────
 
-  const internalValue = useMemo<SpotlightInternalContextValue>(
-    () => ({ state, dispatch, commandContext, runCommand, runCommandWithArgs }),
-    [state, commandContext, runCommand, runCommandWithArgs],
-  )
+  const internalValue: SpotlightInternalContextValue = {
+    state,
+    dispatch,
+    commandContext,
+    runCommand,
+    runCommandWithArgs,
+  }
 
   return (
     <SpotlightContext.Provider value={controls}>

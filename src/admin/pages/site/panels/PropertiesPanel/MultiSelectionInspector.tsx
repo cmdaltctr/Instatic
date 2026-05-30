@@ -27,7 +27,7 @@
  *   for large multi-selections.
  */
 
-import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
   useEditorStore,
@@ -81,84 +81,76 @@ export function MultiSelectionInspector({
 
   // Resolve display names / tags / class chips against the active canvas page.
   // The selectors subscribe to STABLE references (page + visualComponents +
-  // class registry) and the per-row mapping happens via `useMemo` so we don't
-  // return a freshly-built array from the store selector on every render —
-  // `useShallow` can't equate freshly-built objects element-by-element, which
-  // would loop.
+  // class registry) and the per-row mapping is a plain derived value.
   const tree = useEditorStore(selectActiveCanvasPage)
   const visualComponents = useEditorStore((s) => s.site?.visualComponents)
   const classes = useEditorStore((s) => s.site?.styleRules)
-  const layers = useMemo(() => {
-    if (!tree) return []
-    return selectedNodeIds.map((id) => {
-      const node = tree.nodes[id]
-      if (!node) {
+  const layers = !tree
+    ? []
+    : selectedNodeIds.map((id) => {
+        const node = tree.nodes[id]
+        if (!node) {
+          return {
+            id,
+            label: '(missing)',
+            tag: null as string | null,
+            classChip: null as string | null,
+          }
+        }
+        const def = registry.get(node.moduleId)
+        const classNames = getNodeClassNames(node, classes)
         return {
           id,
-          label: '(missing)',
-          tag: null as string | null,
-          classChip: null as string | null,
+          label: getNodeDisplayName(node, def, visualComponents),
+          tag: getNodeHtmlTag(node, def),
+          // Chained-dot CSS selector style — matches the DOM panel's class chip
+          // formatting (".header.padding-m").
+          classChip: classNames.length > 0 ? `.${classNames.join('.')}` : null,
         }
-      }
-      const def = registry.get(node.moduleId)
-      const classNames = getNodeClassNames(node, classes)
-      return {
-        id,
-        label: getNodeDisplayName(node, def, visualComponents),
-        tag: getNodeHtmlTag(node, def),
-        // Chained-dot CSS selector style — matches the DOM panel's class chip
-        // formatting (".header.padding-m").
-        classChip: classNames.length > 0 ? `.${classNames.join('.')}` : null,
-      }
-    })
-  }, [tree, visualComponents, classes, selectedNodeIds])
+      })
 
   const confirmDelete = useConfirmDelete()
-  const handleDelete = useCallback(() => {
+  const handleDelete = () => {
     confirmDelete({
       title: 'Delete layers?',
       description: `${selectedNodeIds.length} layers (and their children) will be removed. This can be undone with Ctrl/Cmd+Z.`,
       confirmLabel: 'Delete',
       commit: () => deleteNodes(selectedNodeIds),
     })
-  }, [confirmDelete, deleteNodes, selectedNodeIds])
+  }
 
   // Wrap menu — small ContextMenu pinned to the Wrap button so the same
   // submenu primitive used in LayerNodeContextMenu is reused here.
   const wrapButtonRef = useRef<HTMLButtonElement>(null)
   const [wrapMenu, setWrapMenu] = useState<{ x: number; y: number } | null>(null)
-  const closeWrapMenu = useCallback(() => setWrapMenu(null), [])
-  const openWrapMenu = useCallback(() => {
+  const closeWrapMenu = () => setWrapMenu(null)
+  const openWrapMenu = () => {
     const rect = wrapButtonRef.current?.getBoundingClientRect()
     if (!rect) return
     // Anchor the menu just below the button.
     setWrapMenu({ x: rect.left, y: rect.bottom + 4 })
-  }, [])
+  }
 
   // Paste anchors to the multi-selection's anchor (last id) — same as
   // single-paste against the selected node.
-  const handlePaste = useCallback(() => {
+  const handlePaste = () => {
     const anchor = selectedNodeIds[selectedNodeIds.length - 1]
     if (anchor) pasteNode(anchor)
-  }, [selectedNodeIds, pasteNode])
+  }
 
-  // Memoise the action handlers so the action bar stays stable across re-renders.
-  const handlers = useMemo(
-    () => ({
-      duplicate: () => duplicateNodes(selectedNodeIds),
-      copy: () => copyNodes(selectedNodeIds),
-      cut: () => cutNodes(selectedNodeIds),
-      wrapContainer: () => {
-        wrapNodes(selectedNodeIds, 'base.container')
-        closeWrapMenu()
-      },
-      wrapLoop: () => {
-        wrapNodes(selectedNodeIds, 'base.loop')
-        closeWrapMenu()
-      },
-    }),
-    [duplicateNodes, copyNodes, cutNodes, wrapNodes, selectedNodeIds, closeWrapMenu],
-  )
+  const handlers = {
+    duplicate: () => duplicateNodes(selectedNodeIds),
+    copy: () => copyNodes(selectedNodeIds),
+    cut: () => cutNodes(selectedNodeIds),
+    wrapContainer: () => {
+      wrapNodes(selectedNodeIds, 'base.container')
+      closeWrapMenu()
+    },
+    wrapLoop: () => {
+      wrapNodes(selectedNodeIds, 'base.loop')
+      closeWrapMenu()
+    },
+  }
 
   return (
     <div className={styles.root}>

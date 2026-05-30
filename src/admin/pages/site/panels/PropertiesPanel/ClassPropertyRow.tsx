@@ -12,7 +12,6 @@
  * Phase 3 / Task #464 / Spec #671.
  */
 
-import { useCallback } from 'react'
 import type { CSSPropertyBag } from '@core/page-tree'
 import { TextControl } from '@site/property-controls/TextControl'
 import { ColorControl } from '@site/property-controls/ColorControl'
@@ -77,37 +76,31 @@ export function ClassPropertyRow({
 
   // Translate a control's (propKey, val) onChange signature into a typed
   // CSSPropertyBag value, coercing to number when the property expects one.
-  const handleControlChange = useCallback(
-    (_key: string, val: unknown) => {
-      const nextValue = String(val ?? '')
-      if (NUMBER_TYPED_PROPS.has(property)) {
-        const parsed = Number(nextValue)
-        onChange(property, Number.isFinite(parsed) && nextValue.trim() !== '' ? parsed : undefined)
-        return
-      }
-      onChange(property, nextValue)
-    },
-    [property, onChange],
-  )
+  const handleControlChange = (_key: string, val: unknown) => {
+    const nextValue = String(val ?? '')
+    if (NUMBER_TYPED_PROPS.has(property)) {
+      const parsed = Number(nextValue)
+      onChange(property, Number.isFinite(parsed) && nextValue.trim() !== '' ? parsed : undefined)
+      return
+    }
+    onChange(property, nextValue)
+  }
 
   // Token-aware properties commit on blur via TokenAwareInput's `onCommit`.
   // It already returns undefined for empty input (clears the value), so
   // the only translation we do here is the number-typed coercion.
-  const handleTokenCommit = useCallback(
-    (resolved: string | undefined) => {
-      if (NUMBER_TYPED_PROPS.has(property)) {
-        if (resolved == null || resolved === '') {
-          onChange(property, undefined)
-          return
-        }
-        const parsed = Number(resolved)
-        onChange(property, Number.isFinite(parsed) ? parsed : resolved)
+  const handleTokenCommit = (resolved: string | undefined) => {
+    if (NUMBER_TYPED_PROPS.has(property)) {
+      if (resolved == null || resolved === '') {
+        onChange(property, undefined)
         return
       }
-      onChange(property, resolved)
-    },
-    [property, onChange],
-  )
+      const parsed = Number(resolved)
+      onChange(property, Number.isFinite(parsed) ? parsed : resolved)
+      return
+    }
+    onChange(property, resolved)
+  }
 
   // ── Dispatch to the correct control ─────────────────────────────────────
   // Each control renders with its own .controlWrapper so the row is

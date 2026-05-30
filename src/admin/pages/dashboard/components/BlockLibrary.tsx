@@ -34,7 +34,7 @@
  * Lives outside `DashboardGrid` as a sibling under the page-level
  * `DndContext` so dragged previews can travel between the two surfaces.
  */
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
@@ -250,16 +250,14 @@ function ExpandedPanel({
   const [query, setQuery] = useState('')
   const q = query.toLowerCase().trim()
 
-  const filteredGroups = useMemo(() => {
-    const filtered = q
-      ? availableWidgets.filter((w) =>
-          w.name.toLowerCase().includes(q) ||
-          w.description.toLowerCase().includes(q) ||
-          w.ownerId.toLowerCase().includes(q),
-        )
-      : availableWidgets
-    return groupWidgetsByOwner(filtered)
-  }, [availableWidgets, q])
+  const filtered = q
+    ? availableWidgets.filter((w) =>
+        w.name.toLowerCase().includes(q) ||
+        w.description.toLowerCase().includes(q) ||
+        w.ownerId.toLowerCase().includes(q),
+      )
+    : availableWidgets
+  const filteredGroups = groupWidgetsByOwner(filtered)
 
   const everythingPlaced = availableWidgets.length === 0
 

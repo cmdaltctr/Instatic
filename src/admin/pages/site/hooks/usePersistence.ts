@@ -100,6 +100,8 @@ export function usePersistence(
     adapterRef.current = adapter
   }, [adapter])
 
+  // Exception #1: referenced in the auto-save and Cmd/Ctrl+S useEffect dep arrays,
+  // so exhaustive-deps requires a stable identity here.
   const saveCurrentSite = useCallback(async () => {
     const { site, setHasUnsavedChanges } = useEditorStore.getState()
     if (!site) return

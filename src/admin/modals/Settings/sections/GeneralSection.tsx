@@ -11,7 +11,7 @@
  * favicon doesn't have intermediate states (single click → commit), so it
  * skips that pattern.
  */
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { Input, Textarea } from '@ui/components/Input'
 import { Button } from '@ui/components/Button'
@@ -167,10 +167,7 @@ function FaviconField({ currentValue, onChange }: FaviconFieldProps) {
     return () => { cancelled = true }
   }, [])
 
-  const currentAsset = useMemo(
-    () => cmsAssets.find((asset) => asset.publicPath === currentValue) ?? null,
-    [cmsAssets, currentValue],
-  )
+  const currentAsset = cmsAssets.find((asset) => asset.publicPath === currentValue) ?? null
 
   function handlePickFromModal(asset: CmsMediaAsset) {
     setCmsAssets((current) => {

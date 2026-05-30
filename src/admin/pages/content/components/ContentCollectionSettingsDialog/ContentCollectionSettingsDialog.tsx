@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { buildPostTypeDefaultFields, dataTableHasField } from '@core/data/fields'
 import {
   POST_TYPE_FIELD_BODY,
@@ -33,7 +33,7 @@ function errorMessage(err: unknown) {
 
 const FORM_ID = 'content-collection-settings-form'
 
-export const ContentCollectionSettingsDialog = memo(function ContentCollectionSettingsDialog({
+export function ContentCollectionSettingsDialog({
   collection,
   onCancel,
   onSave,
@@ -232,4 +232,4 @@ export const ContentCollectionSettingsDialog = memo(function ContentCollectionSe
       </form>
     </Dialog>
   )
-})
+}

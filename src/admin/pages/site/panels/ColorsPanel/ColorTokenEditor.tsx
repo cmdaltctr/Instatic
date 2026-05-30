@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useId, useState } from 'react'
 import {
   generateFrameworkColorVariableSets,
   normalizeFrameworkColorSlug,
@@ -37,23 +37,20 @@ export function ColorTokenEditor({
   )
   const [tintCount, setTintCount] = useState(String(token.generateTints.count))
 
-  const previewToken = useMemo<FrameworkColorToken>(
-    () => ({
-      ...token,
-      lightValue: lightValue.trim() || token.lightValue,
-      darkValue: alternateValue.trim() || token.darkValue,
-      darkModeEnabled: alternateValue.trim().length > 0,
-      generateShades: {
-        ...token.generateShades,
-        count: clampVariantCountInput(shadeCount),
-      },
-      generateTints: {
-        ...token.generateTints,
-        count: clampVariantCountInput(tintCount),
-      },
-    }),
-    [alternateValue, lightValue, shadeCount, tintCount, token],
-  )
+  const previewToken: FrameworkColorToken = {
+    ...token,
+    lightValue: lightValue.trim() || token.lightValue,
+    darkValue: alternateValue.trim() || token.darkValue,
+    darkModeEnabled: alternateValue.trim().length > 0,
+    generateShades: {
+      ...token.generateShades,
+      count: clampVariantCountInput(shadeCount),
+    },
+    generateTints: {
+      ...token.generateTints,
+      count: clampVariantCountInput(tintCount),
+    },
+  }
 
   const previewVariables = generateFrameworkColorVariableSets({
     tokens: [previewToken],

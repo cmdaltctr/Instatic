@@ -26,7 +26,7 @@
  * Editor chrome stays neutral; CodeMirror syntax uses GitHub Dark-style tokens.
  */
 
-import { Suspense, lazy, memo, useEffect, useRef, type CSSProperties } from 'react'
+import { Suspense, lazy, useEffect, useRef, type CSSProperties } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { PanelHeader } from '@admin/shared/PanelHeader'
 import { useDraggablePanel } from '@site/hooks/useDraggablePanel'
@@ -58,7 +58,7 @@ const PANEL_WIDTH = 800
  * bundle (~600 kB) sits behind a single `React.lazy` boundary further down,
  * so we only pay for it the first time the user opens a text file.
  */
-export const CodeEditorPanel = memo(function CodeEditorPanel() {
+export function CodeEditorPanel() {
   // ── Store subscriptions ──────────────────────────────────────────────────
   const activeEditorFileId = useEditorStore((s) => s.activeEditorFileId)
   const codeEditorPanelOpen = useEditorStore((s) => s.codeEditorPanelOpen)
@@ -184,7 +184,7 @@ export const CodeEditorPanel = memo(function CodeEditorPanel() {
       </div>
     </aside>
   )
-})
+}
 
 // ---------------------------------------------------------------------------
 // CodeEditorSkeleton

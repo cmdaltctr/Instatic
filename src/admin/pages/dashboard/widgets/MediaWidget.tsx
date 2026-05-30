@@ -14,7 +14,7 @@
  * the full `CmsMediaAsset` the viewer needs) and reuses it for every
  * subsequent click.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
 import { StatValue } from '@ui/components/charts'
 import type { DashboardWidgetRendererProps } from '@core/dashboard'
@@ -60,10 +60,7 @@ export function MediaWidget({ span, editing }: DashboardWidgetRendererProps) {
   // cache. While the cache is loading the viewer waits to mount —
   // `viewerOpen` is gated on a resolved asset so we don't flash an
   // empty window during the fetch.
-  const viewerAsset = useMemo(
-    () => (viewerAssetId ? assets.find((a) => a.id === viewerAssetId) ?? null : null),
-    [assets, viewerAssetId],
-  )
+  const viewerAsset = viewerAssetId ? assets.find((a) => a.id === viewerAssetId) ?? null : null
 
   const viewerEditor = useStandaloneMediaEditor({
     asset: viewerAsset,
@@ -104,13 +101,13 @@ export function MediaWidget({ span, editing }: DashboardWidgetRendererProps) {
     }
   }, [viewerAssetId, assetsLoaded])
 
-  const openViewer = useCallback((assetId: string) => {
+  const openViewer = (assetId: string) => {
     setViewerAssetId(assetId)
-  }, [])
+  }
 
-  const closeViewer = useCallback(() => {
+  const closeViewer = () => {
     setViewerAssetId(null)
-  }, [])
+  }
 
   return (
     <>

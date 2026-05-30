@@ -17,7 +17,7 @@
  * The live preview debounces at 200 ms so typing feels instant.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog } from '@ui/components/Dialog'
 import { Button } from '@ui/components/Button'
 import { Select } from '@ui/components/Select'
@@ -163,7 +163,7 @@ export function ImportHtmlModal() {
   }, [html])
 
   // Parent picker options: page root + all container nodes.
-  const parentOptions = useMemo(() => {
+  const parentOptions = (() => {
     if (!canvasPage) return []
     const options: Array<{ value: string; label: string; textValue: string }> = []
     for (const node of Object.values(canvasPage.nodes)) {
@@ -179,12 +179,12 @@ export function ImportHtmlModal() {
       })
     }
     return options
-  }, [canvasPage])
+  })()
 
   const nodeCount = result ? Object.keys(result.nodes).length : 0
   const canInsert = nodeCount > 0
 
-  const handleInsert = useCallback(() => {
+  const handleInsert = () => {
     if (!canInsert || !result) return
     const parentId = selectedParentId || canvasPage?.rootNodeId
     if (!parentId) return
@@ -219,7 +219,7 @@ export function ImportHtmlModal() {
       console.error('[ImportHtmlModal] insert failed:', err)
       setErrorMsg(err instanceof Error ? err.message : 'Unknown import error')
     }
-  }, [canInsert, result, selectedParentId, canvasPage, insertImportedNodes, closeModal])
+  }
 
   return (
     <Dialog

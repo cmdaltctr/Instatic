@@ -4,7 +4,7 @@
  * Changes reflect on the canvas immediately because CanvasRoot reads
  * `site.breakpoints` from the store.
  */
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { SmartphoneSolidIcon } from 'pixel-art-icons/icons/smartphone-solid'
 import { TabletSolidIcon } from 'pixel-art-icons/icons/tablet-solid'
@@ -58,22 +58,22 @@ export function BreakpointsSection() {
     setEditIcon(bp.icon)
   }
 
-  const handleSaveEdit = useCallback(() => {
+  const handleSaveEdit = () => {
     if (!editingId) return
     if (editLabel.trim() && editWidth > 0) {
       updateBreakpoint(editingId, { label: editLabel.trim(), width: editWidth, icon: editIcon })
     }
     setEditingId(null)
-  }, [editingId, editLabel, editWidth, editIcon, updateBreakpoint])
+  }
 
-  const handleAdd = useCallback(() => {
+  const handleAdd = () => {
     const label = newLabel.trim()
     if (!label || newWidth <= 0) return
     addBreakpoint({ label, width: newWidth, icon: newIcon })
     setNewLabel('')
     setNewWidth(375)
     setNewIcon('smartphone')
-  }, [newLabel, newWidth, newIcon, addBreakpoint])
+  }
 
   const handleRemove = (id: string) => {
     removeBreakpoint(id)

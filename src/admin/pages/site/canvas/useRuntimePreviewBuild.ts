@@ -32,7 +32,7 @@
  *   ref written during render.
  */
 
-import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import type { Page, SiteDocument } from '@core/page-tree'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { useEditorStore } from '@site/store/store'
@@ -108,9 +108,11 @@ export function useRuntimePreviewBuild({
   const [build, setBuild] = useState<BuildResult | null>(null)
   const [refreshNonce, setRefreshNonce] = useState(0)
 
-  const buildSignature = useMemo(
-    () => computeBuildSignature(site, page?.id ?? null, breakpointId, templateContext),
-    [site, page?.id, breakpointId, templateContext],
+  const buildSignature = computeBuildSignature(
+    site,
+    page?.id ?? null,
+    breakpointId,
+    templateContext,
   )
 
   const isIdle = !enabled || !site || !page || buildSignature === null
@@ -187,9 +189,9 @@ export function useRuntimePreviewBuild({
     return kickOffBuild() ?? undefined
   }, [buildSignature, isIdle, refreshNonce])
 
-  const refresh = useCallback(() => {
+  const refresh = () => {
     setRefreshNonce((n) => n + 1)
-  }, [])
+  }
 
   // Surface the build state via render-time derivation. Stale builds (whose
   // signature doesn't match the current one) are treated as "still building",

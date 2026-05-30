@@ -24,7 +24,7 @@
  * panel id (we keep the existing storage key so saved positions migrate
  * across the rename).
  */
-import { useCallback, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
 import { Input, Textarea } from '@ui/components/Input'
@@ -114,22 +114,22 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
   )
 
   // ── Save callbacks ────────────────────────────────────────────────────────
-  const saveTitle = useCallback(async (next: string) => {
+  const saveTitle = async (next: string) => {
     await editor.updateAsset(asset.id, { title: next })
-  }, [editor, asset.id])
-  const saveFilename = useCallback(async (next: string) => {
+  }
+  const saveFilename = async (next: string) => {
     if (!next.trim()) return
     await editor.renameAsset(asset.id, next.trim())
-  }, [editor, asset.id])
-  const saveAltText = useCallback(async (next: string) => {
+  }
+  const saveAltText = async (next: string) => {
     await editor.updateAsset(asset.id, { altText: next })
-  }, [editor, asset.id])
-  const saveCaption = useCallback(async (next: string) => {
+  }
+  const saveCaption = async (next: string) => {
     await editor.updateAsset(asset.id, { caption: next })
-  }, [editor, asset.id])
-  const saveTags = useCallback(async (next: string[]) => {
+  }
+  const saveTags = async (next: string[]) => {
     await editor.updateAsset(asset.id, { tags: next })
-  }, [editor, asset.id])
+  }
 
   const titleField = useDebouncedSave({ value: asset.title, save: saveTitle })
   const filenameField = useDebouncedSave({ value: asset.filename, save: saveFilename })
@@ -142,14 +142,14 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
     delay: 200,
   })
 
-  const copyUrl = useCallback(async () => {
+  const copyUrl = async () => {
     if (!navigator.clipboard?.writeText) return
     try {
       await navigator.clipboard.writeText(asset.publicPath)
     } catch (err) {
       console.error('[MediaViewerWindow] copy URL failed:', err)
     }
-  }, [asset.publicPath])
+  }
 
   const folderNames = asset.folderIds
     .map((id) => editor.folderById.get(id)?.name ?? null)

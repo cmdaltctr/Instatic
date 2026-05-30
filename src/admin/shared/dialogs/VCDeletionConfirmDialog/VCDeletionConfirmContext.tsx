@@ -22,8 +22,6 @@
  */
 
 import {
-  useCallback,
-  useMemo,
   useState,
   type ReactNode,
 } from 'react'
@@ -43,47 +41,41 @@ export function VCDeletionConfirmProvider({ children }: { children: ReactNode })
   const confirmDelete = useConfirmDelete()
   const [pending, setPending] = useState<PendingVCDeletionState | null>(null)
 
-  const confirm = useCallback(
-    (request: ConfirmVCDeletionRequest) => {
-      if (!site) {
-        // No site loaded — commit immediately
-        request.commit()
-        return
-      }
+  const confirm = (request: ConfirmVCDeletionRequest) => {
+    if (!site) {
+      // No site loaded — commit immediately
+      request.commit()
+      return
+    }
 
-      const impact = previewVCDeletion(site, request.vcId)
+    const impact = previewVCDeletion(site, request.vcId)
 
-      if (!impact) {
-        // No usages — fall through to the generic confirm-delete flow which
-        // respects the confirmBeforeDelete editor preference.
-        confirmDelete({
-          title: 'Delete component?',
-          confirmLabel: 'Delete component',
-          commit: request.commit,
-        })
-        return
-      }
+    if (!impact) {
+      // No usages — fall through to the generic confirm-delete flow which
+      // respects the confirmBeforeDelete editor preference.
+      confirmDelete({
+        title: 'Delete component?',
+        confirmLabel: 'Delete component',
+        commit: request.commit,
+      })
+      return
+    }
 
-      // Usages found — show the impact dialog
-      setPending({ request, impact })
-    },
-    [site, confirmDelete],
-  )
+    // Usages found — show the impact dialog
+    setPending({ request, impact })
+  }
 
-  const value = useMemo<VCDeletionConfirmContextValue>(
-    () => ({ confirm }),
-    [confirm],
-  )
+  const value: VCDeletionConfirmContextValue = { confirm }
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = () => {
     setPending(null)
-  }, [])
+  }
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = () => {
     if (!pending) return
     pending.request.commit()
     setPending(null)
-  }, [pending])
+  }
 
   return (
     <VCDeletionConfirmContext.Provider value={value}>

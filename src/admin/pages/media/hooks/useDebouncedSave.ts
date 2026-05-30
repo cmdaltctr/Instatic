@@ -10,7 +10,7 @@
  * to a new asset in the inspector wipes the in-flight edit on the old one
  * rather than carrying it over.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface UseDebouncedSaveOptions<T> {
   /** Current persisted value — drives the reset on external change. */
@@ -66,7 +66,7 @@ export function useDebouncedSave<T>({
   }, [value, dirty])
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const flush = useCallback(async () => {
+  const flush = async () => {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
@@ -76,9 +76,9 @@ export function useDebouncedSave<T>({
     await saveRef.current(snapshot)
     setDirty(false)
     valueRef.current = snapshot
-  }, [dirty])
+  }
 
-  const setLocal = useCallback((next: T) => {
+  const setLocal = (next: T) => {
     setLocalState(next)
     localRef.current = next
     setDirty(true)
@@ -91,7 +91,7 @@ export function useDebouncedSave<T>({
         valueRef.current = snapshot
       })
     }, delay)
-  }, [delay])
+  }
 
   // Flush on unmount so navigating away doesn't drop the pending edit.
   useEffect(() => {

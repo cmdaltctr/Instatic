@@ -21,7 +21,7 @@
  *   6. On cancel: abort the XHR and delete the placeholder from the doc.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { nanoid } from 'nanoid'
 import type { Editor } from '@tiptap/core'
 import { MEDIA_UPLOAD_PLACEHOLDER_NAME, type MediaUploadKind } from '../nodes/MediaUploadPlaceholder'
@@ -90,92 +90,89 @@ export function useEditorMediaDrop(editorRef: { current: Editor | null }): UseEd
   // inside the upload's settle path. The reverse order would trip the
   // react-hooks immutability lint (and require a ref to dodge a TDZ
   // false-positive). Plain top-down declaration is clearer.
-  const finalisePending = useCallback((uploadId: string) => {
+  const finalisePending = (uploadId: string) => {
     const entry = pendingRef.current.get(uploadId)
     if (entry?.previewUrl) URL.revokeObjectURL(entry.previewUrl)
     pendingRef.current.delete(uploadId)
-  }, [])
+  }
 
-  const startUpload = useCallback(
-    (editor: Editor, file: File, insertPos: number | null) => {
-      const kind = mediaKindOf(file)
-      if (!kind) return false
+  const startUpload = (editor: Editor, file: File, insertPos: number | null) => {
+    const kind = mediaKindOf(file)
+    if (!kind) return false
 
-      const uploadId = `upload_${nanoid(8)}`
-      const previewUrl = URL.createObjectURL(file)
-      const controller = new AbortController()
-      pendingRef.current.set(uploadId, { controller, previewUrl })
+    const uploadId = `upload_${nanoid(8)}`
+    const previewUrl = URL.createObjectURL(file)
+    const controller = new AbortController()
+    pendingRef.current.set(uploadId, { controller, previewUrl })
 
-      const attrs = {
-        uploadId,
-        filename: file.name || 'untitled',
-        kind,
-        progress: 0,
-        status: 'uploading',
-        error: null,
-        previewUrl,
-      }
+    const attrs = {
+      uploadId,
+      filename: file.name || 'untitled',
+      kind,
+      progress: 0,
+      status: 'uploading',
+      error: null,
+      previewUrl,
+    }
 
-      // Insert the placeholder at the drop position (or current selection
-      // for paste). We use `chain().insertContentAt(...)` for an explicit
-      // position when we know one; otherwise `insertContent` falls back to
-      // the selection.
-      const chain = editor.chain().focus()
-      if (insertPos !== null) {
-        chain.insertContentAt(insertPos, {
-          type: MEDIA_UPLOAD_PLACEHOLDER_NAME,
-          attrs,
-        })
-      } else {
-        chain.insertContent({
-          type: MEDIA_UPLOAD_PLACEHOLDER_NAME,
-          attrs,
-        })
-      }
-      chain.run()
-
-      void uploadMediaInline({
-        file,
-        signal: controller.signal,
-        onProgress: (progress) => {
-          updatePlaceholder(editor, uploadId, { progress })
-        },
+    // Insert the placeholder at the drop position (or current selection
+    // for paste). We use `chain().insertContentAt(...)` for an explicit
+    // position when we know one; otherwise `insertContent` falls back to
+    // the selection.
+    const chain = editor.chain().focus()
+    if (insertPos !== null) {
+      chain.insertContentAt(insertPos, {
+        type: MEDIA_UPLOAD_PLACEHOLDER_NAME,
+        attrs,
       })
-        .then((asset) => {
-          replacePlaceholderWithMedia(editor, uploadId, {
-            mediaType: kind,
-            src: asset.publicPath,
-            alt: kind === 'image' ? (asset.filename ?? '') : '',
-          })
+    } else {
+      chain.insertContent({
+        type: MEDIA_UPLOAD_PLACEHOLDER_NAME,
+        attrs,
+      })
+    }
+    chain.run()
+
+    void uploadMediaInline({
+      file,
+      signal: controller.signal,
+      onProgress: (progress) => {
+        updatePlaceholder(editor, uploadId, { progress })
+      },
+    })
+      .then((asset) => {
+        replacePlaceholderWithMedia(editor, uploadId, {
+          mediaType: kind,
+          src: asset.publicPath,
+          alt: kind === 'image' ? (asset.filename ?? '') : '',
+        })
+        finalisePending(uploadId)
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // Cancellation already removed the placeholder; nothing else to do.
           finalisePending(uploadId)
-        })
-        .catch((err: unknown) => {
-          if (err instanceof DOMException && err.name === 'AbortError') {
-            // Cancellation already removed the placeholder; nothing else to do.
-            finalisePending(uploadId)
-            return
-          }
-          const message = err instanceof Error ? err.message : 'Upload failed'
-          updatePlaceholder(editor, uploadId, { status: 'failed', error: message, progress: 1 })
-          // Keep the preview URL alive so the failed-state thumbnail still
-          // renders. The user clicks the X to dismiss → that path revokes.
-        })
+          return
+        }
+        const message = err instanceof Error ? err.message : 'Upload failed'
+        updatePlaceholder(editor, uploadId, { status: 'failed', error: message, progress: 1 })
+        // Keep the preview URL alive so the failed-state thumbnail still
+        // renders. The user clicks the X to dismiss → that path revokes.
+      })
 
-      return true
-    },
-    [finalisePending],
-  )
+    return true
+  }
 
-  const onCancel = useCallback((uploadId: string) => {
+  const onCancel = (uploadId: string) => {
     const entry = pendingRef.current.get(uploadId)
     entry?.controller.abort()
     if (entry?.previewUrl) URL.revokeObjectURL(entry.previewUrl)
     pendingRef.current.delete(uploadId)
     const editor = editorRef.current
     if (editor) removePlaceholder(editor, uploadId)
-  }, [editorRef])
+  }
 
-  const editorProps = useMemo(() => ({
+  const editorProps = {
     handlePaste(_view: EditorViewLike, event: ClipboardEvent): boolean {
       const editor = editorRef.current
       if (!editor) return false
@@ -206,7 +203,7 @@ export function useEditorMediaDrop(editorRef: { current: Editor | null }): UseEd
       }
       return consumed
     },
-  }), [editorRef, startUpload])
+  }
 
   return { editorProps, onCancel }
 }

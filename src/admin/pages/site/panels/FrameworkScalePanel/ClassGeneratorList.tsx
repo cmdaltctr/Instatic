@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { ClassGeneratorRow } from './ClassGeneratorRow'
@@ -21,7 +20,7 @@ export function ClassGeneratorList<C extends GeneratorShape>({
   adapter: ScaleAdapter<GroupShape, C>
   classes: C[]
 }) {
-  const localClasses = useMemo(() => classes.filter((c) => c.tabId === groupId), [classes, groupId])
+  const localClasses = classes.filter((c) => c.tabId === groupId)
 
   function patchClasses(next: C[]) {
     // Replace just the rows belonging to this group; preserve other groups'.

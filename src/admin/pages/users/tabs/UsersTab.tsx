@@ -11,7 +11,7 @@
  * has no fresh window. Cancelling the step-up dialog resolves silently
  * (we match on `StepUpCancelledMessage`).
  */
-import { useEffect, useEffectEvent, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useEffectEvent, useState, type FormEvent } from 'react'
 import { consumePendingAction } from '@admin/spotlight/pendingAction'
 import { Button } from '@ui/components/Button'
 import {
@@ -68,13 +68,9 @@ export function UsersTab({ data, canManageUsers }: UsersTabProps) {
   const [dialogMode, setDialogMode] = useState<UserDialogMode | null>(null)
   const [editingUserId, setEditingUserId] = useState<string | null>(null)
 
-  const assignableRoleOptions = useMemo(
-    () =>
-      roles
-        .filter((role) => role.id !== 'owner')
-        .map((role) => ({ value: role.id, label: role.name, textValue: role.name })),
-    [roles],
-  )
+  const assignableRoleOptions = roles
+    .filter((role) => role.id !== 'owner')
+    .map((role) => ({ value: role.id, label: role.name, textValue: role.name }))
 
   function closeDialog() {
     setDialogMode(null)

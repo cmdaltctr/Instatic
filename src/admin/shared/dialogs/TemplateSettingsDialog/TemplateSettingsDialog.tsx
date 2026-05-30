@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import type { Page, PageTemplateConfig } from '@core/page-tree'
 import {
   normalizePageSlug,
@@ -45,7 +45,7 @@ const FALLBACK_COLLECTIONS: DataTable[] = [{
 
 const FORM_ID = 'template-settings-form'
 
-export const TemplateSettingsDialog = memo(function TemplateSettingsDialog({
+export function TemplateSettingsDialog({
   page,
   pages,
   onCancel,
@@ -191,4 +191,4 @@ export const TemplateSettingsDialog = memo(function TemplateSettingsDialog({
       </form>
     </Dialog>
   )
-})
+}

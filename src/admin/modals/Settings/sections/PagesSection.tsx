@@ -1,7 +1,7 @@
 /**
  * PagesSection — manage pages (add / rename / delete / reorder slug).
  */
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useEditorStore, selectActivePage } from '@site/store/store'
 import {
   createUniquePageSlug,
@@ -34,14 +34,14 @@ export function PagesSection() {
     if (confirmDeleteId) confirmBtnRef.current?.focus()
   }, [confirmDeleteId])
 
-  const handleAdd = useCallback(() => {
+  const handleAdd = () => {
     const title = newTitle.trim()
     if (!title || !site) return
     const slug = createUniquePageSlug(title, site.pages)
     addPage(title, slug)
     setNewTitle('')
     setPageError(null)
-  }, [newTitle, site, addPage])
+  }
 
   const handleStartEdit = (id: string, title: string, slug: string) => {
     setEditingId(id)
@@ -50,7 +50,7 @@ export function PagesSection() {
     setPageError(null)
   }
 
-  const handleSaveEdit = useCallback(() => {
+  const handleSaveEdit = () => {
     if (!editingId || !site) return
     const title = editTitle.trim()
     const slug = normalizePageSlug(editSlug)
@@ -62,7 +62,7 @@ export function PagesSection() {
     if (title) renamePage(editingId, title, slug)
     setEditingId(null)
     setPageError(null)
-  }, [editingId, editTitle, editSlug, site, renamePage])
+  }
 
   const handleDeletePage = (id: string) => {
     if (!site) return

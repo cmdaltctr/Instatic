@@ -10,7 +10,7 @@
  *
  * data-testid="settings-modal" for Playwright (Guideline #221)
  */
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { useAdminUi } from '@admin/state/adminUi'
 import { Button } from '@ui/components/Button'
@@ -83,60 +83,54 @@ export function SettingsModal() {
 
   // Close routes through adminUi — the editor store's `isSettingsOpen`
   // gets cleared by the bridge in `settingsSlice.ts`.
-  const handleClose = useCallback(() => {
+  const handleClose = () => {
     closeAdminUi()
-  }, [closeAdminUi])
+  }
 
   // Update section in BOTH stores. adminUi for the modal's own selection,
   // editor's settingsSlice for downstream readers (spotlight commands).
   const openAdminUi = useAdminUi((state) => state.openSettings)
-  const handleSetSection = useCallback(
-    (id: SectionId) => {
-      setSectionStore(id as Parameters<typeof setSectionStore>[0])
-      openAdminUi(id)
-    },
-    [openAdminUi, setSectionStore],
-  )
+  const handleSetSection = (id: SectionId) => {
+    setSectionStore(id as Parameters<typeof setSectionStore>[0])
+    openAdminUi(id)
+  }
 
   // Focus trap + Esc handler
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Escape') {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      handleClose()
+      return
+    }
+
+    if (e.key !== 'Tab') return
+
+    const dialog = dialogRef.current
+    if (!dialog) return
+
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => el.offsetParent !== null)
+
+    if (focusable.length === 0) return
+
+    const first = focusable[0]
+    const last  = focusable[focusable.length - 1]
+
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
         e.preventDefault()
-        handleClose()
-        return
+        last.focus()
       }
-
-      if (e.key !== 'Tab') return
-
-      const dialog = dialogRef.current
-      if (!dialog) return
-
-      const focusable = Array.from(
-        dialog.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter((el) => el.offsetParent !== null)
-
-      if (focusable.length === 0) return
-
-      const first = focusable[0]
-      const last  = focusable[focusable.length - 1]
-
-      if (e.shiftKey) {
-        if (document.activeElement === first) {
-          e.preventDefault()
-          last.focus()
-        }
-      } else {
-        if (document.activeElement === last) {
-          e.preventDefault()
-          first.focus()
-        }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
       }
-    },
-    [handleClose],
-  )
+    }
+  }
 
   if (!open) return null
 

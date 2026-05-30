@@ -17,7 +17,7 @@
  * the active canvas tree and build `slotInstancesByName` (slotName → child IDs)
  * to pass to `instantiateVCAtRef`.
  */
-import React, { useCallback } from 'react'
+import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
 import { useEditorStore } from '@site/store/store'
 import { instantiateVCAtRef } from '@core/visualComponents/instantiate'
@@ -45,27 +45,22 @@ export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualCompo
       : {}
 
   const vc = useEditorStore(
-    useCallback(
-      (s) => s.site?.visualComponents?.find((v) => v.id === componentId) ?? null,
-      [componentId],
-    ),
+    (s) => s.site?.visualComponents?.find((v) => v.id === componentId) ?? null,
   )
 
   // Subscribe to the active canvas tree nodes so we can resolve slot-instance children.
   // In page mode this is the active page's nodes; in VC mode it is the active VC's tree nodes.
-  const canvasNodes = useEditorStore(
-    useCallback((s): Record<string, BaseNode> | null => {
-      if (!s.site) return null
-      const { activeDocument } = s
-      if (activeDocument?.kind === 'visualComponent') {
-        const activeVc = s.site.visualComponents.find((v) => v.id === activeDocument.vcId)
-        return activeVc ? (activeVc.tree.nodes as Record<string, BaseNode>) : null
-      }
-      const pageId = activeDocument?.kind === 'page' ? activeDocument.pageId : s.activePageId
-      const page = s.site.pages.find((p) => p.id === pageId)
-      return page ? (page.nodes as Record<string, BaseNode>) : null
-    }, []),
-  )
+  const canvasNodes = useEditorStore((s): Record<string, BaseNode> | null => {
+    if (!s.site) return null
+    const { activeDocument } = s
+    if (activeDocument?.kind === 'visualComponent') {
+      const activeVc = s.site.visualComponents.find((v) => v.id === activeDocument.vcId)
+      return activeVc ? (activeVc.tree.nodes as Record<string, BaseNode>) : null
+    }
+    const pageId = activeDocument?.kind === 'page' ? activeDocument.pageId : s.activePageId
+    const page = s.site.pages.find((p) => p.id === pageId)
+    return page ? (page.nodes as Record<string, BaseNode>) : null
+  })
 
   // Class registry — VCInlineTree resolves each inlined node's classIds against this.
   // Subscribing to the registry object keeps the rendered VC ref reactive to class

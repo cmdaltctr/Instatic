@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ChangeEvent, type FocusEvent, type KeyboardEvent } from 'react'
+import { useState, type CSSProperties, type ChangeEvent, type FocusEvent, type KeyboardEvent } from 'react'
 import { generateFrameworkColorVariableSets } from '@core/framework/colors'
 import { useEditorStore } from '@site/store/store'
 import { ColorInput } from '@ui/components/ColorInput'
@@ -43,15 +43,9 @@ export function TokenizedColorField({
   const colorSettings = useEditorStore((state) => state.site?.settings.framework?.colors)
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
-  const variables = useMemo(() => {
-    return generateFrameworkColorVariableSets(colorSettings).light
-      .filter((variable) => variable.tokenId !== excludeTokenId)
-  }, [colorSettings, excludeTokenId])
-  const filteredVariables = useMemo(() => {
-    const query = colorTokenSearchQuery(value)
-    if (!query) return variables.slice(0, 32)
-    return variables.filter((variable) => tokenVariableMatches(variable, query)).slice(0, 32)
-  }, [value, variables])
+  const variables = generateFrameworkColorVariableSets(colorSettings).light
+    .filter((variable) => variable.tokenId !== excludeTokenId)
+  const filteredVariables = computeFilteredVariables(value, variables)
   const swatchValue = resolveTokenReferenceValue(value, variables) ?? value
   const menuId = id ? `${id}-token-menu` : undefined
   const showMenu = open && !disabled && filteredVariables.length > 0
@@ -187,6 +181,12 @@ export function TokenizedColorField({
       </div>
     </div>
   )
+}
+
+function computeFilteredVariables(value: string, variables: ColorVariable[]): ColorVariable[] {
+  const query = colorTokenSearchQuery(value)
+  if (!query) return variables.slice(0, 32)
+  return variables.filter((variable) => tokenVariableMatches(variable, query)).slice(0, 32)
 }
 
 function colorTokenSearchQuery(value: string): string {

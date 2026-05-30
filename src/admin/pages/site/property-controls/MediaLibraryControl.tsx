@@ -17,7 +17,7 @@
  * we get the same wide canvas, folder tree, sort, and clear "selected"
  * affordance as the standalone Media page.
  */
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import {
   listCmsMediaAssets,
   type CmsMediaAsset,
@@ -132,14 +132,8 @@ export function MediaLibraryControl({
 
   const modeLabel = mediaKind === 'image' ? 'image' : 'video'
   const validCurrentValue = isValidMediaUrl(currentValue, mediaKind)
-  const currentAsset = useMemo(
-    () => cmsAssets.find((asset) => asset.publicPath === currentValue) ?? null,
-    [cmsAssets, currentValue],
-  )
-  const viewerAsset = useMemo(
-    () => cmsAssets.find((asset) => asset.id === viewerAssetId) ?? null,
-    [cmsAssets, viewerAssetId],
-  )
+  const currentAsset = cmsAssets.find((asset) => asset.publicPath === currentValue) ?? null
+  const viewerAsset = cmsAssets.find((asset) => asset.id === viewerAssetId) ?? null
   // The viewer needs a `MediaAssetEditor` handle that wraps the same
   // mutations the Media page uses. We don't track folders here (the inspector
   // doesn't care which folder an asset lives in), but tag autocomplete still

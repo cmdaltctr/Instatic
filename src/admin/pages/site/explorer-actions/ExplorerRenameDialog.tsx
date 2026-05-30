@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { Page } from '@core/page-tree'
 import {
@@ -32,7 +32,7 @@ function errorMessage(err: unknown) {
   return err instanceof Error ? err.message.replace(/^\[[^\]]+\]\s*/, '') : 'Unable to rename item'
 }
 
-export const ExplorerRenameDialog = memo(function ExplorerRenameDialog({
+export function ExplorerRenameDialog({
   title,
   fieldLabel,
   initialValue,
@@ -159,4 +159,4 @@ export const ExplorerRenameDialog = memo(function ExplorerRenameDialog({
     </div>,
     document.body,
   )
-})
+}

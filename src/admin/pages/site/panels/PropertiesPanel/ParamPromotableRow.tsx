@@ -14,7 +14,7 @@
  * Constraint #269: this file may import from core/ (it lives in editor/).
  */
 
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { selectActiveCanvasPage } from '@site/store/store'
 import { validateParamName } from '@core/visualComponents/nameValidation'
@@ -69,28 +69,19 @@ export function ParamPromotableRow({
   // ── Store: VC params + node propBindings + dynamicBinding ────────────────
 
   const vcParams = useEditorStore(
-    useCallback((s) => s.site?.visualComponents?.find((v) => v.id === vcId)?.params ?? EMPTY_PARAMS, [vcId]),
+    (s) => s.site?.visualComponents?.find((v) => v.id === vcId)?.params ?? EMPTY_PARAMS,
   )
 
   const propBinding = useEditorStore(
-    useCallback(
-      (s) => selectActiveCanvasPage(s)?.nodes[nodeId]?.propBindings?.[propKey] ?? null,
-      [nodeId, propKey],
-    ),
+    (s) => selectActiveCanvasPage(s)?.nodes[nodeId]?.propBindings?.[propKey] ?? null,
   )
 
-  const hasDynamicBinding = useEditorStore(
-    useCallback(
-      (s) => Boolean(selectActiveCanvasPage(s)?.nodes[nodeId]?.dynamicBindings?.[propKey]),
-      [nodeId, propKey],
-    ),
+  const hasDynamicBinding = useEditorStore((s) =>
+    Boolean(selectActiveCanvasPage(s)?.nodes[nodeId]?.dynamicBindings?.[propKey]),
   )
 
   const nodeModuleId = useEditorStore(
-    useCallback(
-      (s) => selectActiveCanvasPage(s)?.nodes[nodeId]?.moduleId ?? '',
-      [nodeId],
-    ),
+    (s) => selectActiveCanvasPage(s)?.nodes[nodeId]?.moduleId ?? '',
   )
 
   // ── Store actions ─────────────────────────────────────────────────────────

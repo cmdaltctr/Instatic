@@ -17,7 +17,7 @@
  * `rate_limited` event in the last 24 h — a low-cost nudge for the user to
  * change their password (when that flow ships in C.4).
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   DataTable,
   DataTableBody,
@@ -106,15 +106,11 @@ export function ActivityTab() {
     }
   }, [])
 
-  const showSuspiciousBanner = useMemo(
-    () => events.some((event) => isRecentSuspicious(event, mountedAt)),
-    [events, mountedAt],
-  )
+  const showSuspiciousBanner = events.some((event) => isRecentSuspicious(event, mountedAt))
 
-  const failedIn24h = useMemo(
-    () => events.filter((event) => isFailure(event.result) && isWithin24h(event, mountedAt)).length,
-    [events, mountedAt],
-  )
+  const failedIn24h = events.filter(
+    (event) => isFailure(event.result) && isWithin24h(event, mountedAt),
+  ).length
 
   return (
     <section className={styles.section} aria-labelledby="account-activity-title">

@@ -108,6 +108,10 @@ export function CanvasPreviewSurface({ page, activeBreakpoint, templateContext }
     ? widthOverride.width
     : naturalWidth
 
+  // Exception #3 (lint escape hatch): these three handlers write/read dragRef.current.
+  // As plain render-scoped functions the react-hooks/refs rule flags them ("passing a
+  // ref to a function may read its value during render"); the useCallback identity is
+  // what marks them as event handlers and keeps `bun run lint` clean.
   const handlePointerDown = useCallback(
     (side: 'left' | 'right') => (event: ReactPointerEvent<HTMLDivElement>) => {
       if (effectiveWidth === null || !activeBreakpoint) return
@@ -148,9 +152,9 @@ export function CanvasPreviewSurface({ page, activeBreakpoint, templateContext }
     enabled: page !== null && activeBreakpoint !== null,
   })
 
-  const stopCanvasInteraction = useCallback((event: SyntheticEvent) => {
+  const stopCanvasInteraction = (event: SyntheticEvent) => {
     event.stopPropagation()
-  }, [])
+  }
 
   return (
     <div

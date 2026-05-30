@@ -33,9 +33,7 @@ import {
   createElement,
   startTransition,
   use,
-  useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -86,7 +84,7 @@ export function Router({ children }: { children: ReactNode }) {
     getServerSnapshot,
   )
 
-  const location = useMemo<Location>(() => {
+  const location: Location = (() => {
     const queryIndex = snapshot.indexOf('?')
     return queryIndex === -1
       ? { pathname: snapshot, search: '' }
@@ -94,9 +92,9 @@ export function Router({ children }: { children: ReactNode }) {
           pathname: snapshot.slice(0, queryIndex),
           search: snapshot.slice(queryIndex),
         }
-  }, [snapshot])
+  })()
 
-  const navigate = useCallback<NavigateFn>((to, options) => {
+  const navigate: NavigateFn = (to, options) => {
     if (!isBrowser()) return
     const replace = options?.replace ?? false
     // Wrap the location-change dispatch in `startTransition` so React 19
@@ -121,12 +119,9 @@ export function Router({ children }: { children: ReactNode }) {
     startTransition(() => {
       window.dispatchEvent(new Event(LOCATION_CHANGE_EVENT))
     })
-  }, [])
+  }
 
-  const value = useMemo<RouterContextValue>(
-    () => ({ location, navigate }),
-    [location, navigate],
-  )
+  const value: RouterContextValue = { location, navigate }
 
   return (
     <RouterContext.Provider value={value}>{children}</RouterContext.Provider>
@@ -147,7 +142,7 @@ export function MemoryRouter({
   const initial = initialEntries[initialEntries.length - 1] ?? '/'
   const [snapshot, setSnapshot] = useState<string>(initial)
 
-  const location = useMemo<Location>(() => {
+  const location: Location = (() => {
     const queryIndex = snapshot.indexOf('?')
     return queryIndex === -1
       ? { pathname: snapshot, search: '' }
@@ -155,20 +150,17 @@ export function MemoryRouter({
           pathname: snapshot.slice(0, queryIndex),
           search: snapshot.slice(queryIndex),
         }
-  }, [snapshot])
+  })()
 
-  const navigate = useCallback<NavigateFn>((to) => {
+  const navigate: NavigateFn = (to) => {
     // Same transition wrapping as <Router>'s navigate. Tests that assert
     // on Suspense fallback behavior get parity with production routing.
     startTransition(() => {
       setSnapshot(to)
     })
-  }, [])
+  }
 
-  const value = useMemo<RouterContextValue>(
-    () => ({ location, navigate }),
-    [location, navigate],
-  )
+  const value: RouterContextValue = { location, navigate }
 
   return (
     <RouterContext.Provider value={value}>{children}</RouterContext.Provider>
@@ -272,21 +264,18 @@ export function Link({ to, replace = false, onClick, children, ...rest }: LinkPr
   // rendering in places that render outside a Router (rare but safe).
   const ctx = use(RouterContext)
   const inRouter = ctx !== null
-  const handleClick = useCallback(
-    (event: MouseEvent<HTMLAnchorElement>) => {
-      onClick?.(event)
-      if (event.defaultPrevented) return
-      // Let the browser handle non-left-clicks, modifier-clicks, target=_blank,
-      // and external URLs — same semantics as react-router-dom's <Link>.
-      if (event.button !== 0) return
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-      if (rest.target && rest.target !== '_self') return
-      if (!inRouter || !ctx) return
-      event.preventDefault()
-      ctx.navigate(to, { replace })
-    },
-    [onClick, inRouter, ctx, to, replace, rest.target],
-  )
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    onClick?.(event)
+    if (event.defaultPrevented) return
+    // Let the browser handle non-left-clicks, modifier-clicks, target=_blank,
+    // and external URLs — same semantics as react-router-dom's <Link>.
+    if (event.button !== 0) return
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    if (rest.target && rest.target !== '_self') return
+    if (!inRouter || !ctx) return
+    event.preventDefault()
+    ctx.navigate(to, { replace })
+  }
 
   return createElement('a', { ...rest, href: to, onClick: handleClick }, children)
 }

@@ -1,5 +1,4 @@
 import {
-  useMemo,
   useState,
   type ChangeEvent,
   type FocusEvent,
@@ -38,16 +37,14 @@ export function CategoryComboBox({
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
 
-  const filteredSuggestions = useMemo(() => {
-    const query = value.trim().toLowerCase()
-    const exclude = excludeCategory?.trim().toLowerCase()
-    return suggestions.filter((candidate) => {
-      const key = candidate.toLowerCase()
-      if (exclude && key === exclude) return false
-      if (!query) return true
-      return key.includes(query)
-    })
-  }, [excludeCategory, suggestions, value])
+  const query = value.trim().toLowerCase()
+  const exclude = excludeCategory?.trim().toLowerCase()
+  const filteredSuggestions = suggestions.filter((candidate) => {
+    const key = candidate.toLowerCase()
+    if (exclude && key === exclude) return false
+    if (!query) return true
+    return key.includes(query)
+  })
 
   // Reset highlight when the filtered set changes via a previous-value comparison
   // so the active index never points past the end of the filtered list.

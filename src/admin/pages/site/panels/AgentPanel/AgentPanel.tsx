@@ -22,7 +22,7 @@
  * @see Constraint #385 — Standalone Editor: ambient Claude Code credentials
  */
 
-import { useRef, useEffect, useCallback, memo, useMemo } from 'react'
+import { useRef, useEffect, memo } from 'react'
 import { useAgentStore } from '@admin/ai/useAgentStore'
 import { renderMarkdownToHtml } from '@site/agent/markdown'
 import type { AgentMessage, AgentToolCall } from '@site/agent/types'
@@ -59,7 +59,7 @@ type PanelVariant = 'floating' | 'docked'
  * (`.floatPanelClosed`) to preserve Zustand conversation state across open/close cycles.
  * Agent routes via Vite proxy `/admin/api/agent` → local Bun server → Claude SDK.
  */
-export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { variant?: PanelVariant }) {
+export function AgentPanel({ variant = 'floating' }: { variant?: PanelVariant }) {
   const isOpen = useAgentStore((s) => s.isAgentOpen)
   const isStreaming = useAgentStore((s) => s.isAgentStreaming)
   const messages = useAgentStore((s) => s.agentMessages)
@@ -112,29 +112,23 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, closeAgent])
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault()
-      const input = inputRef.current
-      if (!input) return
-      const content = input.value.trim()
-      if (!content || isStreaming) return
-      input.value = ''
-      input.style.height = 'auto'
-      await sendAgentMessage(content)
-    },
-    [isStreaming, sendAgentMessage],
-  )
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const input = inputRef.current
+    if (!input) return
+    const content = input.value.trim()
+    if (!content || isStreaming) return
+    input.value = ''
+    input.style.height = 'auto'
+    await sendAgentMessage(content)
+  }
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        handleSubmit(e as unknown as React.FormEvent)
-      }
-    },
-    [handleSubmit],
-  )
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit(e as unknown as React.FormEvent)
+    }
+  }
 
   // Always-mounted: CSS display:none when closed (via .floatPanelClosed) preserves
   // Zustand state across open/close cycles without conditional rendering.
@@ -274,7 +268,7 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
     </div>
     </aside>
   )
-})
+}
 
 // ---------------------------------------------------------------------------
 // MessageBubble
@@ -284,6 +278,8 @@ interface MessageBubbleProps {
   msg: AgentMessage
 }
 
+// Exception #2: React.memo re-render bailout on a hot, list-rendered component
+// (one per message in messages.map).
 const MessageBubble = memo(function MessageBubble({ msg }: MessageBubbleProps) {
   const isUser = msg.role === 'user'
 
@@ -329,11 +325,13 @@ interface MarkdownTextBubbleProps {
   isUser: boolean
 }
 
+// Exception #2: React.memo re-render bailout on a hot, list-rendered component
+// (one per text block, re-rendered on every streaming delta).
 const MarkdownTextBubble = memo(function MarkdownTextBubble({
   text,
   isUser,
 }: MarkdownTextBubbleProps) {
-  const html = useMemo(() => renderMarkdownToHtml(text), [text])
+  const html = renderMarkdownToHtml(text)
   // Empty/whitespace-only blocks don't render at all (avoids stray bubbles
   // around stripped-out tool blocks during streaming).
   if (!html) return null

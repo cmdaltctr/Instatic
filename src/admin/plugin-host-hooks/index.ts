@@ -16,7 +16,7 @@
  * matching permission to call mutating hooks (e.g. `useEditorTransaction`
  * requires `editor.store.write`).
  */
-import { use, useEffect, useMemo, useState } from 'react'
+import { use, useEffect, useState } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { PluginContext } from './pluginContext'
 
@@ -44,8 +44,7 @@ export function usePluginSettings<
   T extends Record<string, string | number | boolean> = Record<string, string | number | boolean>,
 >(): T {
   const ctx = use(PluginContext)
-  // Memoised so plugins can use settings as a hook dep without a churn loop.
-  return useMemo(() => ({ ...ctx.settings } as T), [ctx.settings])
+  return { ...ctx.settings } as T
 }
 
 /**

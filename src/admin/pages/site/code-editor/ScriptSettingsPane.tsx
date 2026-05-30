@@ -1,4 +1,4 @@
-import { useId, useMemo } from 'react'
+import { useId } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { SiteFile } from '@core/files/schemas'
 import {
@@ -32,20 +32,14 @@ export function ScriptSettingsPane({ file }: ScriptSettingsPaneProps) {
   const config = normalizeScriptRuntimeConfig(
     siteRuntime.scripts[file.id] ?? DEFAULT_SCRIPT_RUNTIME_CONFIG,
   )
-  const importAnalysis = useMemo(
-    () => analyzeRuntimeScriptImports([file], packageJson),
-    [file, packageJson],
-  )
+  const importAnalysis = analyzeRuntimeScriptImports([file], packageJson)
   const runtimePackages = [...importAnalysis.usage.values()]
   const diagnostics = importAnalysis.diagnostics
-  const scopeOptions: ScopePageOption[] = useMemo(
-    () => pages.map((page) => ({
-      id: page.id,
-      label: page.title || page.slug || page.id,
-      isTemplate: Boolean(page.template),
-    })),
-    [pages],
-  )
+  const scopeOptions: ScopePageOption[] = pages.map((page) => ({
+    id: page.id,
+    label: page.title || page.slug || page.id,
+    isTemplate: Boolean(page.template),
+  }))
 
   function patch(patchValue: Parameters<typeof patchScriptRuntimeConfig>[1]) {
     patchScriptRuntimeConfig(file.id, patchValue)

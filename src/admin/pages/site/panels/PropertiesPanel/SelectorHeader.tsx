@@ -6,7 +6,7 @@
  * Renaming a class is a style edit — the pencil button is hidden for callers
  * without `site.style.edit`.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
@@ -37,7 +37,7 @@ export function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
     requestAnimationFrame(() => inputRef.current?.select())
   }, [isEditing])
 
-  const commitRename = useCallback((input: HTMLInputElement) => {
+  const commitRename = (input: HTMLInputElement) => {
     const rawName = input.value.trim()
     const nextName = (rawName.startsWith('.') ? rawName.slice(1) : rawName).trim()
     if (nextName && nextName !== cls.name) {
@@ -50,12 +50,12 @@ export function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
       input.value = selectorLabel
     }
     setIsEditing(false)
-  }, [cls.name, onRename, selectorLabel])
+  }
 
-  const cancelRename = useCallback((input: HTMLInputElement) => {
+  const cancelRename = (input: HTMLInputElement) => {
     input.value = selectorLabel
     setIsEditing(false)
-  }, [selectorLabel])
+  }
 
   if (isEditing) {
     return (

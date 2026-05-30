@@ -20,8 +20,6 @@
  */
 
 import {
-  useCallback,
-  useMemo,
   useState,
   type ReactNode,
 } from 'react'
@@ -38,32 +36,26 @@ export function FrameworkChangeConfirmProvider({ children }: { children: ReactNo
   const previewFrameworkChange = useEditorStore((s) => s.previewFrameworkChange)
   const [pending, setPending] = useState<PendingDialogState | null>(null)
 
-  const confirm = useCallback(
-    (request: ConfirmFrameworkChangeRequest) => {
-      const impact = previewFrameworkChange(request.applyChange)
-      if (!impact) {
-        request.commit()
-        return
-      }
-      setPending({ request, impact })
-    },
-    [previewFrameworkChange],
-  )
+  const confirm = (request: ConfirmFrameworkChangeRequest) => {
+    const impact = previewFrameworkChange(request.applyChange)
+    if (!impact) {
+      request.commit()
+      return
+    }
+    setPending({ request, impact })
+  }
 
-  const value = useMemo<FrameworkChangeConfirmContextValue>(
-    () => ({ confirm }),
-    [confirm],
-  )
+  const value: FrameworkChangeConfirmContextValue = { confirm }
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = () => {
     setPending(null)
-  }, [])
+  }
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = () => {
     if (!pending) return
     pending.request.commit()
     setPending(null)
-  }, [pending])
+  }
 
   return (
     <FrameworkChangeConfirmContext.Provider value={value}>

@@ -66,6 +66,7 @@ export function useCanvasReorderDrag({
   const removeWindowListenersRef = useRef<(() => void) | null>(null)
   const [dragState, setDragState] = useState<CanvasReorderDragState>(EMPTY_DRAG_STATE)
 
+  // Exception #1: closure of `resetDrag`, which feeds the `useEffect` dep array.
   const stopAutoPan = useCallback(() => {
     if (autoPanFrameRef.current !== null) {
       cancelAnimationFrame(autoPanFrameRef.current)
@@ -73,10 +74,12 @@ export function useCanvasReorderDrag({
     }
   }, [])
 
+  // Exception #1: closure of `runAutoPan`, which feeds the `useEffect` dep array.
   const queueAutoPanFrame = useCallback(() => {
     autoPanFrameRef.current = requestAnimationFrame(() => runAutoPanRef.current())
   }, [])
 
+  // Exception #1: closure of `resolveAtClientPoint` -> `runAutoPan`, which feeds the `useEffect` dep array.
   const setResolution = useCallback((resolution: CanvasDropResolution) => {
     latestResolutionRef.current = resolution
     setDragState({
@@ -86,6 +89,7 @@ export function useCanvasReorderDrag({
     })
   }, [])
 
+  // Exception #1: closure of `runAutoPan`, which feeds the `useEffect` dep array.
   const resolveAtClientPoint = useCallback((clientX: number, clientY: number) => {
     const session = sessionRef.current
     const viewport = viewportRef.current
@@ -106,6 +110,7 @@ export function useCanvasReorderDrag({
     }))
   }, [setResolution, viewportRef])
 
+  // Exception #1: referenced in the `useEffect` dep array below (syncs `runAutoPanRef`).
   const runAutoPan = useCallback(() => {
     autoPanFrameRef.current = null
     const root = canvasRootRef?.current
@@ -151,6 +156,7 @@ export function useCanvasReorderDrag({
     }
   }
 
+  // Exception #1: referenced in the `useEffect(() => resetDrag, [resetDrag])` dep array below.
   const resetDrag = useCallback(() => {
     stopAutoPan()
     sessionRef.current = null

@@ -16,7 +16,7 @@
  * uniformly. See `src/__tests__/architecture/component-system-placement.test.ts`.
  */
 
-import { useCallback, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { resolveInsertLocation } from '@site/store/insertLocation'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
@@ -44,39 +44,33 @@ export function ModulePickerDropdown({
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
   const insertModule = useInsertModule()
 
-  const handleOpen = useCallback(() => setOpen(true), [])
-  const handleClose = useCallback(() => {
+  const handleOpen = () => setOpen(true)
+  const handleClose = () => {
     setOpen(false)
     triggerRef.current?.focus()
-  }, [])
+  }
 
-  const handleInsertModule = useCallback(
-    (mod: AnyModuleDefinition) => {
-      if (insertModule(mod)) handleClose()
-    },
-    [insertModule, handleClose],
-  )
+  const handleInsertModule = (mod: AnyModuleDefinition) => {
+    if (insertModule(mod)) handleClose()
+  }
 
-  const handleInsertVC = useCallback(
-    (vcId: string) => {
-      if (!canvasPage) {
-        handleClose()
-        return
-      }
-      // Same target → location resolution as every other insert flow: explicit
-      // selection acts as the target, no selection drops at root, leaf targets
-      // become a sibling-after under their parent (see resolveInsertLocation).
-      const targetId = selectedNodeId ?? canvasPage.rootNodeId
-      const location = resolveInsertLocation(canvasPage, targetId)
-      if (!location) {
-        handleClose()
-        return
-      }
-      insertComponentRef(location.parentId, vcId, location.index)
+  const handleInsertVC = (vcId: string) => {
+    if (!canvasPage) {
       handleClose()
-    },
-    [canvasPage, selectedNodeId, insertComponentRef, handleClose],
-  )
+      return
+    }
+    // Same target → location resolution as every other insert flow: explicit
+    // selection acts as the target, no selection drops at root, leaf targets
+    // become a sibling-after under their parent (see resolveInsertLocation).
+    const targetId = selectedNodeId ?? canvasPage.rootNodeId
+    const location = resolveInsertLocation(canvasPage, targetId)
+    if (!location) {
+      handleClose()
+      return
+    }
+    insertComponentRef(location.parentId, vcId, location.index)
+    handleClose()
+  }
 
   return (
     <>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from '@admin/lib/routing'
 import type { CmsPluginsPayload, PluginAdminPageRoute } from '@core/plugin-sdk'
 import { listCmsPlugins } from '@core/persistence'
@@ -46,11 +46,9 @@ export function PluginPage() {
     return () => { cancelled = true }
   }, [])
 
-  const page = useMemo<PluginAdminPageRoute | null>(() => {
-    return payload.adminPages.find((candidate) =>
-      candidate.pluginId === pluginId && candidate.id === pageId
-    ) ?? null
-  }, [pageId, payload.adminPages, pluginId])
+  const page: PluginAdminPageRoute | null = payload.adminPages.find((candidate) =>
+    candidate.pluginId === pluginId && candidate.id === pageId
+  ) ?? null
 
   if (loading) {
     return (

@@ -15,9 +15,7 @@
 
 import {
   Fragment,
-  useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -77,64 +75,57 @@ export function ModulePicker({
   // ─── Module list + search filter ─────────────────────────────────────────
   const isVCMode = activeDocument?.kind === 'visualComponent'
 
-  const moduleGroups = useMemo<AnyModuleDefinition[][]>(() => {
-    const groups: AnyModuleDefinition[][] = []
-    for (const mods of Object.values(registry.listByCategory())) {
-      const visible = mods.filter((m) => {
-        if (m.id === 'base.body') return false
-        if (m.id === 'base.visual-component-ref') return false
-        // `base.slot-instance` is auto-materialized as a VC ref's child on the
-        // page tree by `syncSlotInstances`. It is NEVER user-insertable from
-        // the picker — surfacing it here causes a duplicate "Slot" entry next
-        // to `base.slot-outlet` in VC mode (both modules are named "Slot")
-        // and lets users insert orphan slot-instance nodes that the lock-down
-        // then refuses to delete.
-        if (m.id === 'base.slot-instance') return false
-        // `base.slot-outlet` is the VC author's marker that says "consumer
-        // content goes here". Only meaningful inside a VC definition — hide
-        // it from page mode where it has no consumer.
-        if (m.id === 'base.slot-outlet') return isVCMode
-        return true
-      })
-      if (visible.length > 0) groups.push(visible)
-    }
-    return groups
-  }, [isVCMode])
+  const moduleGroups: AnyModuleDefinition[][] = []
+  for (const mods of Object.values(registry.listByCategory())) {
+    const visible = mods.filter((m) => {
+      if (m.id === 'base.body') return false
+      if (m.id === 'base.visual-component-ref') return false
+      // `base.slot-instance` is auto-materialized as a VC ref's child on the
+      // page tree by `syncSlotInstances`. It is NEVER user-insertable from
+      // the picker — surfacing it here causes a duplicate "Slot" entry next
+      // to `base.slot-outlet` in VC mode (both modules are named "Slot")
+      // and lets users insert orphan slot-instance nodes that the lock-down
+      // then refuses to delete.
+      if (m.id === 'base.slot-instance') return false
+      // `base.slot-outlet` is the VC author's marker that says "consumer
+      // content goes here". Only meaningful inside a VC definition — hide
+      // it from page mode where it has no consumer.
+      if (m.id === 'base.slot-outlet') return isVCMode
+      return true
+    })
+    if (visible.length > 0) moduleGroups.push(visible)
+  }
 
-  const filteredModuleGroups = useMemo<AnyModuleDefinition[][]>(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return moduleGroups
-    return moduleGroups
-      .map((g) =>
-        g.filter(
-          (m) =>
-            m.name.toLowerCase().includes(q) ||
-            m.id.toLowerCase().includes(q),
-        ),
+  const trimmedQuery = query.trim().toLowerCase()
+  const filteredModuleGroups: AnyModuleDefinition[][] = !trimmedQuery
+    ? moduleGroups
+    : moduleGroups
+        .map((g) =>
+          g.filter(
+            (m) =>
+              m.name.toLowerCase().includes(trimmedQuery) ||
+              m.id.toLowerCase().includes(trimmedQuery),
+          ),
+        )
+        .filter((g) => g.length > 0)
+
+  const filteredVcs = !trimmedQuery
+    ? visualComponents
+    : visualComponents.filter((vc) =>
+        vc.name.toLowerCase().includes(trimmedQuery),
       )
-      .filter((g) => g.length > 0)
-  }, [moduleGroups, query])
-
-  const filteredVcs = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return visualComponents
-    return visualComponents.filter((vc) => vc.name.toLowerCase().includes(q))
-  }, [visualComponents, query])
 
   const isEmpty =
     filteredModuleGroups.length === 0 && filteredVcs.length === 0
 
   // ─── Keyboard navigation: ArrowDown from search jumps to first row ───────
-  const handleSearchKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key !== 'ArrowDown') return
-      e.preventDefault()
-      const first =
-        containerRef?.current?.querySelector<HTMLElement>('[role="menuitem"]')
-      first?.focus()
-    },
-    [containerRef],
-  )
+  const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'ArrowDown') return
+    e.preventDefault()
+    const first =
+      containerRef?.current?.querySelector<HTMLElement>('[role="menuitem"]')
+    first?.focus()
+  }
 
   // Render groups separated by ContextMenuSeparator. VCs get their own group
   // at the end so they're visually distinguishable from base modules.

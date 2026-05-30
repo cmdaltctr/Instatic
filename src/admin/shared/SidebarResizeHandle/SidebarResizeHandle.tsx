@@ -50,6 +50,7 @@ export function SidebarResizeHandle({
   const widthRef = useRef(clampSidebarWidth(width))
   const dragRef = useRef<ResizeDragState | null>(null)
 
+  // Exception #1: referenced in the useEffect dependency array below; exhaustive-deps needs a stable identity.
   const applyLiveWidth = useCallback((nextWidth: number) => {
     const clampedWidth = clampSidebarWidth(nextWidth)
     widthRef.current = clampedWidth
@@ -61,7 +62,7 @@ export function SidebarResizeHandle({
     applyLiveWidth(width)
   }, [applyLiveWidth, width])
 
-  const handlePointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     const startWidth = clampSidebarWidth(widthRef.current)
     dragRef.current = {
       startClientX: event.clientX,
@@ -69,30 +70,30 @@ export function SidebarResizeHandle({
     }
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
-  }, [])
+  }
 
-  const handlePointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return
     applyLiveWidth(widthFromPointer(side, dragRef.current, event.clientX))
-  }, [applyLiveWidth, side])
+  }
 
-  const commitPointerResize = useCallback((clientX: number) => {
+  const commitPointerResize = (clientX: number) => {
     if (!dragRef.current) return
     const nextWidth = widthFromPointer(side, dragRef.current, clientX)
     dragRef.current = null
     applyLiveWidth(nextWidth)
     onResize(nextWidth)
-  }, [applyLiveWidth, onResize, side])
+  }
 
-  const handlePointerUp = useCallback((event: PointerEvent<HTMLDivElement>) => {
+  const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
     commitPointerResize(event.clientX)
-  }, [commitPointerResize])
+  }
 
-  const handlePointerCancel = useCallback((event: PointerEvent<HTMLDivElement>) => {
+  const handlePointerCancel = (event: PointerEvent<HTMLDivElement>) => {
     commitPointerResize(event.clientX)
-  }, [commitPointerResize])
+  }
 
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     let nextWidth: number | null = null
 
     if (event.key === 'Home') {
@@ -108,7 +109,7 @@ export function SidebarResizeHandle({
     event.preventDefault()
     applyLiveWidth(nextWidth)
     onResize(nextWidth)
-  }, [applyLiveWidth, onResize, side])
+  }
 
   return (
     <div

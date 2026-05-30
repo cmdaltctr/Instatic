@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { DataRow, DataRowCells } from '@core/data/schemas'
 
 const DEBOUNCE_MS = 700
@@ -71,7 +71,7 @@ export function useDataRowDraft(
     return () => clearTimer()
   }, [])
 
-  const performSave = useCallback(async (rowId: string, snapshot: DataRowCells) => {
+  async function performSave(rowId: string, snapshot: DataRowCells) {
     setIsSaving(true)
     setSaveError(null)
     try {
@@ -83,15 +83,15 @@ export function useDataRowDraft(
     } finally {
       setIsSaving(false)
     }
-  }, [onSave])
+  }
 
-  const scheduleDebounced = useCallback((rowId: string) => {
+  function scheduleDebounced(rowId: string) {
     clearTimer()
     timerRef.current = setTimeout(() => {
       timerRef.current = null
       void performSave(rowId, cellsRef.current)
     }, DEBOUNCE_MS)
-  }, [performSave])
+  }
 
   // Plain functions — React Compiler (when enabled) memoizes automatically.
   function setCell(fieldId: string, value: unknown) {

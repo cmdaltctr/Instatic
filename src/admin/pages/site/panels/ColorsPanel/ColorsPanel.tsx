@@ -1,4 +1,4 @@
-import { useMemo, useState, type MouseEvent } from 'react'
+import { useState, type MouseEvent } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { FrameworkColorToken } from '@core/framework/schemas'
 import type { UpdateFrameworkColorTokenPatch } from '@site/store/slices/site/types'
@@ -56,10 +56,7 @@ export function ColorsPanel() {
   )
 
   const colors = site?.settings.framework?.colors ?? EMPTY_COLORS
-  const categories = useMemo(
-    () => deriveCategoryLabels(colors.tokens),
-    [colors.tokens],
-  )
+  const categories = deriveCategoryLabels(colors.tokens)
 
   // Derive the effective filter without mutating state during render — avoids
   // the double-render that a guard + setState would cause. When the active
@@ -70,21 +67,18 @@ export function ColorsPanel() {
       ? activeCategory
       : null
 
-  const filteredTokens = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    return colors.tokens
-      .filter(
-        (token) =>
-          effectiveActiveCategory === null ||
-          token.category === effectiveActiveCategory,
-      )
-      .filter(
-        (token) =>
-          !normalizedQuery ||
-          token.slug.toLowerCase().includes(normalizedQuery),
-      )
-      .sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug))
-  }, [effectiveActiveCategory, colors.tokens, query])
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredTokens = colors.tokens
+    .filter(
+      (token) =>
+        effectiveActiveCategory === null ||
+        token.category === effectiveActiveCategory,
+    )
+    .filter(
+      (token) =>
+        !normalizedQuery || token.slug.toLowerCase().includes(normalizedQuery),
+    )
+    .sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug))
 
   const contextToken = contextMenu
     ? (colors.tokens.find((token) => token.id === contextMenu.tokenId) ?? null)

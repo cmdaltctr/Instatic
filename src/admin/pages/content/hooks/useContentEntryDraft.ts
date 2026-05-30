@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useLayoutEffect, useState } from 'react'
 import {
   publishCmsDataRow,
   saveCmsDataRowDraft,
@@ -45,6 +45,8 @@ export function useContentEntryDraft({
   const [body, setBody] = useState('')
   const [saveMessage, setSaveMessage] = useState<SaveMessage>('idle')
 
+  // Exception #1: referenced in the useLayoutEffect dep array below, so it
+  // needs a stable identity that react-hooks/exhaustive-deps can see.
   const applySelectedEntry = useCallback((entry: DataRow | null) => {
     setTitle(entry ? readTitleCell(entry.cells) : '')
     setSlug(entry ? readSlugCell(entry.cells) : '')
@@ -61,15 +63,15 @@ export function useContentEntryDraft({
   }, [applySelectedEntry, selectedEntry?.id])
   /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
-  const applyEntryFields = useCallback((entry: DataRow) => {
+  const applyEntryFields = (entry: DataRow) => {
     setTitle(readTitleCell(entry.cells))
     setSlug(readSlugCell(entry.cells))
     setSeoTitle(readSeoTitleCell(entry.cells))
     setSeoDescription(readSeoDescriptionCell(entry.cells))
     setFeaturedMediaId(readFeaturedMediaCell(entry.cells))
-  }, [])
+  }
 
-  const isDirty = useMemo(() => {
+  const isDirty = (() => {
     if (!selectedEntry) return false
     return title !== readTitleCell(selectedEntry.cells) ||
       slug !== readSlugCell(selectedEntry.cells) ||
@@ -77,9 +79,9 @@ export function useContentEntryDraft({
       seoDescription !== readSeoDescriptionCell(selectedEntry.cells) ||
       featuredMediaId !== readFeaturedMediaCell(selectedEntry.cells) ||
       body !== readBodyCell(selectedEntry.cells)
-  }, [body, featuredMediaId, selectedEntry, seoDescription, seoTitle, slug, title])
+  })()
 
-  const saveDraft = useCallback(async (): Promise<DataRow | null> => {
+  const saveDraft = async (): Promise<DataRow | null> => {
     if (!selectedEntry) return null
     const nextTitle = title.trim() || 'Untitled'
     const nextSlug = slugFromTitle(slug || nextTitle)
@@ -97,19 +99,9 @@ export function useContentEntryDraft({
     updateSelectedEntry(row)
     applyEntryFields(row)
     return row
-  }, [
-    applyEntryFields,
-    body,
-    featuredMediaId,
-    selectedEntry,
-    seoDescription,
-    seoTitle,
-    slug,
-    title,
-    updateSelectedEntry,
-  ])
+  }
 
-  const handleSaveDraft = useCallback(async () => {
+  const handleSaveDraft = async () => {
     setSaveMessage('saving')
     setError(null)
     try {
@@ -119,9 +111,9 @@ export function useContentEntryDraft({
       setSaveMessage('error')
       setError(err instanceof Error ? err.message : 'Could not save draft')
     }
-  }, [saveDraft, setError])
+  }
 
-  const handlePublish = useCallback(async () => {
+  const handlePublish = async () => {
     if (!selectedEntry) return
     setSaveMessage('publishing')
     setError(null)
@@ -141,9 +133,9 @@ export function useContentEntryDraft({
       setSaveMessage('error')
       setError(err instanceof Error ? err.message : 'Could not publish entry')
     }
-  }, [saveDraft, selectedEntry, setError, updateSelectedEntry])
+  }
 
-  const handleStatusChange = useCallback(async (nextStatus: DataRowStatus) => {
+  const handleStatusChange = async (nextStatus: DataRowStatus) => {
     if (!selectedEntry || nextStatus === selectedEntry.status) return
 
     if (nextStatus === 'published') {
@@ -172,7 +164,7 @@ export function useContentEntryDraft({
       setSaveMessage('error')
       setError(err instanceof Error ? err.message : 'Could not update entry status')
     }
-  }, [applyEntryFields, handlePublish, saveDraft, selectedEntry, setError, updateSelectedEntry])
+  }
 
   return {
     title,

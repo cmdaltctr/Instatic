@@ -12,7 +12,6 @@
  * 500+ line canvas component.
  */
 
-import { useCallback } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { ActiveDocument } from '@site/store/slices/uiSlice'
 import { getKeybindingForCommand } from '@admin/spotlight/keybindings'
@@ -121,7 +120,7 @@ function runClipboardShortcut(
   return false
 }
 
-/** Returns the canvas keydown handler. Stable across renders thanks to useCallback. */
+/** Returns the canvas keydown handler. */
 export function useCanvasKeyboardShortcuts(
   deps: CanvasKeyboardShortcutsDeps,
 ): (event: CanvasKeyEvent) => void {
@@ -143,70 +142,51 @@ export function useCanvasKeyboardShortcuts(
     pasteNode,
   } = deps
 
-  return useCallback(
-    (event: CanvasKeyEvent) => {
-      // Zoom / pan keys always run, regardless of selection state.
-      canvasKeyDown(event)
+  return (event: CanvasKeyEvent) => {
+    // Zoom / pan keys always run, regardless of selection state.
+    canvasKeyDown(event)
 
-      // Escape exits VC mode regardless of selection (SF-1 / CR #666). This
-      // must run before the selectedNodeId guard so pressing Escape while in
-      // VC mode with nothing selected still returns to the page canvas.
-      if (event.key === 'Escape') {
-        clearSelection()
-        if (activeDocument?.kind === 'visualComponent') {
-          setActiveDocument(null)
-        }
-        return
+    // Escape exits VC mode regardless of selection (SF-1 / CR #666). This
+    // must run before the selectedNodeId guard so pressing Escape while in
+    // VC mode with nothing selected still returns to the page canvas.
+    if (event.key === 'Escape') {
+      clearSelection()
+      if (activeDocument?.kind === 'visualComponent') {
+        setActiveDocument(null)
       }
+      return
+    }
 
-      if (!editable) return
-      if (!selectedNodeId) return
+    if (!editable) return
+    if (!selectedNodeId) return
 
-      // Read the live selection set inside the handler so multi-actions see
-      // the latest state without subscribing the component to selectedNodeIds.
-      const currentIds = useEditorStore.getState().selectedNodeIds
+    // Read the live selection set inside the handler so multi-actions see
+    // the latest state without subscribing the component to selectedNodeIds.
+    const currentIds = useEditorStore.getState().selectedNodeIds
 
-      if (getKeybindingForCommand('layers.delete')?.match(event)) {
-        runDeleteShortcut(event, selectedNodeId, currentIds, {
-          requestDeleteNode,
-          deleteNodes,
-          clearSelection,
-        })
-        return
-      }
-
-      if (getKeybindingForCommand('layers.duplicate')?.match(event)) {
-        runDuplicateShortcut(event, selectedNodeId, currentIds, {
-          duplicateNode,
-          duplicateNodes,
-        })
-        return
-      }
-
-      runClipboardShortcut(event, selectedNodeId, currentIds, {
-        copyNode,
-        copyNodes,
-        cutNode,
-        cutNodes,
-        pasteNode,
+    if (getKeybindingForCommand('layers.delete')?.match(event)) {
+      runDeleteShortcut(event, selectedNodeId, currentIds, {
+        requestDeleteNode,
+        deleteNodes,
+        clearSelection,
       })
-    },
-    [
-      canvasKeyDown,
-      selectedNodeId,
-      editable,
-      activeDocument,
-      setActiveDocument,
-      clearSelection,
-      requestDeleteNode,
-      deleteNodes,
-      duplicateNode,
-      duplicateNodes,
+      return
+    }
+
+    if (getKeybindingForCommand('layers.duplicate')?.match(event)) {
+      runDuplicateShortcut(event, selectedNodeId, currentIds, {
+        duplicateNode,
+        duplicateNodes,
+      })
+      return
+    }
+
+    runClipboardShortcut(event, selectedNodeId, currentIds, {
       copyNode,
       copyNodes,
       cutNode,
       cutNodes,
       pasteNode,
-    ],
-  )
+    })
+  }
 }

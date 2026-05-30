@@ -13,7 +13,7 @@
  *   - `ai.audit.read`        → Audit tab (read site-wide usage)
  */
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { AdminPageLayout } from '@admin/layouts/AdminPageLayout'
 import { hasCapability } from '@admin/access'
@@ -37,12 +37,9 @@ export function AiPage() {
   const canManage = unrestricted || hasCapability(currentUser, 'ai.providers.manage')
   const canReadAudit = unrestricted || hasCapability(currentUser, 'ai.audit.read')
 
-  const availableTabs = useMemo<Tab[]>(() => {
-    const tabs: Tab[] = []
-    if (canManage) tabs.push('providers', 'defaults')
-    if (canReadAudit) tabs.push('audit')
-    return tabs
-  }, [canManage, canReadAudit])
+  const availableTabs: Tab[] = []
+  if (canManage) availableTabs.push('providers', 'defaults')
+  if (canReadAudit) availableTabs.push('audit')
 
   const [tab, setTab] = useState<Tab>('providers')
   const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0] ?? 'providers'

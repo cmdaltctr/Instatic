@@ -20,7 +20,7 @@
  *     <div {...headerDragProps} className={styles.header}>…</div>
  *   </div>
  */
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   readStoredPanelPosition,
   writeStoredPanelPosition,
@@ -117,7 +117,7 @@ export function useDraggablePanel(
 
   // ── Drag handlers ──────────────────────────────────────────────────────────
 
-  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Skip drag when clicking interactive elements inside the header
     if ((e.target as HTMLElement).closest('button, input, select, textarea, a')) return
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -127,9 +127,9 @@ export function useDraggablePanel(
       startPanelX: positionRef.current.x,
       startPanelY: positionRef.current.y,
     }
-  }, [])
+  }
 
-  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!dragRef.current) return
     const dx = e.clientX - dragRef.current.startClientX
     const dy = e.clientY - dragRef.current.startClientY
@@ -144,9 +144,9 @@ export function useDraggablePanel(
       panel.style.setProperty('--panel-x', `${clamped.x}px`)
       panel.style.setProperty('--panel-y', `${clamped.y}px`)
     }
-  }, [])
+  }
 
-  const commitDragEnd = useCallback((clientX: number, clientY: number) => {
+  function commitDragEnd(clientX: number, clientY: number) {
     if (!dragRef.current) return
     const dx = clientX - dragRef.current.startClientX
     const dy = clientY - dragRef.current.startClientY
@@ -157,15 +157,15 @@ export function useDraggablePanel(
     dragRef.current = null
     // Single setState on drag end — triggers React re-render + localStorage persist effect.
     setPosition(clamped)
-  }, [])
+  }
 
-  const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     commitDragEnd(e.clientX, e.clientY)
-  }, [commitDragEnd])
+  }
 
-  const onPointerCancel = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  function onPointerCancel(e: React.PointerEvent<HTMLDivElement>) {
     commitDragEnd(e.clientX, e.clientY)
-  }, [commitDragEnd])
+  }
 
   // ── Panel position style (CSS-var injection — only permitted inline style form) ──
   const panelPositionStyle: React.CSSProperties = {

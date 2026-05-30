@@ -11,7 +11,6 @@
  * when the related row no longer exists. That's why this tab consumes
  * `users` and `roles` even though it doesn't mutate them.
  */
-import { useMemo } from 'react'
 import {
   DataTable,
   DataTableBody,
@@ -29,8 +28,8 @@ import styles from '../UsersPage.module.css'
 
 export function AuditTab({ data }: { data: UsersPageData }) {
   const { users, roles, events } = data
-  const usersById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users])
-  const rolesById = useMemo(() => new Map(roles.map((role) => [role.id, role])), [roles])
+  const usersById = new Map(users.map((user) => [user.id, user]))
+  const rolesById = new Map(roles.map((role) => [role.id, role]))
 
   return (
     <section className={styles.section} aria-labelledby="audit-events-title">

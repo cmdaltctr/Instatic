@@ -15,14 +15,7 @@
  * to mount it when `open` is true and pass an `onInstalled(entry)` callback.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Dialog } from '@ui/components/Dialog'
@@ -187,15 +180,15 @@ export function AddGoogleFontDialog({
    * This keeps the network state in sync with the real selection without
    * calling setState inside the network effect's synchronous body.
    */
-  const displayedEstimate: EstimateState = useMemo(() => {
+  const displayedEstimate: EstimateState = (() => {
     if (!selected) return { status: 'idle' }
     if (pickedVariants.length === 0 || pickedSubsets.length === 0) {
       return { status: 'ready', totalBytes: 0, fileCount: 0 }
     }
     return networkEstimate
-  }, [selected, pickedVariants, pickedSubsets, networkEstimate])
+  })()
 
-  const filtered = useMemo(() => {
+  const filtered = (() => {
     if (!families) return []
     const q = query.trim().toLowerCase()
     return families.filter((f) => {
@@ -203,7 +196,7 @@ export function AddGoogleFontDialog({
       if (q && !f.family.toLowerCase().includes(q)) return false
       return true
     })
-  }, [families, query, category])
+  })()
 
   // Lazily load preview CSS for the first N visible families. Loading every
   // family at once would inject ~1500 link tags — IntersectionObserver is the
@@ -377,7 +370,7 @@ function FamilyPickerStep({
   onLoadMorePreviews,
 }: FamilyPickerStepProps) {
   const listRef = useRef<HTMLDivElement>(null)
-  const handleScroll = useCallback(() => {
+  function handleScroll() {
     const el = listRef.current
     if (!el) return
     // Trigger another preview batch when the user nears the bottom — same
@@ -385,7 +378,7 @@ function FamilyPickerStep({
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
       onLoadMorePreviews()
     }
-  }, [onLoadMorePreviews])
+  }
 
   return (
     <>
@@ -475,23 +468,20 @@ function VariantsAndSubsetsStep({
   onPickedVariantsChange,
   onPickedSubsetsChange,
 }: VariantsAndSubsetsStepProps) {
-  const sortedVariants = useMemo(
-    () => [...family.variants].sort(compareVariants),
-    [family.variants],
-  )
-  const sortedSubsets = useMemo(() => [...family.subsets].sort(), [family.subsets])
-  const variantsSet = useMemo(() => new Set(pickedVariants), [pickedVariants])
-  const subsetsSet = useMemo(() => new Set(pickedSubsets), [pickedSubsets])
+  const sortedVariants = [...family.variants].sort(compareVariants)
+  const sortedSubsets = [...family.subsets].sort()
+  const variantsSet = new Set(pickedVariants)
+  const subsetsSet = new Set(pickedSubsets)
 
   // Pick the heaviest selected weight as the hero preview's font-weight so the
   // user immediately sees what their highest-weight choice looks like. Defaults
   // to 400 if nothing's selected.
-  const heroWeight = useMemo(() => {
+  const heroWeight = (() => {
     const weights = pickedVariants
       .map((v) => parseVariant(v)?.weight)
       .filter((w): w is number => typeof w === 'number')
     return weights.length > 0 ? Math.max(...weights) : 400
-  }, [pickedVariants])
+  })()
 
   function toggleVariant(variant: string) {
     if (variantsSet.has(variant)) {

@@ -20,7 +20,7 @@
  * DataMeta is fetched once and cached module-level in `./cache.ts`.
  */
 
-import { useEffect, useMemo, useState, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { PropertyControl } from '@core/module-engine/types'
 import type { DynamicPropBinding } from '@core/page-tree'
@@ -175,24 +175,15 @@ export function BindingPickerPopover({
   const activePageForFrame = useEditorStore(selectActivePage)
   const activeSite = useEditorStore((s) => s.site)
 
-  const pageFrame = useMemo(
-    () => (activePageForFrame ? buildPageFrame(activePageForFrame) : null),
-    [activePageForFrame],
-  )
-  const siteFrame = useMemo(
-    () => (activeSite ? buildSiteFrame(activeSite) : null),
-    [activeSite],
-  )
-  const routeFrame = useMemo(
-    () => (pageFrame ? buildRouteFrame(pageFrame.permalink) : null),
-    [pageFrame],
-  )
+  const pageFrame = activePageForFrame ? buildPageFrame(activePageForFrame) : null
+  const siteFrame = activeSite ? buildSiteFrame(activeSite) : null
+  const routeFrame = pageFrame ? buildRouteFrame(pageFrame.permalink) : null
 
   // Auto-scope precedence:
   //   1. `loopTableId` (Loop bound to a specific data table) — most specific.
   //   2. `activePageTableSlug` (template page) — currentEntry resolves
   //      against this table.
-  const scopedTable: DataMetaTable | null = useMemo(() => {
+  const scopedTable: DataMetaTable | null = (() => {
     if (!meta) return null
     if (loopTableId) {
       const byId = meta.tables.find((t) => t.id === loopTableId)
@@ -202,7 +193,7 @@ export function BindingPickerPopover({
       return meta.tables.find((t) => t.slug === activePageTableSlug) ?? null
     }
     return null
-  }, [loopTableId, activePageTableSlug, meta])
+  })()
 
   // Loop scope without a specific table — synthetic fields only.
   const hasLoopOnlyScope = !scopedTable && (availableFields?.length ?? 0) > 0
@@ -270,7 +261,7 @@ export function BindingPickerPopover({
   // All applicable groups, top to bottom. Computed once based on context —
   // no source-selection step in between. Authors see every reachable
   // binding at once and just click the one they want.
-  const groups: FieldGroup[] = useMemo(() => {
+  const groups: FieldGroup[] = (() => {
     const result: FieldGroup[] = []
 
     // 1. Scoped table fields — leads when auto-scoped.
@@ -319,14 +310,14 @@ export function BindingPickerPopover({
     }
 
     return result
-  }, [scopedTable, availableFields, hasLoopOnlyScope, sourceLabel])
+  })()
 
   // Compatibility check across the entire list — used to show the "no
   // compatible fields" hint when an aggressive control type (image / media)
   // lands in a scope that has no media fields anywhere.
-  const allFieldsIncompatible = useMemo(() => {
-    if (groups.length === 0) return false
-    return groups.every((g) =>
+  const allFieldsIncompatible =
+    groups.length > 0 &&
+    groups.every((g) =>
       g.entries.every((entry) => {
         if (entry.kind === 'loop' || entry.kind === 'system') {
           return !loopFieldMatchesControl(entry.field, controlKind)
@@ -334,7 +325,6 @@ export function BindingPickerPopover({
         return !isFieldBindable(controlKind, entry.field)
       }),
     )
-  }, [groups, controlKind])
 
   // ─── Table existence (for the footer hint) ─────────────────────────────
   // When there are tables in the system but the current scope can't reach

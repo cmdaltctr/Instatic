@@ -12,7 +12,7 @@
  * a successful save (avoids the round-trip flicker), then call `refresh()`
  * to reconcile authoritative state from the server.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   listCmsAuditEvents,
   listCmsRoles,
@@ -72,11 +72,10 @@ export function useUsersPageData(access: UsersPageLoadAccess): UsersPageData {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Memoise the access object to keep the load effect / refresh stable
-  // across re-renders. The caller passes a fresh object each render, so
-  // we re-derive the memo on the underlying boolean flags only.
-  const loadAccess = useMemo<UsersPageLoadAccess>(
-    () => ({
+  // Exception #1 (react-hooks/exhaustive-deps): feeds the load effect's
+  // dep array, so it needs a stable identity the static lint can see.
+  const loadAccess = useCallback(
+    (): UsersPageLoadAccess => ({
       canManageUsers: access.canManageUsers,
       canReadRoleOptions: access.canReadRoleOptions,
       canReadAudit: access.canReadAudit,
@@ -84,24 +83,26 @@ export function useUsersPageData(access: UsersPageLoadAccess): UsersPageData {
     [access.canManageUsers, access.canReadRoleOptions, access.canReadAudit],
   )
 
+  // Exception #1 (react-hooks/exhaustive-deps): feeds the load effect's
+  // dep array, so it needs a stable identity the static lint can see.
   const applyLoadedData = useCallback((data: LoadedData) => {
     setUsers(data.users)
     setRoles(data.roles)
     setEvents(data.events)
   }, [])
 
-  const refresh = useCallback(async () => {
+  const refresh = async () => {
     setError(null)
     try {
-      applyLoadedData(await loadUsersPageData(loadAccess))
+      applyLoadedData(await loadUsersPageData(loadAccess()))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load users')
     }
-  }, [applyLoadedData, loadAccess])
+  }
 
   useEffect(() => {
     let cancelled = false
-    void loadUsersPageData(loadAccess)
+    void loadUsersPageData(loadAccess())
       .then((data) => {
         if (!cancelled) applyLoadedData(data)
       })

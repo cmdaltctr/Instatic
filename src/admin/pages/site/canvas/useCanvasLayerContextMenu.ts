@@ -6,7 +6,7 @@
  * export components.
  */
 
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 
 export interface CanvasContextMenuPosition {
   x: number
@@ -23,13 +23,13 @@ export interface CanvasLayerContextMenuApi {
 export function useCanvasLayerContextMenu(): CanvasLayerContextMenuApi {
   const [position, setPosition] = useState<CanvasContextMenuPosition | null>(null)
 
-  const open = useCallback((next: CanvasContextMenuPosition) => {
+  const open = (next: CanvasContextMenuPosition) => {
     setPosition(next)
-  }, [])
+  }
 
-  const close = useCallback(() => {
+  const close = () => {
     setPosition(null)
-  }, [])
+  }
 
   return { position, open, close }
 }

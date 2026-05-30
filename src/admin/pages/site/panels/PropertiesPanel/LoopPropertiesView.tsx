@@ -13,7 +13,7 @@
  * Achromatic palette (Constraint #376). CSS Modules only (Constraint #402).
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { loopSourceRegistry } from '@core/loops/registry'
 import type { LoopEntitySource } from '@core/loops/types'
@@ -34,7 +34,7 @@ interface LoopPropertiesViewProps {
 export function LoopPropertiesView({ nodeId, props }: LoopPropertiesViewProps) {
   const updateNodeProps = useEditorStore((s) => s.updateNodeProps)
 
-  const sources = useMemo(() => loopSourceRegistry.list(), [])
+  const sources = loopSourceRegistry.list()
   const sourceId = typeof props.sourceId === 'string' ? props.sourceId : ''
   const source: LoopEntitySource | undefined = sources.find((s) => s.id === sourceId)
 
@@ -62,7 +62,7 @@ export function LoopPropertiesView({ nodeId, props }: LoopPropertiesViewProps) {
   }, [sourceId, tables])
 
   // Build the per-source filter schema with dynamic options patched in.
-  const filterSchema: PropertySchema = useMemo(() => {
+  function buildFilterSchema(): PropertySchema {
     if (!source) return {}
     if (source.id === 'data.rows' && tables) {
       const tableField = source.filterSchema.tableId
@@ -80,19 +80,18 @@ export function LoopPropertiesView({ nodeId, props }: LoopPropertiesViewProps) {
       }
     }
     return source.filterSchema
-  }, [source, tables])
+  }
+  const filterSchema = buildFilterSchema()
 
   // Order options reactive to source change.
-  const orderOptions: PropertyControl = useMemo(() => {
-    return {
-      type: 'select',
-      label: 'Order by',
-      options:
-        source?.orderByOptions.map((o) => ({ label: o.label, value: o.id })) ?? [
-          { label: 'Default', value: '' },
-        ],
-    }
-  }, [source])
+  const orderOptions: PropertyControl = {
+    type: 'select',
+    label: 'Order by',
+    options:
+      source?.orderByOptions.map((o) => ({ label: o.label, value: o.id })) ?? [
+        { label: 'Default', value: '' },
+      ],
+  }
 
   function handleSourceChange(_key: string, value: unknown) {
     const nextId = typeof value === 'string' ? value : ''

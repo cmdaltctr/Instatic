@@ -18,7 +18,7 @@
  * handle on every render — same pattern used by the site editor's
  * `executor` for the same reason.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AgentPanel } from '@site/panels/AgentPanel'
 import { AgentStoreProvider } from '@admin/ai/AgentStoreContext'
 import { readTitleCell } from '@core/data/cells'
@@ -106,7 +106,7 @@ export function ContentAgentMount({
   // ContentPage render. The store takes no parameters; the agent's
   // reactive state (workspace, draft, currentUser) flows through the
   // registered ContentBridgeHandle, not through the store factory.
-  const store = useMemo(() => createContentAgentStore(), [])
+  const [store] = useState(() => createContentAgentStore())
 
   // Refs that follow the latest workspace + draft state on every render.
   // The bridge handle methods read through these so they always see live

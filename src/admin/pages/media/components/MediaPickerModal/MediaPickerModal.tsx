@@ -15,7 +15,7 @@
  *     its own folder selection / scroll position / filter state without
  *     leaking into the Media page if it's open elsewhere.
  */
-import { useEffect, useEffectEvent, useMemo, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
@@ -207,13 +207,13 @@ interface PickedSummaryProps {
  * picked").
  */
 function PickedSummary({ asset, matchesKind, mediaKind }: PickedSummaryProps) {
-  const summary = useMemo(() => {
-    if (!asset) return null
-    const bucket = bucketForMime(asset.mimeType)
-    const thumbUrl = bucket === 'image' ? pickVariantUrl(asset, 56) : null
-    const blurUrl = bucket === 'image' ? blurHashToDataUrl(asset.blurHash) : null
-    return { bucket, thumbUrl, blurUrl }
-  }, [asset])
+  const summary = asset
+    ? {
+        bucket: bucketForMime(asset.mimeType),
+        thumbUrl: bucketForMime(asset.mimeType) === 'image' ? pickVariantUrl(asset, 56) : null,
+        blurUrl: bucketForMime(asset.mimeType) === 'image' ? blurHashToDataUrl(asset.blurHash) : null,
+      }
+    : null
 
   if (!asset) {
     const kindLabel = mediaKind === 'image' ? 'image' : mediaKind === 'video' ? 'video' : 'asset'

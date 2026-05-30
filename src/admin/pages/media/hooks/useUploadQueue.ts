@@ -89,6 +89,7 @@ export function useUploadQueue({
   // whether to start another upload without scanning the full list.
   const inFlightRef = useRef(0)
 
+  // Exception #1: feeds the transitive closure of `pump`, which is a useEffect dependency.
   const setItemsAndMirror = useCallback((updater: (prev: UploadItem[]) => UploadItem[]) => {
     // CRITICAL: the ref is the queue's source of truth — pump() reads it
     // synchronously and within the same tick as enqueue() / patchItem()
@@ -102,6 +103,7 @@ export function useUploadQueue({
     setItems(next)
   }, [])
 
+  // Exception #1: feeds the transitive closure of `pump`, which is a useEffect dependency.
   const patchItem = useCallback((id: string, patch: Partial<UploadItem>) => {
     setItemsAndMirror((prev) => prev.map((item) => item.id === id ? { ...item, ...patch } : item))
   }, [setItemsAndMirror])
@@ -113,6 +115,7 @@ export function useUploadQueue({
   const pumpRef = useRef<() => void>(() => {})
 
   // ── Single-upload pipeline ────────────────────────────────────────────────
+  // Exception #1: feeds the transitive closure of `pump`, which is a useEffect dependency.
   const runUpload = useCallback((item: UploadItem) => {
     inFlightRef.current += 1
     patchItem(item.id, { status: 'uploading', progress: 0, error: null })
@@ -208,6 +211,7 @@ export function useUploadQueue({
   // next iteration of the while loop sees `runUpload`'s status change
   // immediately. Without that ref-sync, this loop would re-pick the same
   // 'queued' item for every spare slot and trigger duplicate uploads.
+  // Exception #1: referenced in the useEffect dependency array below.
   const pump = useCallback(() => {
     while (inFlightRef.current < concurrency) {
       const next = itemsRef.current.find((item) => item.status === 'queued')
@@ -220,7 +224,7 @@ export function useUploadQueue({
   // initial empty pump) always invoke the latest version.
   useEffect(() => { pumpRef.current = pump }, [pump])
 
-  const enqueue = useCallback((files: File[], folderId: string | null) => {
+  const enqueue = (files: File[], folderId: string | null) => {
     const additions: UploadItem[] = []
     for (const file of files) {
       const sizeCheck = checkSizeLimit(file.size)
@@ -239,33 +243,33 @@ export function useUploadQueue({
     if (additions.length === 0) return
     setItemsAndMirror((prev) => [...additions, ...prev])
     pump()
-  }, [pump, setItemsAndMirror])
+  }
 
-  const retry = useCallback((uploadId: string) => {
+  const retry = (uploadId: string) => {
     const item = itemsRef.current.find((entry) => entry.id === uploadId)
     if (!item || (item.status !== 'failed' && item.status !== 'cancelled')) return
     patchItem(uploadId, { status: 'queued', error: null, progress: 0 })
     pump()
-  }, [patchItem, pump])
+  }
 
-  const remove = useCallback((uploadId: string) => {
+  const remove = (uploadId: string) => {
     const transfer = transfersRef.current.get(uploadId)
     if (transfer) transfer.xhr.abort()
     setItemsAndMirror((prev) => prev.filter((item) => item.id !== uploadId))
-  }, [setItemsAndMirror])
+  }
 
-  const clearFinished = useCallback(() => {
+  const clearFinished = () => {
     setItemsAndMirror((prev) => prev.filter((item) =>
       item.status === 'queued' || item.status === 'uploading',
     ))
-  }, [setItemsAndMirror])
+  }
 
-  const cancelAll = useCallback(() => {
+  const cancelAll = () => {
     for (const [, transfer] of transfersRef.current) transfer.xhr.abort()
     setItemsAndMirror((prev) => prev.map((item) =>
       item.status === 'queued' ? { ...item, status: 'cancelled' as const } : item,
     ))
-  }, [setItemsAndMirror])
+  }
 
   const active = items.some((item) => item.status === 'queued' || item.status === 'uploading')
 

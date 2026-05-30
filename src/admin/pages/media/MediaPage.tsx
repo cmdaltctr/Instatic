@@ -12,7 +12,7 @@
  * auto-opens once the user has 2+ assets selected; the viewer opens whenever
  * the user has a primary selection.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AdminCanvasLayout } from '@admin/layouts/AdminCanvasLayout'
 import {
   readWorkspaceLayout,
@@ -57,28 +57,18 @@ export function MediaPage() {
   // Build the thin viewer-editor handle from the workspace. Same contract the
   // standalone MediaExplorerPanel-driven viewer uses, so the viewer doesn't
   // need to know it lives inside the full Media page.
-  const viewerEditor = useMemo(() => {
-    if (!workspace.selectedAsset) return null
-    return {
-      asset: workspace.selectedAsset,
-      tagPalette: workspace.tagPalette,
-      folderById: workspace.folderById,
-      updateAsset: workspace.updateAsset,
-      renameAsset: workspace.renameAsset,
-      replaceAssetFile: workspace.replaceAssetFile,
-      restoreAsset: workspace.restoreAsset,
-      purgeAsset: workspace.purgeAsset,
-    }
-  }, [
-    workspace.selectedAsset,
-    workspace.tagPalette,
-    workspace.folderById,
-    workspace.updateAsset,
-    workspace.renameAsset,
-    workspace.replaceAssetFile,
-    workspace.restoreAsset,
-    workspace.purgeAsset,
-  ])
+  const viewerEditor = workspace.selectedAsset
+    ? {
+        asset: workspace.selectedAsset,
+        tagPalette: workspace.tagPalette,
+        folderById: workspace.folderById,
+        updateAsset: workspace.updateAsset,
+        renameAsset: workspace.renameAsset,
+        replaceAssetFile: workspace.replaceAssetFile,
+        restoreAsset: workspace.restoreAsset,
+        purgeAsset: workspace.purgeAsset,
+      }
+    : null
 
   // Auto-open the viewer when a primary selection appears via a plain click.
   // We don't auto-open while a multi-selection is in flight (2+ items) —

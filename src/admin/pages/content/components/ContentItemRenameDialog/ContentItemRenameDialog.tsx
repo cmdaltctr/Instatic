@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { Input } from '@ui/components/Input'
@@ -25,7 +25,7 @@ function errorMessage(err: unknown) {
 
 const FORM_ID = 'content-item-rename-form'
 
-export const ContentItemRenameDialog = memo(function ContentItemRenameDialog({
+export function ContentItemRenameDialog({
   title,
   titleLabel,
   initialTitle,
@@ -121,4 +121,4 @@ export const ContentItemRenameDialog = memo(function ContentItemRenameDialog({
       </form>
     </Dialog>
   )
-})
+}

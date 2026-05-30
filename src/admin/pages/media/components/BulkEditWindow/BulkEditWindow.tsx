@@ -9,7 +9,7 @@
  * the user composes a batch, hits "Apply", and we run them in series with
  * a small progress badge.
  */
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Input, Textarea } from '@ui/components/Input'
 import { CheckIcon } from 'pixel-art-icons/icons/check'
@@ -62,7 +62,7 @@ export function BulkEditWindow({ workspace, open, onClose }: BulkEditWindowProps
 
   const assets = workspace.selectedAssets
   const count = assets.length
-  const allImages = useMemo(() => assets.every((a) => a.mimeType.startsWith('image/')), [assets])
+  const allImages = assets.every((a) => a.mimeType.startsWith('image/'))
 
   function resetPlan() {
     setPlan(EMPTY_PLAN)
@@ -286,13 +286,11 @@ interface FolderPickerProps {
 
 function FolderPicker({ label, selected, onChange, folders }: FolderPickerProps) {
   const [draft, setDraft] = useState('')
-  const matches = useMemo(() => {
-    const needle = draft.trim().toLowerCase()
-    return folders
-      .filter((folder) => !selected.includes(folder.id))
-      .filter((folder) => !needle || folder.name.toLowerCase().includes(needle))
-      .slice(0, 6)
-  }, [folders, selected, draft])
+  const needle = draft.trim().toLowerCase()
+  const matches = folders
+    .filter((folder) => !selected.includes(folder.id))
+    .filter((folder) => !needle || folder.name.toLowerCase().includes(needle))
+    .slice(0, 6)
 
   function pick(folder: CmsMediaFolder) {
     onChange([...selected, folder.id])

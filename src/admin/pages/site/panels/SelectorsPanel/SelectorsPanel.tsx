@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import { selectSelectedNode, useEditorStore } from '@site/store/store'
 import { styleRuleSelector } from '@core/page-tree/classNames'
 import { generatedClassKindLabel, isGeneratedClass, isGeneratedClassLocked } from '@core/page-tree/classUtils'
@@ -95,19 +95,14 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
   const [renameTarget, setRenameTarget] = useState<StyleRule | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<StyleRule | null>(null)
 
-  const reusableClasses = useMemo(
-    () => getReusableClasses(site?.styleRules ?? {}),
-    [site?.styleRules],
-  )
-  const filteredClasses = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    return reusableClasses.filter((cls) => {
-      if (filter === 'user' && isGeneratedClass(cls)) return false
-      if (filter === 'utility' && !isGeneratedClass(cls)) return false
-      if (normalized && !cls.name.toLowerCase().includes(normalized)) return false
-      return true
-    })
-  }, [filter, query, reusableClasses])
+  const reusableClasses = getReusableClasses(site?.styleRules ?? {})
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredClasses = reusableClasses.filter((cls) => {
+    if (filter === 'user' && isGeneratedClass(cls)) return false
+    if (filter === 'utility' && !isGeneratedClass(cls)) return false
+    if (normalizedQuery && !cls.name.toLowerCase().includes(normalizedQuery)) return false
+    return true
+  })
   const selectedClass = reusableClasses.find((cls) => cls.id === selectedSelectorClassId) ?? null
   const contextClass = contextMenu ? site?.styleRules[contextMenu.classId] ?? null : null
 

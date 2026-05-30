@@ -1,4 +1,3 @@
-import { useCallback } from 'react'
 import { selectActiveCanvasPage, useEditorStore } from '@site/store/store'
 import { resolveInsertLocation } from '@site/store/insertLocation'
 import { getMissingModuleDependencies } from '@core/module-engine/dependencies'
@@ -29,28 +28,25 @@ export function useInsertModule() {
   const packageJson = useEditorStore((s) => s.packageJson)
   const setDependency = useEditorStore((s) => s.setDependency)
 
-  return useCallback(
-    (mod: AnyModuleDefinition, explicitParentId?: string) => {
-      if (!canvasPage) return null
+  return (mod: AnyModuleDefinition, explicitParentId?: string) => {
+    if (!canvasPage) return null
 
-      // Resolve target → parent + index. Explicit parent wins over selection,
-      // selection wins over "drop at root".
-      const targetId =
-        (explicitParentId && canvasPage.nodes[explicitParentId] ? explicitParentId : null) ??
-        selectedNodeId ??
-        canvasPage.rootNodeId
+    // Resolve target → parent + index. Explicit parent wins over selection,
+    // selection wins over "drop at root".
+    const targetId =
+      (explicitParentId && canvasPage.nodes[explicitParentId] ? explicitParentId : null) ??
+      selectedNodeId ??
+      canvasPage.rootNodeId
 
-      const location = resolveInsertLocation(canvasPage, targetId)
-      if (!location) return null
+    const location = resolveInsertLocation(canvasPage, targetId)
+    if (!location) return null
 
-      for (const dependency of getMissingModuleDependencies(mod, packageJson)) {
-        setDependency(dependency.name, dependency.version, dependency.dev)
-      }
+    for (const dependency of getMissingModuleDependencies(mod, packageJson)) {
+      setDependency(dependency.name, dependency.version, dependency.dev)
+    }
 
-      const nodeId = insertNode(mod.id, mod.defaults, location.parentId, location.index)
-      selectNode(nodeId)
-      return nodeId
-    },
-    [canvasPage, selectedNodeId, packageJson, setDependency, insertNode, selectNode],
-  )
+    const nodeId = insertNode(mod.id, mod.defaults, location.parentId, location.index)
+    selectNode(nodeId)
+    return nodeId
+  }
 }

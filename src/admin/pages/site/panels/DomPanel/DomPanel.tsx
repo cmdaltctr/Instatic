@@ -26,7 +26,7 @@
  * - data-panel attribute for event propagation guard (Guideline #192)
  * - data-testid="dom-panel" and "dom-panel-ready" for Playwright (Guideline #221)
  */
-import { useEffect, useCallback, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -280,67 +280,58 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
   }, [focusedPanel, panelRef])
 
   // ─── Keyboard shortcuts at panel level ────────────────────────────────────
-  const handlePanelKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'F6') {
+  const handlePanelKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'F6') {
+      e.preventDefault()
+      useEditorStore.getState().cycleFocusedPanel()
+    }
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl+E = expand all, Ctrl+W = collapse all
+      if (e.key === 'e' && page) {
         e.preventDefault()
-        useEditorStore.getState().cycleFocusedPanel()
+        expandAll(flattenSubtree(page, page.rootNodeId))
       }
-      if (e.ctrlKey || e.metaKey) {
-        // Ctrl+E = expand all, Ctrl+W = collapse all
-        if (e.key === 'e' && page) {
-          e.preventDefault()
-          expandAll(flattenSubtree(page, page.rootNodeId))
-        }
-        if (e.key === 'w') {
-          e.preventDefault()
-          collapseAll()
-        }
-        // Ctrl+F = focus search
-        if (e.key === 'f') {
-          e.preventDefault()
-          searchInputRef.current?.focus()
-        }
+      if (e.key === 'w') {
+        e.preventDefault()
+        collapseAll()
       }
-    },
-    [page, expandAll, collapseAll],
-  )
+      // Ctrl+F = focus search
+      if (e.key === 'f') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+  }
 
   // ─── Background right-click → tree-background context menu ───────────────
   // Fires only for clicks on the empty padding/space of the tree area —
   // TreeNode's onContextMenu calls e.stopPropagation() so per-row right-clicks
   // don't reach this handler. Skipped while search is active because the
   // tree-mode UI (with its root anchor) isn't what's on screen.
-  const handleBackgroundContextMenu = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!editable) return
-      if (searchQuery.trim()) return
-      if (!page) return
-      e.preventDefault()
-      e.stopPropagation()
-      setBgContextMenu({ x: e.clientX, y: e.clientY })
-    },
-    [editable, page, searchQuery],
-  )
+  const handleBackgroundContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!editable) return
+    if (searchQuery.trim()) return
+    if (!page) return
+    e.preventDefault()
+    e.stopPropagation()
+    setBgContextMenu({ x: e.clientX, y: e.clientY })
+  }
 
   // ─── DnD drag-end: commit one validated move to store ────────────────────
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      if (!editable) return
-      const target = dnd.handleDragEnd(event)
-      if (!target) return
+  const handleDragEnd = (event: DragEndEvent) => {
+    if (!editable) return
+    const target = dnd.handleDragEnd(event)
+    if (!target) return
 
-      try {
-        // Multi-drag: route to `moveNodes` so every dragged id is moved in a
-        // single undo step. For single-drag, `target.draggedIds` is `[draggedId]`
-        // and `moveNodes` collapses to `moveNode` internally.
-        useEditorStore.getState().moveNodes(target.draggedIds, target.parentId, target.index)
-      } catch (err) {
-        console.warn('[DomPanel] Ignored stale drag/drop target:', err)
-      }
-    },
-    [dnd, editable],
-  )
+    try {
+      // Multi-drag: route to `moveNodes` so every dragged id is moved in a
+      // single undo step. For single-drag, `target.draggedIds` is `[draggedId]`
+      // and `moveNodes` collapses to `moveNode` internally.
+      useEditorStore.getState().moveNodes(target.draggedIds, target.parentId, target.index)
+    } catch (err) {
+      console.warn('[DomPanel] Ignored stale drag/drop target:', err)
+    }
+  }
 
   // ─── Search: flat filtered list of matching nodes ─────────────────────────
   // Matches against the node's display name, its HTML tag (with optional `<>`
@@ -350,7 +341,7 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
   //   "<div>"       → div containers and text/divs
   //   ".container"  → nodes with class "container" specifically
   //   "padding-m"   → nodes with class "padding-m"
-  const searchRows = useMemo<SearchRow[]>(() => {
+  const searchRows: SearchRow[] = (() => {
     const rawQuery = searchQuery.trim().toLowerCase()
     if (!rawQuery || !page) return []
 
@@ -389,7 +380,7 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
           classChip,
         } satisfies SearchRow]
       })
-  }, [searchQuery, page, classes, visualComponents])
+  })()
 
   // Read-only callers (Viewer / Client) never see a toggle to expand the
   // layers panel — the toolbar LayersButton (and the toggleable rail) is

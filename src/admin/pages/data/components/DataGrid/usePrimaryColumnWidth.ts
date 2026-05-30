@@ -6,7 +6,7 @@
  * key `pb-data-grid-primary-widths-v1`. Validated by TypeBox; corrupted
  * blobs gracefully fall back to defaults rather than throwing.
  */
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { Type, type Static } from '@core/utils/typeboxHelpers'
 import { safeParseJson } from '@core/utils/jsonValidate'
 
@@ -82,19 +82,16 @@ export function usePrimaryColumnWidth(
     setWidth(resolveInitialWidth(tableId))
   }
 
-  const commit = useCallback(
-    (next: number) => {
-      const clamped = clamp(next)
-      setWidth(clamped)
-      if (tableId == null) return
-      const all = readAll()
-      writeAll({
-        version: 1,
-        widths: { ...all.widths, [tableId]: clamped },
-      })
-    },
-    [tableId],
-  )
+  const commit = (next: number) => {
+    const clamped = clamp(next)
+    setWidth(clamped)
+    if (tableId == null) return
+    const all = readAll()
+    writeAll({
+      version: 1,
+      widths: { ...all.widths, [tableId]: clamped },
+    })
+  }
 
   return [width, commit]
 }

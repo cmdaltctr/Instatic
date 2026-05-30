@@ -13,7 +13,7 @@
  * mount come from there. This module owns the destructive-action body.
  */
 
-import { useMemo, useRef } from 'react'
+import { useRef } from 'react'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import type {
@@ -45,7 +45,7 @@ export function FrameworkChangeConfirmDialog({
   // Group usages by classId so the body lists "<class> — N place(s)"
   // followed by per-place rows. Classes with no usages aren't rendered
   // (they'll be removed silently by the commit).
-  const grouped = useMemo(() => groupUsagesByClass(impact.usages), [impact.usages])
+  const grouped = groupUsagesByClass(impact.usages)
   const totalUsages = impact.usages.length
   const removedInUseCount = grouped.length
 

@@ -11,7 +11,7 @@
  * state — only the loaded data, the shared error string, and the
  * mutation refresh callback live here.
  */
-import { useEffect, useEffectEvent, useMemo, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { peekPendingAction } from '@admin/spotlight/pendingAction'
 import { Button } from '@ui/components/Button'
 import { AdminPageLayout } from '@admin/layouts/AdminPageLayout'
@@ -33,19 +33,13 @@ export function UsersPage() {
   const canReadAudit = unrestricted || hasCapability(currentUser, 'audit.read')
   const canReadRoleOptions = canManageUsers || canManageRoles
 
-  const loadAccess = useMemo<UsersPageLoadAccess>(
-    () => ({ canManageUsers, canReadRoleOptions, canReadAudit }),
-    [canManageUsers, canReadRoleOptions, canReadAudit],
-  )
+  const loadAccess: UsersPageLoadAccess = { canManageUsers, canReadRoleOptions, canReadAudit }
   const data = useUsersPageData(loadAccess)
 
-  const availableTabs = useMemo<Tab[]>(() => {
-    const tabs: Tab[] = []
-    if (canManageUsers) tabs.push('users')
-    if (canManageRoles) tabs.push('roles')
-    if (canReadAudit) tabs.push('audit')
-    return tabs
-  }, [canManageUsers, canManageRoles, canReadAudit])
+  const availableTabs: Tab[] = []
+  if (canManageUsers) availableTabs.push('users')
+  if (canManageRoles) availableTabs.push('roles')
+  if (canReadAudit) availableTabs.push('audit')
 
   const [tab, setTab] = useState<Tab>('users')
   const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0] ?? 'users'

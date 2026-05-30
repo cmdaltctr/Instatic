@@ -5,7 +5,7 @@
  * Renaming a node mutates `node.label`, which is a structural change — the
  * pencil button is hidden for callers without `site.structure.edit`.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
@@ -37,7 +37,7 @@ export function NodeHeader({ nodeId, label, moduleName, onRename }: NodeHeaderPr
     requestAnimationFrame(() => inputRef.current?.select())
   }, [isEditing])
 
-  const commitRename = useCallback((input: HTMLInputElement) => {
+  const commitRename = (input: HTMLInputElement) => {
     const nextLabel = input.value.trim()
     if (nextLabel && nextLabel !== displayName) {
       onRename(nextLabel)
@@ -45,12 +45,12 @@ export function NodeHeader({ nodeId, label, moduleName, onRename }: NodeHeaderPr
       input.value = displayName
     }
     setIsEditing(false)
-  }, [displayName, onRename])
+  }
 
-  const cancelRename = useCallback((input: HTMLInputElement) => {
+  const cancelRename = (input: HTMLInputElement) => {
     input.value = displayName
     setIsEditing(false)
-  }, [displayName])
+  }
 
   if (isEditing) {
     return (

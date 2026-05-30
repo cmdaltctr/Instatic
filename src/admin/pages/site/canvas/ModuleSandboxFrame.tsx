@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
 import { createModuleImportMap } from '@core/module-engine/runtimeResolver'
 import {
@@ -64,15 +64,9 @@ export function ModuleSandboxFrame({
   // missing deps would surface as a raw `TypeError: Failed to resolve
   // module specifier` inside the iframe. Show a friendlier empty state
   // (with a one-click "add" affordance) before mounting the iframe at all.
-  const missingDependencies = useMemo(
-    () => getMissingModuleDependencies(moduleDefinition, packageJson),
-    [moduleDefinition, packageJson],
-  )
+  const missingDependencies = getMissingModuleDependencies(moduleDefinition, packageJson)
 
-  const classCSS = useMemo(
-    () => getNodeClassCSS(site, classIds),
-    [site, classIds],
-  )
+  const classCSS = getNodeClassCSS(site, classIds)
 
   // The iframe's import map is filtered from the site's precomputed
   // `runtime.packageImportmap` — the server built it from the actual
@@ -82,38 +76,32 @@ export function ModuleSandboxFrame({
   // same on-disk file the published page uses.
   const siteImportmap = useEditorStore((s) => s.siteRuntime.packageImportmap)
   const dependencyResolveStatus = useEditorStore((s) => s.dependencyResolveStatus)
-  const importMap = useMemo(
-    () => createModuleImportMap(moduleDefinition, {
-      packageJson,
-      strictSiteManifest: true,
-      siteImportmap,
-    }),
-    [moduleDefinition, packageJson, siteImportmap],
-  )
+  const importMap = createModuleImportMap(moduleDefinition, {
+    packageJson,
+    strictSiteManifest: true,
+    siteImportmap,
+  })
   // Importmap is incomplete if any runtime dep declared by this module is
   // missing from `importMap.imports`. That's the case after opening a site
   // whose persisted state predates the importmap field, or while the
   // background auto-resolve is still installing. We refuse to mount the
   // iframe in that state so the user sees a clear "resolving" message
   // instead of a "Failed to resolve module specifier" runtime error.
-  const importmapIncomplete = useMemo(() => {
+  const importmapIncomplete = (() => {
     const runtimeDeps = normalizeModuleDependencies(moduleDefinition.dependencies)
       .filter((dep) => !dep.dev)
     if (runtimeDeps.length === 0) return false
     return runtimeDeps.some((dep) => !importMap.imports[dep.name])
-  }, [moduleDefinition.dependencies, importMap])
+  })()
 
-  const sandboxContext = useMemo<SandboxContext>(
-    () => ({
-      props,
-      nodeId,
-      isSelected,
-      className: mcClassName ?? '',
-      dependencies: importMap.imports,
-      apiVersion: 1,
-    }),
-    [props, nodeId, isSelected, mcClassName, importMap],
-  )
+  const sandboxContext: SandboxContext = {
+    props,
+    nodeId,
+    isSelected,
+    className: mcClassName ?? '',
+    dependencies: importMap.imports,
+    apiVersion: 1,
+  }
 
   if (!runtime) {
     return (
@@ -263,6 +251,7 @@ function SandboxIframeBody({
     }),
   )
 
+  // Exception #1: transitive closure of scheduleUpdate, which feeds a useEffect dep array.
   const flushUpdate = useCallback(() => {
     const payload = pendingUpdateRef.current
     if (!payload) return
@@ -276,6 +265,7 @@ function SandboxIframeBody({
     }, '*')
   }, [])
 
+  // Exception #1: referenced in the useEffect dep array below.
   const scheduleUpdate = useCallback(() => {
     pendingUpdateRef.current = { context: sandboxContext, classCSS }
     if (updateFrameRef.current !== null) return
@@ -286,14 +276,14 @@ function SandboxIframeBody({
     })
   }, [sandboxContext, classCSS, flushUpdate])
 
-  const postUpdate = useCallback(() => {
+  const postUpdate = () => {
     pendingUpdateRef.current = { context: sandboxContext, classCSS }
     if (updateFrameRef.current !== null) {
       window.cancelAnimationFrame(updateFrameRef.current)
       updateFrameRef.current = null
     }
     flushUpdate()
-  }, [sandboxContext, classCSS, flushUpdate])
+  }
 
   useEffect(() => {
     scheduleUpdate()
