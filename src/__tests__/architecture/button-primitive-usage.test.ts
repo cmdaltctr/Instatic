@@ -163,6 +163,17 @@ const ALLOWLIST = new Set([
   //   CSS-Grid row rather than a panel section.
   'admin/pages/data/components/DataGrid/DataGridHeaderCell.tsx',
   'admin/pages/data/components/DataGrid/DataGrid.tsx',
+
+  // ── §8.11 BorderControl side / corner picker hit areas ──────────────────
+  // The visual border editor's side picker renders four absolutely-positioned
+  // thin edge bars (6px wide/tall) inside a 72×72 box, and the radius corner
+  // picker renders four 14×14 corner dots. Each is a clickable hit area whose
+  // geometry IS the affordance (which edge / corner you're editing). Button's
+  // token-driven size system (micro = 18px, sm = 26px) cannot represent a 6px
+  // edge bar or a corner-anchored dot — same pattern class as §8.10's
+  // grid-cell day buttons (bespoke positioned hit area, custom selected
+  // state). These are the only bare <button>s in the file.
+  'admin/pages/site/panels/PropertiesPanel/BorderControl/BorderControl.tsx',
 ])
 
 // ---------------------------------------------------------------------------

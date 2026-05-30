@@ -1,0 +1,246 @@
+/*
+ * BorderControl — visual per-side border editor + radius corner editor.
+ *
+ * Two stacked groups (Sides, Radius) each pairing a clickable visual picker
+ * with the value inputs, plus a trailing Outline pair. The pickers echo the
+ * SpacingBoxControl visual language (achromatic box, accent highlight on the
+ * active edge) but are simpler — borders only need edge/corner selection, not
+ * the full box-model diagram.
+ */
+
+.root {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+}
+
+/* ── Group (Sides / Radius) ──────────────────────────────────────────────── */
+
+.group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.groupHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 18px;
+}
+
+.groupTitle {
+    color: var(--editor-text-secondary);
+    font-size: 11px;
+    font-weight: 620;
+}
+
+.groupActions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.borderBody,
+.radiusBody {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── Field row (label + control) ─────────────────────────────────────────── */
+
+.fieldRow {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+}
+
+.fieldLabel {
+    color: var(--editor-text-subtle);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.fieldControl {
+    min-width: 0;
+}
+
+/* The embedded ColorControl renders its own ControlRow; strip the duplicate
+ * label column so it lines up with the Width / Style rows above it. */
+.colorField :global(.controlWrapper) {
+    grid-template-columns: 52px 1fr;
+    gap: 6px;
+    min-height: 28px;
+}
+
+/* ── Side picker (4 clickable edges) ─────────────────────────────────────── */
+
+.sidePicker {
+    flex: 0 0 auto;
+}
+
+.sideBox {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    border-radius: var(--editor-radius);
+    background: var(--editor-surface);
+}
+
+.sideBoxCore {
+    position: absolute;
+    inset: 18px;
+    border-radius: var(--editor-radius-sm);
+    background: var(--editor-surface-2);
+    pointer-events: none;
+}
+
+.sideEdge {
+    position: absolute;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: var(--input-border);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+
+.sideEdge:hover {
+    background: var(--input-border-hover);
+}
+
+.sideEdgeSet {
+    background: var(--editor-text-muted);
+}
+
+.sideEdgeActive {
+    background: var(--editor-accent);
+}
+
+.sideEdgeActive:hover {
+    background: var(--editor-accent-light);
+}
+
+/* Edge geometry — each edge is a thin bar inset from the box corners. */
+.sideTop {
+    top: 6px;
+    left: 14px;
+    right: 14px;
+    height: 6px;
+}
+
+.sideBottom {
+    bottom: 6px;
+    left: 14px;
+    right: 14px;
+    height: 6px;
+}
+
+.sideLeft {
+    left: 6px;
+    top: 14px;
+    bottom: 14px;
+    width: 6px;
+}
+
+.sideRight {
+    right: 6px;
+    top: 14px;
+    bottom: 14px;
+    width: 6px;
+}
+
+/* ── Corner picker (4 clickable dots) ────────────────────────────────────── */
+
+.cornerPicker {
+    flex: 0 0 auto;
+}
+
+.cornerBox {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    border-radius: var(--editor-radius);
+    background: var(--editor-surface);
+}
+
+.cornerDot {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--input-border);
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    transition: border-color 120ms ease;
+}
+
+.cornerDot:hover {
+    border-color: var(--input-border-hover);
+}
+
+.cornerDotActive {
+    border-color: var(--editor-accent);
+}
+
+.cornerDotActive:hover {
+    border-color: var(--editor-accent-light);
+}
+
+/* Each dot sits at its corner and rounds the OUTER corner so the curve
+ * direction reads which corner it controls. */
+.cornerTopLeft {
+    top: 10px;
+    left: 10px;
+    border-right: none;
+    border-bottom: none;
+    border-top-left-radius: 8px;
+}
+
+.cornerTopRight {
+    top: 10px;
+    right: 10px;
+    border-left: none;
+    border-bottom: none;
+    border-top-right-radius: 8px;
+}
+
+.cornerBottomRight {
+    bottom: 10px;
+    right: 10px;
+    border-left: none;
+    border-top: none;
+    border-bottom-right-radius: 8px;
+}
+
+.cornerBottomLeft {
+    bottom: 10px;
+    left: 10px;
+    border-right: none;
+    border-top: none;
+    border-bottom-left-radius: 8px;
+}
+
+/* ── Outline pair ────────────────────────────────────────────────────────── */
+
+.outlineRows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--input-border);
+}

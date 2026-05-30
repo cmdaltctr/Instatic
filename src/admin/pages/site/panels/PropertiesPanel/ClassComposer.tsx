@@ -12,6 +12,7 @@ import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { Section } from '@ui/components/Section'
 import { SpacingBoxControl } from './SpacingBoxControl/SpacingBoxControl'
+import { BorderControl } from './BorderControl/BorderControl'
 import { LayoutSection } from './LayoutSection'
 import { PositionSection } from './PositionSection'
 import {
@@ -28,6 +29,7 @@ import sectionStyles from '@ui/components/Section/Section.module.css'
 const SPACING_SECTION_ID = 'spacing'
 const LAYOUT_SECTION_ID = 'layout'
 const POSITION_SECTION_ID = 'position'
+const BORDER_SECTION_ID = 'border'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -224,6 +226,29 @@ function ClassStyleSection({
             onRemove={onRemove}
             onClearProperty={onClearProperty}
           />
+        ) : section.id === BORDER_SECTION_ID ? (
+          // Border uses a visual per-side editor (width / style / colour per
+          // edge with a link toggle) + a radius corner editor + an outline
+          // pair. The raw shorthand rows (border / borderTop / borderRadius /
+          // …) live in the Advanced disclosure below for power users who want
+          // to paste a shorthand string directly.
+          <>
+            <BorderControl
+              key={activeTab}
+              storedStyles={storedStyles}
+              currentStyles={currentStyles}
+              onChange={onChange}
+              onClearProperty={onClearProperty}
+            />
+            <AdvancedRows
+              activeTab={activeTab}
+              properties={BORDER_ADVANCED_PROPERTIES}
+              storedStyles={storedStyles}
+              currentStyles={currentStyles}
+              onChange={onChange}
+              onRemove={onRemove}
+            />
+          </>
         ) : (
           section.properties.map((prop) => {
             const storedValue = storedStyles[prop]
@@ -249,6 +274,80 @@ function ClassStyleSection({
         )}
       </div>
     </Section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Border advanced rows — raw CSS shorthand props that the visual
+// BorderControl deliberately doesn't surface. Kept available behind a
+// disclosure for power users who paste shorthand strings.
+// ---------------------------------------------------------------------------
+
+const BORDER_ADVANCED_PROPERTIES: ReadonlyArray<keyof CSSPropertyBag> = [
+  'border',
+  'borderTop',
+  'borderRight',
+  'borderBottom',
+  'borderLeft',
+  'borderWidth',
+  'borderStyle',
+  'borderColor',
+  'borderRadius',
+  'appearance',
+]
+
+interface AdvancedRowsProps {
+  activeTab: string
+  properties: ReadonlyArray<keyof CSSPropertyBag>
+  storedStyles: Record<string, unknown>
+  currentStyles: Record<string, unknown>
+  onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
+  onRemove: (property: keyof CSSPropertyBag) => void
+}
+
+/**
+ * A `<details>` disclosure wrapping a stack of raw property rows. Used for the
+ * Border section's shorthand props. Native `<details>`/`<summary>` is semantic
+ * HTML (not a bare interactive control), so it's outside the button-primitive
+ * gate without needing an allowlist entry.
+ */
+function AdvancedRows({
+  activeTab,
+  properties,
+  storedStyles,
+  currentStyles,
+  onChange,
+  onRemove,
+}: AdvancedRowsProps) {
+  // Open by default when any advanced prop already carries a value, so an
+  // imported class that set `border: 1px solid red` as a shorthand is visible.
+  const anySet = properties.some((prop) => hasStyleValue(storedStyles[prop]))
+
+  return (
+    <details className={styles.advanced} open={anySet}>
+      <summary className={styles.advancedSummary}>Advanced</summary>
+      <div className={styles.advancedBody}>
+        {properties.map((prop) => {
+          const storedValue = storedStyles[prop]
+          const isSet = hasStyleValue(storedValue)
+          const currentValue = currentStyles[prop]
+          const fallbackValue = hasStyleValue(currentValue)
+            ? currentValue
+            : getCSSPropertyDefaultValue(prop)
+          return (
+            <ClassPropertyRow
+              key={`${activeTab}-${String(prop)}`}
+              property={prop}
+              value={isSet ? (storedValue as string | number) : undefined}
+              placeholder={!isSet ? fallbackValue : undefined}
+              isSet={isSet}
+              onChange={onChange}
+              onRemove={onRemove}
+            />
+          )
+        })}
+      </div>
+    </details>
   )
 }
 

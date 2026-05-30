@@ -57,7 +57,25 @@ export const NUMBER_TYPED_PROPS = new Set<keyof CSSPropertyBag>(['zIndex', 'opac
 const COLOR_PROPERTIES = new Set<keyof CSSPropertyBag>([
   'color',
   'backgroundColor',
+  // Per-side border colors land here too so they render with the colour
+  // picker when surfaced in advanced-mode rows. The BorderControl
+  // composite uses its own picker; this fallback only matters when the
+  // user opens the unified property surface that lists every key.
+  'borderColor',
+  'borderTopColor',
+  'borderRightColor',
+  'borderBottomColor',
+  'borderLeftColor',
 ])
+
+// ---------------------------------------------------------------------------
+// Border style keywords — used by the visual BorderControl and the
+// fallback property surface.
+// ---------------------------------------------------------------------------
+const BORDER_STYLE_KEYWORDS = [
+  'none', 'hidden', 'solid', 'dashed', 'dotted', 'double',
+  'groove', 'ridge', 'inset', 'outset',
+]
 
 // ---------------------------------------------------------------------------
 // Enum (select) properties → option lists (first option is the default)
@@ -87,6 +105,14 @@ const ENUM_OPTIONS = new Map<keyof CSSPropertyBag, string[]>([
   ['pointerEvents',    ['auto', 'none']],
   ['scrollBehavior',   ['auto', 'smooth']],
   ['cursor',           ['auto', 'pointer', 'default', 'move', 'not-allowed', 'crosshair', 'text']],
+  // Border styles — the visual BorderControl uses the same list directly.
+  ['borderStyle',      BORDER_STYLE_KEYWORDS],
+  ['borderTopStyle',   BORDER_STYLE_KEYWORDS],
+  ['borderRightStyle', BORDER_STYLE_KEYWORDS],
+  ['borderBottomStyle',BORDER_STYLE_KEYWORDS],
+  ['borderLeftStyle',  BORDER_STYLE_KEYWORDS],
+  // Native form-control appearance — only `none` and `auto` see real-world use.
+  ['appearance',       ['auto', 'none']],
 ])
 
 // ---------------------------------------------------------------------------
@@ -222,6 +248,25 @@ const DEFAULT_CSS_VALUES: Partial<Record<keyof CSSPropertyBag, string | number>>
   borderRight:  '',
   borderBottom: '',
   borderLeft:   '',
+  // 4-sides shorthand longhands. Empty placeholders so the publisher
+  // doesn't accidentally emit `border-width: 0` etc. when the user only
+  // touched the per-side longhands.
+  borderWidth: '',
+  borderStyle: '',
+  borderColor: 'transparent',
+  // Per-side longhands edited by the visual BorderControl.
+  borderTopWidth:    '0',
+  borderTopStyle:    'none',
+  borderTopColor:    'transparent',
+  borderRightWidth:  '0',
+  borderRightStyle:  'none',
+  borderRightColor:  'transparent',
+  borderBottomWidth: '0',
+  borderBottomStyle: 'none',
+  borderBottomColor: 'transparent',
+  borderLeftWidth:   '0',
+  borderLeftStyle:   'none',
+  borderLeftColor:   'transparent',
   borderRadius:            '0px',
   borderTopLeftRadius:     '0px',
   borderTopRightRadius:    '0px',
@@ -229,6 +274,8 @@ const DEFAULT_CSS_VALUES: Partial<Record<keyof CSSPropertyBag, string | number>>
   borderBottomRightRadius: '0px',
   outline:       'none',
   outlineOffset: '0px',
+  // ── Form-control reset ────────────────────────────────────────────────────
+  appearance: 'auto',
   // ── Effects ───────────────────────────────────────────────────────────────
   boxShadow:      'none',
   filter:         'none',
@@ -399,19 +446,36 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
     id: 'border',
     title: 'Border',
     icon: BoxSolidIcon,
+    // Drives the section "N set" dot + search filtering. The visual
+    // BorderControl edits the per-side longhands + per-corner radius +
+    // outline; the shorthand props (border / borderTop / …) live in the
+    // section's Advanced disclosure and are listed here too so a search for
+    // "border" still surfaces the section.
     properties: [
+      // Per-side longhands (canonical, edited by BorderControl)
+      'borderTopWidth', 'borderTopStyle', 'borderTopColor',
+      'borderRightWidth', 'borderRightStyle', 'borderRightColor',
+      'borderBottomWidth', 'borderBottomStyle', 'borderBottomColor',
+      'borderLeftWidth', 'borderLeftStyle', 'borderLeftColor',
+      // Per-corner radius
+      'borderTopLeftRadius',
+      'borderTopRightRadius',
+      'borderBottomLeftRadius',
+      'borderBottomRightRadius',
+      // Outline
+      'outline',
+      'outlineOffset',
+      // Shorthands (Advanced disclosure)
       'border',
       'borderTop',
       'borderRight',
       'borderBottom',
       'borderLeft',
+      'borderWidth',
+      'borderStyle',
+      'borderColor',
       'borderRadius',
-      'borderTopLeftRadius',
-      'borderTopRightRadius',
-      'borderBottomLeftRadius',
-      'borderBottomRightRadius',
-      'outline',
-      'outlineOffset',
+      'appearance',
     ],
   },
   {

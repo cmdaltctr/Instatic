@@ -122,14 +122,56 @@ const CSSPropertyBagSchema = Type.Object({
   borderRight: Type.Optional(Type.String()),
   borderBottom: Type.Optional(Type.String()),
   borderLeft: Type.Optional(Type.String()),
+
+  // 4-sides shorthand longhands. `borderColor` was already here;
+  // `borderWidth` and `borderStyle` are added so a real-site import
+  // that mixes shorthand and longhand round-trips losslessly.
+  borderWidth: Type.Optional(Type.String()),
+  borderStyle: Type.Optional(Type.String()),
   borderColor: Type.Optional(Type.String()),
+
+  // Per-side longhand — the canonical storage shape edited by the
+  // visual BorderControl. The publisher collapses all-sides-equal
+  // values to the `border: W S C` shorthand at emission time so the
+  // generated CSS stays compact (mirrors the padding / margin sides
+  // shorthand in `bagToCSS`).
+  borderTopWidth: Type.Optional(Type.String()),
+  borderTopStyle: Type.Optional(Type.String()),
+  borderTopColor: Type.Optional(Type.String()),
+  borderRightWidth: Type.Optional(Type.String()),
+  borderRightStyle: Type.Optional(Type.String()),
+  borderRightColor: Type.Optional(Type.String()),
+  borderBottomWidth: Type.Optional(Type.String()),
+  borderBottomStyle: Type.Optional(Type.String()),
+  borderBottomColor: Type.Optional(Type.String()),
+  borderLeftWidth: Type.Optional(Type.String()),
+  borderLeftStyle: Type.Optional(Type.String()),
+  borderLeftColor: Type.Optional(Type.String()),
+
   borderRadius: Type.Optional(Type.String()),
   borderTopLeftRadius: Type.Optional(Type.String()),
   borderTopRightRadius: Type.Optional(Type.String()),
   borderBottomLeftRadius: Type.Optional(Type.String()),
   borderBottomRightRadius: Type.Optional(Type.String()),
+
+  // border-image — the browser unrolls the `border` shorthand into these
+  // five longhands too. No dedicated editor UI (border-image is niche), but
+  // allowlisted so imported CSS round-trips faithfully instead of warning.
+  // `borderImageSource` is the picture/gradient; the others control slicing.
+  borderImageSource: Type.Optional(Type.String()),
+  borderImageSlice: Type.Optional(Type.String()),
+  borderImageWidth: Type.Optional(Type.String()),
+  borderImageOutset: Type.Optional(Type.String()),
+  borderImageRepeat: Type.Optional(Type.String()),
+
   outline: Type.Optional(Type.String()),
   outlineOffset: Type.Optional(Type.String()),
+
+  // Native form-control reset. `appearance: none` is ubiquitous in modern
+  // reset stylesheets (Tailwind preflight, Open Props, ...). The editor's
+  // own controls have no use for it, but imported CSS that targets form
+  // elements needs it to round-trip.
+  appearance: Type.Optional(Type.String()),
 
   // Effects
   boxShadow: Type.Optional(Type.String()),
