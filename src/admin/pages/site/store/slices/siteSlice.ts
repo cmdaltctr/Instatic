@@ -65,6 +65,10 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
     // call it before staging multiple mutations).
     pushHistory: helpers.pushHistory,
 
+    // mutateAllPagesAndSite is the public entry point for the Super Import
+    // wizard — one Cmd+Z reverts the entire import.
+    mutateAllPagesAndSite: helpers.mutateAllPagesAndSite,
+
     // ─── Action surface ──────────────────────────────────────────────────────
     ...createUndoRedoActions(helpers),
     ...createLifecycleActions(helpers),
