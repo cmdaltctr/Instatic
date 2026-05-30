@@ -19,7 +19,7 @@ import { createClipboardSlice } from './slices/clipboardSlice'
 import { setAgentStoreApi } from '@site/agent/storeRef'
 import { bindPluginRuntimeStoreApi } from '@core/plugins/runtime'
 import { useAdminUi } from '@admin/state/adminUi'
-import { readEditorLayout } from '@site/layout/panelLayoutStorage'
+import { readWorkspaceLayout, workspaceFromPathname } from '@site/layout/panelLayoutStorage'
 import { restoreStoredEditorLayout } from '@site/hooks/useEditorLayoutPersistence'
 
 /**
@@ -71,7 +71,9 @@ export const useEditorStore = create<EditorStore>()(
 
 // Synchronously hydrate the persisted editor layout (sidebar widths,
 // open/closed panel states) from localStorage at module-load time —
-// BEFORE the first React render reads the store.
+// BEFORE the first React render reads the store. Picks the workspace
+// to hydrate from based on the current URL pathname so e.g. opening
+// `/admin/media` paints with media's saved sidebar state, not site's.
 //
 // Why this can't live in a `useEffect`: `useEditorLayoutPersistence`
 // used to be the sole hydration site, and `useEffect` only runs after
@@ -88,9 +90,10 @@ export const useEditorStore = create<EditorStore>()(
 // The hook still runs on every `<AdminCanvasLayout>` mount as a safety
 // net (re-applies the layout when the layout component remounts after
 // a non-editor route) and owns the write-side `subscribe`.
-const initialEditorLayout = readEditorLayout()
-if (initialEditorLayout) {
-  restoreStoredEditorLayout(useEditorStore, initialEditorLayout)
+if (typeof window !== 'undefined') {
+  const initialWorkspace = workspaceFromPathname(window.location.pathname) ?? 'site'
+  const initialLayout = readWorkspaceLayout(initialWorkspace)
+  restoreStoredEditorLayout(useEditorStore, initialWorkspace, initialLayout)
 }
 
 // Wire the live store reference to the agent executor's bridge module so

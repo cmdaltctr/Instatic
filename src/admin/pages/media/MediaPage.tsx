@@ -14,6 +14,10 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { AdminCanvasLayout } from '@admin/layouts/AdminCanvasLayout'
+import {
+  readWorkspaceLayout,
+  writeWorkspaceLayout,
+} from '@site/layout/panelLayoutStorage'
 import { Button } from '@ui/components/Button'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
 import { MediaSidebar, type MediaSidebarPanelId } from './components/MediaSidebar/MediaSidebar'
@@ -23,9 +27,29 @@ import { UploadQueueWindow } from './components/UploadQueueWindow/UploadQueueWin
 import { BulkEditWindow } from './components/BulkEditWindow/BulkEditWindow'
 import { useMediaWorkspace } from './hooks/useMediaWorkspace'
 
+const MEDIA_PANEL_IDS: ReadonlySet<MediaSidebarPanelId> = new Set(['folders', 'storage'])
+
+function readPersistedMediaPanel(): MediaSidebarPanelId | null {
+  const stored = readWorkspaceLayout('media').activeLeftPanel
+  if (stored === null) return null
+  if (typeof stored === 'string' && MEDIA_PANEL_IDS.has(stored as MediaSidebarPanelId)) {
+    return stored as MediaSidebarPanelId
+  }
+  return 'folders'
+}
+
 export function MediaPage() {
   const workspace = useMediaWorkspace()
-  const [activePanel, setActivePanel] = useState<MediaSidebarPanelId | null>('folders')
+  // Initial value pulls from the per-workspace stored layout so the rail
+  // remembers the last panel the user had open in the Media workspace.
+  const [activePanel, setActivePanel] = useState<MediaSidebarPanelId | null>(
+    readPersistedMediaPanel,
+  )
+  // Persist rail toggles so the next visit to /admin/media reopens the same
+  // panel (or stays closed if the user closed it).
+  useEffect(() => {
+    writeWorkspaceLayout('media', { activeLeftPanel: activePanel })
+  }, [activePanel])
   const [uploadQueueOpen, setUploadQueueOpen] = useState(false)
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)

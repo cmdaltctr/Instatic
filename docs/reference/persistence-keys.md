@@ -20,7 +20,7 @@ Catalog of every `localStorage` / `sessionStorage` key the admin app writes, and
 | Key                                       | Owner                                                                 | Source-of-truth file                                            |
 |-------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------|
 | `pb-editor-prefs`                         | All editor preferences (auto-save, hover-preview, density, layers options) — see [docs/features/editor-preferences.md](../features/editor-preferences.md) | `src/admin/pages/site/preferences/editorPreferences.ts` → `EDITOR_PREFS_KEY` |
-| `pb-editor-layout-v1`                     | Floating panel positions / open states (canvas + media)               | `src/admin/pages/site/layout/panelLayoutStorage.ts` → `EDITOR_LAYOUT_STORAGE_KEY` |
+| `pb-editor-layout-v2`                     | Per-workspace sidebar widths + open states (site / content / data / media) and floating panel positions | `src/admin/pages/site/layout/panelLayoutStorage.ts` → `EDITOR_LAYOUT_STORAGE_KEY` |
 | `pb-clipboard-v1`                         | The editor clipboard (copy / cut / paste of layer subtrees)            | `src/admin/pages/site/store/clipboard/clipboardStorage.ts` → `CLIPBOARD_STORAGE_KEY` |
 | `pb-class-usage`                          | Recently-used classes in the ClassPicker autocomplete                 | `src/admin/pages/site/preferences/classUsage.ts` → `CLASS_USAGE_STORAGE_KEY` |
 | `pb-dom-panel`                            | DOM panel collapse / expand state per node                            | `src/admin/pages/site/panels/DomPanel/DomPanel.tsx`             |
@@ -116,7 +116,7 @@ localStorage.setItem('pb-...', JSON.stringify(next))
 When a stored shape changes incompatibly, bump the suffix:
 
 ```text
-pb-editor-layout-v1    →    pb-editor-layout-v2
+pb-editor-layout-v2    →    pb-editor-layout-v3
 ```
 
 The old key stays in localStorage for users who haven't upgraded; the new key starts fresh. Don't migrate — let the old data be GC'd by the user agent over time.

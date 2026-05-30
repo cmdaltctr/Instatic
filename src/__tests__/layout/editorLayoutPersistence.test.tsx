@@ -19,7 +19,7 @@ import type { CmsCurrentUser } from '@core/persistence'
 import { pageToCells } from '@core/data/pageFromRow'
 import '@modules/base/index'
 
-const LAYOUT_STORAGE_KEY = 'pb-editor-layout-v1'
+const LAYOUT_STORAGE_KEY = 'pb-editor-layout-v2'
 
 const originalFetch = globalThis.fetch
 
@@ -275,22 +275,22 @@ describe('AdminCanvasLayout — CMS site hydration gate', () => {
 })
 
 describe('AdminCanvasLayout — persisted panel layout', () => {
-  it('restores panel visibility from localStorage on mount', async () => {
+  it('restores panel visibility from the site workspace layout on mount', async () => {
     localStorage.setItem(
       LAYOUT_STORAGE_KEY,
       JSON.stringify({
-        version: 1,
-        panels: {
-          dom: { open: false },
-          properties: { open: true, mode: 'floating', width: 390 },
-          site: { open: true },
-          media: { open: true },
-          codeeditor: { open: true },
-          dependencies: { open: true },
-          agent: { open: true },
+        version: 2,
+        workspaces: {
+          site: {
+            leftWidth: 410,
+            rightWidth: 390,
+            rightOpen: true,
+            propertiesPanelMode: 'floating',
+            activeLeftPanel: 'site',
+            codeEditorPanelOpen: true,
+            activeEditorFileId: 'file-1',
+          },
         },
-        sidebars: { leftWidth: 410 },
-        activeEditorFileId: 'file-1',
       }),
     )
     loadSiteWithSelectedHeading()
@@ -310,30 +310,6 @@ describe('AdminCanvasLayout — persisted panel layout', () => {
       expect(state.activeEditorFileId).toBe('file-1')
       expect(state.dependenciesPanelOpen).toBe(false)
       expect(state.isAgentOpen).toBe(false)
-    }, { timeout: 150 })
-  })
-
-  it('ignores retired Files panel layout records', async () => {
-    localStorage.setItem(
-      LAYOUT_STORAGE_KEY,
-      JSON.stringify({
-        version: 1,
-        panels: {
-          files: { open: true },
-          site: { open: false },
-        },
-      }),
-    )
-
-    renderEditorLayout()
-
-    await waitFor(() => {
-      const state = useEditorStore.getState()
-      expect(state.siteExplorerPanelOpen).toBe(false)
-
-      const stored = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) ?? '{}')
-      expect(stored.panels.files).toBeUndefined()
-      expect(stored.panels.site.open).toBe(false)
     }, { timeout: 150 })
   })
 })
@@ -570,12 +546,16 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
     localStorage.setItem(
       LAYOUT_STORAGE_KEY,
       JSON.stringify({
-        version: 1,
-        panels: {
-          site: { open: true },
-          properties: { open: true, mode: 'docked', width: 420 },
+        version: 2,
+        workspaces: {
+          site: {
+            leftWidth: 410,
+            rightWidth: 420,
+            rightOpen: true,
+            activeLeftPanel: 'site',
+            propertiesPanelMode: 'docked',
+          },
         },
-        sidebars: { leftWidth: 410 },
       }),
     )
 
@@ -601,8 +581,8 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
       expect(state.leftSidebarWidth).toBe(420)
       expect(state.propertiesPanel.width).toBe(430)
       const stored = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) ?? '{}')
-      expect(stored.sidebars.leftWidth).toBe(420)
-      expect(stored.panels.properties.width).toBe(430)
+      expect(stored.workspaces.site.leftWidth).toBe(420)
+      expect(stored.workspaces.site.rightWidth).toBe(430)
     }, { timeout: 150 })
   })
 

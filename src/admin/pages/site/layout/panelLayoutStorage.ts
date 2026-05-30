@@ -2,7 +2,20 @@ import { Type } from '@sinclair/typebox'
 import type { PropertiesPanelMode } from '@site/store/slices/uiSlice'
 import { safeParseJson } from '@core/utils/jsonValidate'
 
-export const EDITOR_LAYOUT_STORAGE_KEY = 'pb-editor-layout-v1'
+/**
+ * Per-workspace editor layout storage.
+ *
+ * The persisted shape is namespaced by workspace ('site', 'content', 'data',
+ * 'media') so each workspace remembers its own sidebar widths and open/closed
+ * state independently. Switching from a workspace with the right sidebar
+ * expanded (e.g. `site`) to one with no right panel (e.g. `media`) no longer
+ * reserves an empty width on the second workspace.
+ *
+ * Floating panel positions (drag-and-drop overlays) are kept at the top level
+ * — each `FloatingPanelId` is unique to a single workspace, so there is no
+ * cross-workspace collision to namespace around.
+ */
+export const EDITOR_LAYOUT_STORAGE_KEY = 'pb-editor-layout-v2'
 
 /**
  * 2D position of a draggable / floating panel relative to the viewport.
@@ -30,29 +43,65 @@ export type FloatingPanelId =
   | 'mediaDetachedInspector'
   | 'mediaBulkEdit'
 
-export interface StoredPanelLayout {
-  open?: boolean
-  position?: PanelPosition
-  width?: number
-  mode?: PropertiesPanelMode
+/**
+ * Editor workspaces tracked by the layout persistence layer. These are the
+ * four canvas-style admin workspaces — every page that mounts inside
+ * `AdminCanvasLayout`. Other admin pages (Plugins, Users, Account, …) render
+ * via `AdminPageLayout` and do not participate in this persistence.
+ */
+export type EditorWorkspaceId = 'site' | 'content' | 'data' | 'media'
+
+const EDITOR_WORKSPACE_IDS: ReadonlySet<EditorWorkspaceId> = new Set([
+  'site',
+  'content',
+  'data',
+  'media',
+])
+
+export interface StoredWorkspaceLayout {
+  /** Left sidebar pixel width (clamped to SIDEBAR_MIN/MAX_WIDTH on read). */
+  leftWidth?: number
+  /** Right sidebar pixel width. */
+  rightWidth?: number
+  /** Whether the left sidebar shows a panel (rail expanded). */
+  leftOpen?: boolean
+  /** Whether the right sidebar is currently expanded. */
+  rightOpen?: boolean
+  /**
+   * Workspace-specific identifier of the panel that is open in the left
+   * sidebar. Each workspace uses its own id space:
+   *   - site:    'layers' | 'site' | 'selectors' | 'colors' | ...
+   *   - content: 'content' | 'media' | 'agent'
+   *   - media:   'folders' | 'storage'
+   *   - data:    null (the data workspace has a single toggleable panel)
+   */
+  activeLeftPanel?: string | null
+
+  // ── Site-workspace-only fields ────────────────────────────────────────────
+  /** ID of the file currently open in the floating code editor (site only). */
+  activeEditorFileId?: string | null
+  /** Whether the floating code editor is visible (site only). */
+  codeEditorPanelOpen?: boolean
+  /** Properties panel docked vs floating (site only). */
+  propertiesPanelMode?: PropertiesPanelMode
 }
 
 export interface StoredEditorLayout {
-  version: 1
-  panels?: Partial<Record<FloatingPanelId, StoredPanelLayout>>
-  sidebars?: {
-    leftWidth?: number
-  }
-  activeEditorFileId?: string | null
+  version: 2
+  /**
+   * Floating panel positions, keyed by panel id. Each `FloatingPanelId` is
+   * unique to a single workspace so positions are kept at the top level.
+   */
+  panelPositions?: Partial<Record<FloatingPanelId, PanelPosition>>
+  /** Per-workspace sidebar / panel state. */
+  workspaces?: Partial<Record<EditorWorkspaceId, StoredWorkspaceLayout>>
 }
 
 // ---------------------------------------------------------------------------
 // Storage schema
 //
-// .passthrough() so future fields written by other parts of the editor (or
-// older versions) don't crash this reader. Strict version:1 check happens at
-// the call site to allow migrating older shapes if we ever add v2.
-// Surfaced by /audit-types.
+// `additionalProperties: true` so future fields written by other parts of the
+// editor (or older versions) don't crash this reader.
 
 const PanelPositionSchema = Type.Object(
   {
@@ -62,31 +111,31 @@ const PanelPositionSchema = Type.Object(
   { additionalProperties: true },
 )
 
-const StoredPanelLayoutSchema = Type.Object(
+const StoredWorkspaceLayoutSchema = Type.Object(
   {
-    open: Type.Optional(Type.Boolean()),
-    position: Type.Optional(PanelPositionSchema),
-    width: Type.Optional(Type.Number()),
+    leftWidth: Type.Optional(Type.Number()),
+    rightWidth: Type.Optional(Type.Number()),
+    leftOpen: Type.Optional(Type.Boolean()),
+    rightOpen: Type.Optional(Type.Boolean()),
+    activeLeftPanel: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    activeEditorFileId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    codeEditorPanelOpen: Type.Optional(Type.Boolean()),
     // PropertiesPanelMode is a string union; keep loose to avoid coupling to
     // its exact membership here.
-    mode: Type.Optional(Type.String()),
+    propertiesPanelMode: Type.Optional(Type.String()),
   },
   { additionalProperties: true },
 )
 
 const StoredEditorLayoutSchema = Type.Object(
   {
-    version: Type.Literal(1),
-    panels: Type.Optional(Type.Record(Type.String(), StoredPanelLayoutSchema)),
-    sidebars: Type.Optional(
-      Type.Object(
-        {
-          leftWidth: Type.Optional(Type.Number()),
-        },
-        { additionalProperties: true },
-      ),
+    version: Type.Literal(2),
+    panelPositions: Type.Optional(
+      Type.Record(Type.String(), PanelPositionSchema),
     ),
-    activeEditorFileId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    workspaces: Type.Optional(
+      Type.Record(Type.String(), StoredWorkspaceLayoutSchema),
+    ),
   },
   { additionalProperties: true },
 )
@@ -123,25 +172,79 @@ export function writeEditorLayout(layout: StoredEditorLayout) {
 function updateEditorLayout(
   updater: (layout: StoredEditorLayout) => StoredEditorLayout,
 ) {
-  const current = readEditorLayout() ?? { version: 1, panels: {} }
+  const current = readEditorLayout() ?? { version: 2 as const }
   writeEditorLayout(updater(current))
 }
 
+/**
+ * Read the stored layout for a single workspace. Returns an empty object when
+ * no state has been persisted yet — callers should layer their own defaults.
+ */
+export function readWorkspaceLayout(
+  workspace: EditorWorkspaceId,
+): StoredWorkspaceLayout {
+  return readEditorLayout()?.workspaces?.[workspace] ?? {}
+}
+
+/**
+ * Merge a partial layout into a workspace's stored layout. Existing fields
+ * are preserved; pass `undefined` to leave them untouched (a `null` value
+ * intentionally clears a field for those that accept null).
+ */
+export function writeWorkspaceLayout(
+  workspace: EditorWorkspaceId,
+  partial: Partial<StoredWorkspaceLayout>,
+) {
+  updateEditorLayout((layout) => ({
+    ...layout,
+    version: 2,
+    workspaces: {
+      ...layout.workspaces,
+      [workspace]: {
+        ...layout.workspaces?.[workspace],
+        ...partial,
+      },
+    },
+  }))
+}
+
 export function readStoredPanelPosition(panelId: FloatingPanelId): PanelPosition | null {
-  const position = readEditorLayout()?.panels?.[panelId]?.position
+  const position = readEditorLayout()?.panelPositions?.[panelId]
   return isPanelPosition(position) ? position : null
 }
 
 export function writeStoredPanelPosition(panelId: FloatingPanelId, position: PanelPosition) {
   updateEditorLayout((layout) => ({
     ...layout,
-    version: 1,
-    panels: {
-      ...layout.panels,
-      [panelId]: {
-        ...layout.panels?.[panelId],
-        position,
-      },
+    version: 2,
+    panelPositions: {
+      ...layout.panelPositions,
+      [panelId]: position,
     },
   }))
+}
+
+/**
+ * Type guard for narrowing a URL pathname / arbitrary string to one of the
+ * canvas workspaces. Used by `store.ts` synchronous hydration to pick which
+ * workspace's layout to apply on cold load.
+ */
+export function isEditorWorkspaceId(value: string): value is EditorWorkspaceId {
+  return EDITOR_WORKSPACE_IDS.has(value as EditorWorkspaceId)
+}
+
+/**
+ * Map a pathname (e.g. `window.location.pathname`) onto one of the editor
+ * workspaces, or null when the URL does not point at a canvas workspace.
+ *
+ * Lives in the storage module (rather than the hook layer) so the synchronous
+ * hydration in `store.ts` can call it without dragging React into the
+ * eager bundle.
+ */
+export function workspaceFromPathname(pathname: string): EditorWorkspaceId | null {
+  if (pathname.startsWith('/admin/site')) return 'site'
+  if (pathname.startsWith('/admin/content')) return 'content'
+  if (pathname.startsWith('/admin/data')) return 'data'
+  if (pathname.startsWith('/admin/media')) return 'media'
+  return null
 }

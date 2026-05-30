@@ -1,4 +1,8 @@
 import { Suspense, lazy, useEffect, useId, useRef, useState } from 'react'
+import {
+  readWorkspaceLayout,
+  writeWorkspaceLayout,
+} from '@site/layout/panelLayoutStorage'
 import { useAdminUi } from '@admin/state/adminUi'
 import { readTitleCell } from '@core/data/cells'
 import type {
@@ -49,8 +53,31 @@ import {
   canPublishContentEntry,
 } from '@admin/access'
 
+const CONTENT_PANEL_IDS: ReadonlySet<ContentPanelId> = new Set(['content', 'media', 'agent'])
+
+function readPersistedContentPanel(): ContentPanelId | null {
+  const stored = readWorkspaceLayout('content').activeLeftPanel
+  if (stored === null) return null
+  if (typeof stored === 'string' && CONTENT_PANEL_IDS.has(stored as ContentPanelId)) {
+    return stored as ContentPanelId
+  }
+  return 'content'
+}
+
 export function ContentPage() {
-  const [activeContentPanel, setActiveContentPanel] = useState<ContentPanelId | null>('content')
+  // Initial value pulls from the per-workspace stored layout so the rail
+  // remembers the last panel the user had open in the Content workspace.
+  // First-time visitors fall back to the 'content' panel; an explicit `null`
+  // (user closed the rail) is preserved.
+  const [activeContentPanel, setActiveContentPanel] = useState<ContentPanelId | null>(
+    readPersistedContentPanel,
+  )
+  // Persist any rail change so the next visit to /admin/content reopens the
+  // same panel. Effect runs on mount too — that's fine; the value is
+  // identical to what we just read.
+  useEffect(() => {
+    writeWorkspaceLayout('content', { activeLeftPanel: activeContentPanel })
+  }, [activeContentPanel])
   const [collectionDialogOpen, setCollectionDialogOpen] = useState(false)
   // These are monotonic counters used purely as "do the action now" pings:
   // bumping them re-runs the focus effect inside the canvas / body editor.

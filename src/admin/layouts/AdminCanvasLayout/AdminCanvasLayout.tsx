@@ -83,6 +83,7 @@ import { EditorPermissionsProvider } from '@site/EditorPermissionsProvider'
 import type { EditorPermissions } from '@site/editorPermissionsContext'
 
 import { ImportHtmlModal } from '@admin/modals/ImportHtml'
+import { SiteImportModal } from '@admin/modals/SiteImport'
 
 // SettingsModal is heavy (~37 KB raw) and closed 99% of the time. lazy()
 // pushes it into its own chunk and the conditional render below avoids
@@ -151,6 +152,7 @@ export function AdminCanvasLayout({
 }: AdminCanvasLayoutProps) {
   const site = useEditorStore((s) => s.site)
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
+  const propertiesPanelCollapsed = useEditorStore((s) => s.propertiesPanel.collapsed)
   const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
   // Toolbar branding — pulled from the editor store here (we already have
   // it loaded) and forwarded to the prop-driven Toolbar below. Keeps the
@@ -165,6 +167,7 @@ export function AdminCanvasLayout({
   // shell reads from it too.
   const settingsOpen = useAdminUi((s) => s.settingsOpen)
   const importHtmlModalOpen = useEditorStore((s) => s.importHtmlModalOpen)
+  const siteImportModalOpen = useEditorStore((s) => s.siteImportModalOpen)
   const publishSiteSummary = useAdminUi((s) => s.setSiteSummary)
   const publishActiveLivePath = useAdminUi((s) => s.setActiveLivePath)
   // Public path of the page currently open in the Site-editor canvas —
@@ -206,7 +209,16 @@ export function AdminCanvasLayout({
       publishActiveLivePath(null)
     }
   }, [workspace, activeSitePath, publishActiveLivePath])
-  const customRightSidebarExpanded = workspace !== 'site' && Boolean(contentRightPanel)
+  // Media has no right panel at all — its contract never provides
+  // `contentRightPanel`. Track that as a "no right sidebar in this
+  // workspace" signal so we can pass `mode='hidden'` below and stop
+  // reserving width based on a saved `propertiesPanel.collapsed` flag
+  // bled in from another workspace. (Per-workspace layout persistence
+  // makes this less likely in practice, but the media workspace has no
+  // meaningful "open" state to remember either way.)
+  const workspaceHasRightSidebar = workspace !== 'media'
+  const customRightSidebarExpanded =
+    workspaceHasRightSidebar && workspace !== 'site' && !propertiesPanelCollapsed
   const hasRightSidebar = customRightSidebarExpanded || (workspace === 'site' && rightSidebarExpanded)
   // Three-way edit permissions — see `src/admin/access.ts`. A user with all
   // three holds full editor rights; a user with only `canEditContent` is the
@@ -252,7 +264,7 @@ export function AdminCanvasLayout({
     enabled: workspace === 'site',
     loaded: persistence.saveStatus.state !== 'loading',
   })
-  useEditorLayoutPersistence()
+  useEditorLayoutPersistence(workspace)
   useInstalledEditorPlugins()
   // Mount the SSE bridge ONCE per admin tab — gives toasts on plugin
   // crashes from any route, drives the red dot on the Plugins nav link,
@@ -416,15 +428,20 @@ export function AdminCanvasLayout({
           </div>
         </div>
         {/* `mode` tells the RightSidebar which expansion model to use:
-            - `'workspace'`: Content / Data / Media — width follows saved
-              `propertiesPanel.collapsed` only, independent of whether
-              `contentPanel` happens to be truthy yet (those workspaces
-              gate the inspector on async data; a contentPanel-dependent
-              width would slide in once the fetch resolves).
+            - `'workspace'`: Content / Data — width follows the saved
+              `propertiesPanel.collapsed` flag (now per-workspace), so
+              each workspace remembers its own open/closed preference.
+              Independent of whether `contentPanel` happens to be truthy
+              yet (those workspaces gate their inspector on async data;
+              a contentPanel-dependent width would slide in once the
+              fetch resolves).
             - `'site'`:      Site editor — width follows the selection-
               gated `sitePropertiesExpanded` selector.
-            - `'hidden'`:    Site viewer (cannot save drafts) — always
-              closed; nothing inside.
+            - `'hidden'`:    Site viewer (cannot save drafts) AND the
+              Media workspace (no right panel at all — there is nothing
+              to render inside, so the sidebar stays at zero width and
+              the saved properties-collapsed flag from another workspace
+              cannot bleed into Media as empty reserved space).
             `key={workspace}` remounts the sidebar on workspace switch so
             no transition fires across navigations even when both sides
             happen to be expanded at saved widths. Cross-workspace
@@ -432,7 +449,13 @@ export function AdminCanvasLayout({
             `::view-transition(root)` fade in this file's stylesheet. */}
         <RightSidebar
           key={workspace}
-          mode={workspace !== 'site' ? 'workspace' : canSaveSite ? 'site' : 'hidden'}
+          mode={
+            !workspaceHasRightSidebar
+              ? 'hidden'
+              : workspace !== 'site'
+                ? 'workspace'
+                : canSaveSite ? 'site' : 'hidden'
+          }
           contentPanel={workspace !== 'site' ? contentRightPanel : undefined}
         />
       </div>
@@ -458,6 +481,10 @@ export function AdminCanvasLayout({
           Dialog handles its own portal + Escape; always rendered so it can
           react to `importHtmlModalOpen` without a lazy-load delay. */}
       {importHtmlModalOpen && <ImportHtmlModal />}
+
+      {/* Super Import wizard — opens from Spotlight "Import Site" command.
+          Freshly mounted on each open so all wizard state starts clean. */}
+      {siteImportModalOpen && <SiteImportModal />}
     </div>
     </EditorPermissionsProvider>
   )
