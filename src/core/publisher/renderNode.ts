@@ -28,7 +28,7 @@ import { resolveDynamicProps } from '@core/templates/dynamicBindings'
 import { sanitizeModuleCSS } from './cssCollector'
 import { escapeHtml } from './utils'
 import { escapeProps } from './escapeProps'
-import { injectNodeClassIds } from './classInjection'
+import { injectNodeClassIds, injectNodeInlineStyles } from './classInjection'
 import { renderVisualComponentRef } from './renderVisualComponentRef'
 import { renderLoop } from './renderLoop'
 import { resolveAutoSizes } from './sizesResolver'
@@ -129,9 +129,11 @@ function renderStandardNode(
     ctx.cssMap.set(node.moduleId, sanitizeModuleCSS(output.css))
   }
 
-  // base.body has no wrapper element — its classIds go on <body> in publishPage.
+  // base.body has no wrapper element — its classIds + inline styles go on
+  // <body> in publishPage.
   if (node.moduleId === 'base.body') return output.html
-  return injectNodeClassIds(output.html, node.classIds, ctx.site)
+  const withClasses = injectNodeClassIds(output.html, node.classIds, ctx.site)
+  return injectNodeInlineStyles(withClasses, node.inlineStyles)
 }
 
 /**

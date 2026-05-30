@@ -15,7 +15,7 @@
 import type { Page, PageNode } from '@core/page-tree'
 import { selectVisualComponentById } from '@core/page-tree/siteSelectors'
 import { instantiateVCAtRef, type InstantiatedVCNode } from '@core/visualComponents/instantiate'
-import { injectNodeClassIds } from './classInjection'
+import { injectNodeClassIds, injectNodeInlineStyles } from './classInjection'
 import { escapeHtml } from './utils'
 import type { RenderContext } from './renderContext'
 
@@ -130,7 +130,8 @@ export function renderVisualComponentRef(
     cssMap: ctx.cssMap,
   }
 
-  // The page-level ref node's classIds belong on the VC's root element;
-  // the VC's own nodes contribute their classIds via the recursive call.
-  return injectNodeClassIds(renderNode(rootNodeId, syntheticCtx), node.classIds, ctx.site)
+  // The page-level ref node's classIds + inline styles belong on the VC's root
+  // element; the VC's own nodes contribute their classIds via the recursive call.
+  const rendered = injectNodeClassIds(renderNode(rootNodeId, syntheticCtx), node.classIds, ctx.site)
+  return injectNodeInlineStyles(rendered, node.inlineStyles)
 }

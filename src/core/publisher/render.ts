@@ -30,6 +30,7 @@ import type { IModuleRegistry } from '@core/module-engine/types'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { buildPageFrame, buildSiteFrame, buildRouteFrame } from '@core/templates/contextFrames'
 import { classNamesForClassIds } from '@core/page-tree/classNames'
+import { bagToInlineStyle } from './classCss'
 import { collectClassCSS } from './cssCollector'
 import { collectUserStylesheetCss } from './userStylesheets'
 import { PUBLISHER_RESET_CSS } from './reset'
@@ -253,11 +254,18 @@ function composeTemplateContext(
  */
 function computeBodyOpenTag(page: Page, site: SiteDocument): string {
   const rootNode = page.nodes[page.rootNodeId]
-  if (!rootNode?.classIds?.length) return '<body>'
-  const classAttr = classNamesForClassIds(site.styleRules, rootNode.classIds)
-    .map(escapeHtml)
-    .join(' ')
-  return classAttr ? `<body class="${classAttr}">` : '<body>'
+  if (!rootNode) return '<body>'
+
+  const classAttr = rootNode.classIds?.length
+    ? classNamesForClassIds(site.styleRules, rootNode.classIds).map(escapeHtml).join(' ')
+    : ''
+  // base.body emits no wrapper, so the root node's inline styles also belong
+  // on <body> itself (same reasoning as classIds above).
+  const styleAttr = rootNode.inlineStyles ? escapeHtml(bagToInlineStyle(rootNode.inlineStyles)) : ''
+
+  const attrs =
+    (classAttr ? ` class="${classAttr}"` : '') + (styleAttr ? ` style="${styleAttr}"` : '')
+  return `<body${attrs}>`
 }
 
 /**

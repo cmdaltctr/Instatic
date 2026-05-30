@@ -30,6 +30,7 @@ import { Button } from '@ui/components/Button'
 import { SearchBar } from '@ui/components/SearchBar'
 import { Section } from '@ui/components/Section'
 import { ClassComposer } from './ClassComposer'
+import { InlineStyleComposer } from './InlineStyleComposer'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { StyleCategoryRail, MODULE_CATEGORY_ID } from './StyleCategoryRail'
 import {
@@ -61,6 +62,12 @@ interface StyleSurfaceProps {
   activeBreakpointId: string | undefined
   /** Node id — triggers scroll reset when it changes. */
   nodeId: string | null
+  /**
+   * The selected node's inline styles (`node.inlineStyles`). When present (or
+   * after the user clicks "Style inline"), the CSS area edits these directly —
+   * the per-node `style=""` layer — instead of a class.
+   */
+  inlineStyles?: Record<string, unknown>
   /** Pre-rendered module prop rows shown in the Module section. */
   moduleContent?: ReactNode
   /** Called when 'Add class' is clicked in the locked preview. */
@@ -77,6 +84,7 @@ export function StyleSurface({
   activeClassId,
   activeBreakpointId,
   nodeId,
+  inlineStyles,
   moduleContent,
   onFocusClassPicker,
 }: StyleSurfaceProps) {
@@ -92,7 +100,12 @@ export function StyleSurface({
     if (styleQuery !== '') setStyleQuery('')
   }
 
-  // Reset active anchor on node change ("update during render" — no setState-in-effect).
+  // Inline-vs-class edit target lives in the store (mutually exclusive with the
+  // active class; reset on selection change in selectionSlice).
+  const inlineStyleEditing = useEditorStore((s) => s.inlineStyleEditing)
+  const setInlineStyleEditing = useEditorStore((s) => s.setInlineStyleEditing)
+
+  // Reset active anchor on node change ("update during render").
   const [lastNodeId, setLastNodeId] = useState<string | null>(null)
   if (lastNodeId !== nodeId) {
     setLastNodeId(nodeId)
@@ -176,9 +189,22 @@ export function StyleSurface({
     return cs && cs.some((c) => c.id === id) ? id : null
   })
   const activeContextId = activeConditionId ?? (activeTab !== 'base' ? activeTab : null)
-  const storedStyles: Record<string, unknown> = activeClass
-    ? (activeContextId ? (activeClass.contextStyles[activeContextId] ?? {}) : activeClass.styles)
-    : {}
+
+  // Inline-style editing target: a node with no active class that either
+  // already has inline styles or opted in via "Style inline". Inline styles are
+  // base-only, so the breakpoint/condition context is irrelevant here.
+  const permissions = useEditorPermissions()
+  const canEditStyleHere = permissions.canEditStyle
+  // `inlineStyleEditing` is the single source of truth for the edit target
+  // (seeded on selection for inline-only nodes, toggled via the Inline pill /
+  // "Style inline" button). It's mutually exclusive with an active class.
+  const showInline = canEditStyleHere && nodeId != null && activeClass == null && inlineStyleEditing
+
+  const storedStyles: Record<string, unknown> = showInline
+    ? (inlineStyles ?? {})
+    : activeClass
+      ? (activeContextId ? (activeClass.contextStyles[activeContextId] ?? {}) : activeClass.styles)
+      : {}
   const sectionSetCounts = getClassStyleSectionSetCounts(storedStyles)
 
   // Module section visibility: always visible unless search has no match.
@@ -195,13 +221,12 @@ export function StyleSurface({
     ? activeClass
     : null
 
-  // CSS area content. Three branches:
+  // CSS area content. Branches in priority order:
   //  - caller lacks `site.style.edit`           → role-locked notice
+  //  - inline-style editing target              → InlineStyleComposer
   //  - active class is set and editable         → ClassComposer
   //  - active class is a locked generated utility → utility notice
-  //  - no active class                          → teaser + "Add class" CTA
-  const permissions = useEditorPermissions()
-  const canEditStyleHere = permissions.canEditStyle
+  //  - no active class                          → teaser + "Add class"/"Style inline"
   let cssContent: ReactNode
   if (!canEditStyleHere) {
     cssContent = (
@@ -212,6 +237,15 @@ export function StyleSurface({
           description="Your role can edit page copy but not classes or style overrides. Ask an editor to make visual changes."
         />
       </div>
+    )
+  } else if (showInline) {
+    cssContent = (
+      <InlineStyleComposer
+        key={`${nodeId}-inline`}
+        nodeId={nodeId!}
+        inlineStyles={inlineStyles}
+        styleQuery={styleQuery}
+      />
     )
   } else if (activeClass != null) {
     if (isGeneratedClassLocked(activeClass)) {
@@ -232,7 +266,10 @@ export function StyleSurface({
     }
   } else {
     cssContent = (
-      <LockedStylePreview onFocusClassPicker={onFocusClassPicker ?? noop} />
+      <LockedStylePreview
+        onFocusClassPicker={onFocusClassPicker ?? noop}
+        onStyleInline={nodeId != null ? () => setInlineStyleEditing(true) : undefined}
+      />
     )
   }
 
@@ -294,6 +331,7 @@ export function StyleSurface({
           onSectionClick={handleSectionClick}
           definition={definition ?? null}
           activeClass={activeClass}
+          editingInline={showInline}
         />
       </div>
     </div>
@@ -306,11 +344,14 @@ export function StyleSurface({
 
 interface LockedStylePreviewProps {
   onFocusClassPicker: () => void
+  /** When provided, shows a "Style inline" button that edits the node's
+   *  `style=""` layer directly (no class). Omitted in selector/global mode. */
+  onStyleInline?: () => void
 }
 
 const TEASER_SECTION = CLASS_STYLE_SECTIONS.find((s) => s.id === 'layout')!
 
-function LockedStylePreview({ onFocusClassPicker }: LockedStylePreviewProps) {
+function LockedStylePreview({ onFocusClassPicker, onStyleInline }: LockedStylePreviewProps) {
   const noopChange = () => {}
   const noopRemove = () => {}
 
@@ -339,13 +380,25 @@ function LockedStylePreview({ onFocusClassPicker }: LockedStylePreviewProps) {
         <p className={styles.lockedPreviewCtaText}>
           Add a class to start styling this element
         </p>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onFocusClassPicker}
-        >
-          Add class
-        </Button>
+        <div className={styles.lockedPreviewCtaActions}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onFocusClassPicker}
+          >
+            Add class
+          </Button>
+          {onStyleInline && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onStyleInline}
+              tooltip="Style just this element with an inline style attribute (no reusable class)"
+            >
+              Style inline
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )

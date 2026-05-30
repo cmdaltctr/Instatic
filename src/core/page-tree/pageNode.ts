@@ -69,6 +69,9 @@ export function parsePageNode(raw: unknown, nodePath: string): PageNode {
   const props = parseStylesBag(r.props)
   const propBindings = parsePropBindings(r.propBindings)
   const dynamicBindings = parseAndMigrateDynamicBindings(r.dynamicBindings, props)
+  // Inline styles — same tolerant bag parser as props/class styles. Dropped
+  // when missing or empty so nodes without inline styles stay lean.
+  const inlineStyles = parseStylesBag(r.inlineStyles)
 
   return {
     id,
@@ -82,5 +85,6 @@ export function parsePageNode(raw: unknown, nodePath: string): PageNode {
     ...(typeof r.hidden === 'boolean' ? { hidden: r.hidden } : {}),
     ...(propBindings !== undefined ? { propBindings } : {}),
     ...(dynamicBindings !== undefined ? { dynamicBindings } : {}),
+    ...(Object.keys(inlineStyles).length > 0 ? { inlineStyles } : {}),
   }
 }

@@ -146,6 +146,40 @@ describe('classSlice.updateClassStyles', () => {
 })
 
 // ---------------------------------------------------------------------------
+// clearClassStyleProperties — batch prune (orphan-prune scenario)
+// ---------------------------------------------------------------------------
+
+describe('classSlice.clearClassStyleProperties', () => {
+  it('clears several properties from base + every context in one undo step', () => {
+    setupSite()
+    const cls = getStore().createClass('row')
+    getStore().updateClassStyles(cls.id, { display: 'flex', alignItems: 'center', color: 'red' })
+    getStore().setClassContextStyles(cls.id, 'mobile', { gap: '8px' })
+
+    const historyBefore = historyLength()
+    getStore().clearClassStyleProperties(cls.id, ['display', 'alignItems', 'gap'])
+
+    const rule = useEditorStore.getState().site!.styleRules[cls.id]
+    // Pruned everywhere; the unrelated `color` survives.
+    expect('display' in rule.styles).toBe(false)
+    expect('alignItems' in rule.styles).toBe(false)
+    expect(rule.styles.color).toBe('red')
+    expect('gap' in (rule.contextStyles.mobile ?? {})).toBe(false)
+    // Single undo step.
+    expect(historyLength()).toBe(historyBefore + 1)
+  })
+
+  it('is a no-op (no history) when none of the properties are set', () => {
+    setupSite()
+    const cls = getStore().createClass('row')
+    getStore().updateClassStyles(cls.id, { color: 'red' })
+    const historyBefore = historyLength()
+    getStore().clearClassStyleProperties(cls.id, ['display', 'gap'])
+    expect(historyLength()).toBe(historyBefore)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // setClassContextStyles
 // ---------------------------------------------------------------------------
 

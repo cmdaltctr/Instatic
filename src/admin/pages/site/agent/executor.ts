@@ -300,7 +300,7 @@ function runInsertHtml(input: Static<typeof insertHtmlSchema>): AgentActionResul
   }
 
   // (3) Parse and walk the HTML to produce a flat node fragment
-  const { nodes, rootIds, nodeStyles } = importHtml(input.html)
+  const { nodes, rootIds } = importHtml(input.html)
   if (rootIds.length === 0) {
     return { success: false, error: 'HTML contained no importable elements.' }
   }
@@ -308,7 +308,7 @@ function runInsertHtml(input: Static<typeof insertHtmlSchema>): AgentActionResul
   // (4) Insert via the store action — same path as the paste import modal
   const insertedRootIds = getStoreState().insertImportedNodes(
     input.parentId,
-    { nodes, rootIds, ...(nodeStyles ? { nodeStyles } : {}) },
+    { nodes, rootIds },
     input.index,
   )
   if (insertedRootIds.length === 0) {
@@ -398,14 +398,14 @@ function runReplaceNodeHtml(input: Static<typeof replaceNodeHtmlSchema>): AgentA
   }
 
   // Import and insert the new HTML under the target node
-  const { nodes, rootIds, nodeStyles } = importHtml(input.html)
+  const { nodes, rootIds } = importHtml(input.html)
   if (rootIds.length === 0) {
     return { success: false, error: 'HTML contained no importable elements.' }
   }
 
   const insertedRootIds = getStoreState().insertImportedNodes(
     input.nodeId,
-    { nodes, rootIds, ...(nodeStyles ? { nodeStyles } : {}) },
+    { nodes, rootIds },
   )
   if (insertedRootIds.length === 0) {
     return { success: false, error: `Node does not accept children: ${input.nodeId}` }

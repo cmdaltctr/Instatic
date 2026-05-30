@@ -97,6 +97,7 @@ export function makePage(
       hidden: spec.hidden ?? false,
       dynamicBindings: spec.dynamicBindings,
       propBindings: spec.propBindings,
+      ...(spec.inlineStyles ? { inlineStyles: spec.inlineStyles } : {}),
     }
   }
   return {

@@ -86,24 +86,19 @@ function rewriteFragment(
 
   for (const [id, node] of Object.entries(fragment.nodes)) {
     const newProps = rewriteProps(node.props, rewriteMap)
-    rewrittenNodes[id] = { ...node, props: newProps }
-  }
-
-  // Inline background `url('key')` values carried in `nodeStyles` rewrite to
-  // their uploaded media URL just like CSS-rule background values.
-  let rewrittenNodeStyles: ImportFragment['nodeStyles']
-  if (fragment.nodeStyles) {
-    rewrittenNodeStyles = {}
-    for (const [id, bag] of Object.entries(fragment.nodeStyles)) {
-      rewrittenNodeStyles[id] = rewriteStylesBag(bag, rewriteMap) as Record<string, string>
+    // Inline background `url('key')` values on `node.inlineStyles` rewrite to
+    // their uploaded media URL just like CSS-rule background values.
+    const newInlineStyles = node.inlineStyles
+      ? rewriteStylesBag(node.inlineStyles as Record<string, unknown>, rewriteMap)
+      : undefined
+    rewrittenNodes[id] = {
+      ...node,
+      props: newProps,
+      ...(newInlineStyles ? { inlineStyles: newInlineStyles } : {}),
     }
   }
 
-  return {
-    nodes: rewrittenNodes,
-    rootIds: fragment.rootIds,
-    ...(rewrittenNodeStyles ? { nodeStyles: rewrittenNodeStyles } : {}),
-  }
+  return { nodes: rewrittenNodes, rootIds: fragment.rootIds }
 }
 
 function rewriteProps(

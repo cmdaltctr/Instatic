@@ -107,6 +107,9 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
   const node = useEditorStore((s) => selectActiveCanvasPage(s)?.nodes[nodeId] ?? null)
   const activeClassId = useEditorStore((s) => s.activeClassId)
   const setActiveClass = useEditorStore((s) => s.setActiveClass)
+  const inlineStyleEditing = useEditorStore((s) => s.inlineStyleEditing)
+  const setInlineStyleEditing = useEditorStore((s) => s.setInlineStyleEditing)
+  const clearNodeInlineStyles = useEditorStore((s) => s.clearNodeInlineStyles)
   const addNodeClass = useEditorStore((s) => s.addNodeClass)
   const removeNodeClass = useEditorStore((s) => s.removeNodeClass)
   const createClass = useEditorStore((s) => s.createClass)
@@ -143,6 +146,15 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
 
   const assignedIds = node?.classIds ?? []
   const visibleAssignedIds = assignedIds.filter((id) => isUserVisibleClass(site?.styleRules[id]))
+  // The "Inline" pill appears once the node has inline styles, or while the
+  // user is actively editing inline styles (so they can switch back to a class
+  // or see the active target). Lets a node with BOTH classes and inline styles
+  // toggle which one the panel edits.
+  const nodeHasInlineStyles = !!node?.inlineStyles && Object.keys(node.inlineStyles).length > 0
+  // Show the pill when there are inline styles to switch to, or while inline
+  // editing is active (so the user can switch back to a class). `inlineStyleEditing`
+  // is the single source of truth for which target is active.
+  const showInlinePill = nodeHasInlineStyles || inlineStyleEditing
   const allClasses = Object.values(site?.styleRules ?? {}).filter(isUserVisibleClass)
   const contextClass = contextMenu ? site?.styleRules[contextMenu.classId] ?? null : null
   const contextClassIndex = contextMenu ? visibleAssignedIds.indexOf(contextMenu.classId) : -1
@@ -443,12 +455,12 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
       {/* Assigned class chips — rendered below the input row so the
           add-class control and Componentize button sit at the top of the
           panel, with the active chip stack underneath. */}
-      {visibleAssignedIds.length > 0 && (
+      {(visibleAssignedIds.length > 0 || showInlinePill) && (
         <div className={styles.pillsContainer}>
           {visibleAssignedIds.map((id) => {
             const cls = site?.styleRules[id]
             if (!cls) return null
-            const isActive = activeClassId === id
+            const isActive = activeClassId === id && !inlineStyleEditing
             return (
               <AssignedClassPill
                 key={id}
@@ -461,6 +473,16 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
               />
             )
           })}
+          {showInlinePill && (
+            <InlineStylePill
+              isActive={inlineStyleEditing}
+              onToggle={() => setInlineStyleEditing(!inlineStyleEditing)}
+              onRemove={() => {
+                clearNodeInlineStyles(nodeId)
+                setInlineStyleEditing(false)
+              }}
+            />
+          )}
         </div>
       )}
     </div>
@@ -590,6 +612,66 @@ function AssignedClassPill({
         dangerHover
         className={styles.pillRemoveBtn}
         data-testid={`class-chip-remove-${cls.name}`}
+      >
+        <CloseIcon size={10} color="currentColor" aria-hidden="true" />
+      </Button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// InlineStylePill — the "Inline" edit-target chip.
+//
+// Sits alongside the class pills. Selecting it switches the Properties panel to
+// editing the node's inline styles (`node.inlineStyles`); selecting a class
+// pill switches back. Mutually exclusive with the active class (enforced in the
+// store). No remove button — inline styles are cleared per-property in the
+// editor, and the pill disappears once none remain (unless still being edited).
+// ---------------------------------------------------------------------------
+
+function InlineStylePill({
+  isActive,
+  onToggle,
+  onRemove,
+}: {
+  isActive: boolean
+  onToggle: () => void
+  /** Clear all inline styles on the node (mirrors the class pill's × remove). */
+  onRemove: () => void
+}) {
+  return (
+    <div
+      className={cn(styles.pill, isActive ? styles.pillActive : styles.pillInactive)}
+      data-accent="inline"
+      data-testid="inline-style-pill"
+      onClick={onToggle}
+      role="button"
+      aria-pressed={isActive}
+      aria-label={`${isActive ? 'Stop editing' : 'Edit'} inline styles`}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggle()
+        }
+      }}
+    >
+      <span className={styles.pillName}>Inline</span>
+
+      {/* Clear all inline styles from this element (does not affect classes). */}
+      <Button
+        variant="ghost"
+        size="micro"
+        iconOnly
+        onClick={(e) => {
+          e.stopPropagation()
+          onRemove()
+        }}
+        aria-label="Clear inline styles"
+        tooltip="Clear inline styles"
+        dangerHover
+        className={styles.pillRemoveBtn}
+        data-testid="inline-style-pill-remove"
       >
         <CloseIcon size={10} color="currentColor" aria-hidden="true" />
       </Button>

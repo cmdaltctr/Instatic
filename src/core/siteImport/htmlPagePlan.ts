@@ -69,12 +69,8 @@ export function makeHtmlPagePlan(
   const slug = deriveSlug(htmlPath)
 
   // --- Step 5: parse body nodes ---
-  const { nodes, rootIds, nodeStyles } = importHtml(htmlSource)
-  const nodeFragment: ImportFragment = {
-    nodes,
-    rootIds,
-    ...(nodeStyles ? { nodeStyles } : {}),
-  }
+  const { nodes, rootIds } = importHtml(htmlSource)
+  const nodeFragment: ImportFragment = { nodes, rootIds }
 
   const pagePlan: PagePlan = {
     source: htmlPath,

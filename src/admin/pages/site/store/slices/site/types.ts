@@ -191,6 +191,18 @@ export interface SiteSlice {
   /** Multi-delete: removes every id and its descendants in one undo step. */
   deleteNodes: (nodeIds: string[]) => void
   updateNodeProps: (nodeId: string, patch: Record<string, unknown>) => void
+  /**
+   * Patch a node's inline styles (`node.inlineStyles`) — the per-node `style=""`
+   * layer emitted by the publisher. A `null`/`undefined`/`''` value in the patch
+   * removes that property; an empty resulting bag clears the field entirely.
+   * Inline styles are BASE-ONLY (no breakpoint/condition axis), mirroring real
+   * HTML inline styles.
+   */
+  setNodeInlineStyles: (nodeId: string, patch: Record<string, string | number | null | undefined>) => void
+  /** Remove a single property from a node's inline styles. */
+  removeNodeInlineStyleProperty: (nodeId: string, propKey: string) => void
+  /** Remove ALL inline styles from a node (clears the `inlineStyles` field). */
+  clearNodeInlineStyles: (nodeId: string) => void
   setBreakpointOverride: (nodeId: string, breakpointId: string, patch: Record<string, unknown>) => void
   clearBreakpointOverride: (nodeId: string, breakpointId: string) => void
   renameNode: (nodeId: string, label: string) => void

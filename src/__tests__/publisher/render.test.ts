@@ -413,6 +413,64 @@ describe('renderNode', () => {
       expect(html).toBe('<!-- marker --><section class="hero"><p>x</p></section>')
     })
   })
+
+  // -------------------------------------------------------------------------
+  // Inline styles — node.inlineStyles → style="" on the root element
+  // -------------------------------------------------------------------------
+
+  describe('inline styles — node.inlineStyles emit a style attribute', () => {
+    const bareContainerDef = makeModule('base.container', {
+      canHaveChildren: true,
+      render: (_, children) => ({ html: `<div>${children.join('')}</div>` }),
+    })
+    const reg = makeRegistry({ 'base.container': bareContainerDef })
+
+    it('emits a style attribute, sanitised and HTML-escaped, from inlineStyles', () => {
+      const page = makePage({
+        root: {
+          moduleId: 'base.container',
+          inlineStyles: { backgroundImage: `url('/uploads/media/hero.png')`, color: 'red' },
+        },
+      })
+      const html = renderNode('root', {
+        page, site, registry: reg, breakpointId: undefined, cssMap: new Map(),
+      })
+      // Single-quotes in the url() are escaped for the double-quoted attribute.
+      expect(html).toContain('style="')
+      expect(html).toContain('background-image: url(&#x27;/uploads/media/hero.png&#x27;)')
+      expect(html).toContain('color: red')
+    })
+
+    it('drops a dangerous declaration value but keeps the safe ones', () => {
+      const page = makePage({
+        root: {
+          moduleId: 'base.container',
+          inlineStyles: { color: 'expression(alert(1))', display: 'block' },
+        },
+      })
+      const html = renderNode('root', {
+        page, site, registry: reg, breakpointId: undefined, cssMap: new Map(),
+      })
+      expect(html).not.toContain('expression')
+      expect(html).toContain('display: block')
+    })
+
+    it('coexists with classIds — both class and style land on the root', () => {
+      const siteDoc = makeSite({
+        styleRules: {
+          'c-id': { id: 'c-id', name: 'card', styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 },
+        },
+      })
+      const page = makePage({
+        root: { moduleId: 'base.container', classIds: ['c-id'], inlineStyles: { color: 'blue' } },
+      })
+      const html = renderNode('root', {
+        page, site: siteDoc, registry: reg, breakpointId: undefined, cssMap: new Map(),
+      })
+      expect(html).toContain('class="card"')
+      expect(html).toContain('style="color: blue"')
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

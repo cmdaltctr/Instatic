@@ -157,6 +157,7 @@ export function PropertiesPanelBody(props: PropertiesPanelBodyProps): React.Reac
         activeClassId={activeClassId}
         activeBreakpointId={activeBreakpointId}
         nodeId={selectedNodeId}
+        inlineStyles={selectedNode.inlineStyles}
         moduleContent={moduleTabContent}
         onFocusClassPicker={onFocusClassPicker}
       />

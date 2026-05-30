@@ -34,7 +34,7 @@ import {
 import type { NodeTree, PageNode, SiteDocument } from '@core/page-tree'
 import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
 import { depthInTree } from './helpers'
-import { indexStyleRulesByName, linkImportedClassNames, materializeImportedNodeStyle } from './importLinking'
+import { indexStyleRulesByName, linkImportedClassNames } from './importLinking'
 import type { SiteSlice, SiteSliceHelpers } from './types'
 
 export type NodeActions = Pick<
@@ -45,6 +45,9 @@ export type NodeActions = Pick<
   | 'deleteNode'
   | 'deleteNodes'
   | 'updateNodeProps'
+  | 'setNodeInlineStyles'
+  | 'removeNodeInlineStyleProperty'
+  | 'clearNodeInlineStyles'
   | 'setBreakpointOverride'
   | 'clearBreakpointOverride'
   | 'renameNode'
@@ -149,12 +152,12 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
         // risk on the node map.
         const classesByName = indexStyleRulesByName(site.styleRules)
         for (const [id, node] of Object.entries(fragment.nodes)) {
-          const classIds = linkImportedClassNames(node.classIds, site.styleRules, classesByName)
-          // Inline background image → node-scoped module-style class, appended
-          // last so it outranks the element's reusable classes.
-          const scopedId = materializeImportedNodeStyle(fragment.nodeStyles, id, site.styleRules)
-          if (scopedId) classIds.push(scopedId)
-          tree.nodes[id] = { ...node, classIds }
+          // `node.inlineStyles` (e.g. an imported inline background) rides
+          // along on the `...node` spread — it is a first-class node field.
+          tree.nodes[id] = {
+            ...node,
+            classIds: linkImportedClassNames(node.classIds, site.styleRules, classesByName),
+          }
         }
 
         // Wire the imported root nodes as children of the target parent.
@@ -241,6 +244,45 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
         if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
         if (!recordPatchChanges(node.props, patch)) return false
         updateNodeProps(tree, nodeId, patch)
+        return true
+      })
+    },
+
+    setNodeInlineStyles: (nodeId, patch) => {
+      mutateActiveTree((tree) => {
+        const node = tree.nodes[nodeId]
+        if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
+        const next: Record<string, unknown> = { ...(node.inlineStyles ?? {}) }
+        let changed = false
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === null || value === undefined || value === '') {
+            if (key in next) {
+              delete next[key]
+              changed = true
+            }
+          } else if (!Object.is(next[key], value)) {
+            next[key] = value
+            changed = true
+          }
+        }
+        if (!changed) return false
+        // Drop the field entirely when the bag is empty so nodes without inline
+        // styles stay lean (and the publisher emits no `style` attribute).
+        if (Object.keys(next).length > 0) node.inlineStyles = next
+        else delete node.inlineStyles
+        return true
+      })
+    },
+
+    removeNodeInlineStyleProperty: (nodeId, propKey) => {
+      actions.setNodeInlineStyles(nodeId, { [propKey]: null })
+    },
+
+    clearNodeInlineStyles: (nodeId) => {
+      mutateActiveTree((tree) => {
+        const node = tree.nodes[nodeId]
+        if (!node?.inlineStyles) return false
+        delete node.inlineStyles
         return true
       })
     },

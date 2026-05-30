@@ -55,9 +55,12 @@ export const BaseNodeSchema = Type.Object({
   locked:              Type.Optional(Type.Boolean()),
   hidden:              Type.Optional(Type.Boolean()),
   classIds:            withFallback(Type.Array(Type.String()), []),
+  inlineStyles:        Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   // ... propBindings, etc.
 })
 ```
+
+`inlineStyles` is the per-node **inline-style layer**: a camelCase CSS bag (same shape as a `StyleRule`'s `styles`) that the publisher emits as a literal `style="…"` attribute on the node's root element (or on `<body>` for the root `base.body` node). It is independent of `classIds` (a node can have both) and is **base-only** — like a real HTML `style=""` attribute it cannot be breakpoint- or condition-scoped. Values are sanitised at the publish boundary by `bagToInlineStyle` → `sanitiseCssValue`. Edited via the Properties panel's "Style inline" mode (store actions `setNodeInlineStyles` / `removeNodeInlineStyleProperty`); the HTML importer also writes it when it harvests an element's inline background image.
 
 `PageNode` (in `src/core/page-tree/pageNode.ts`) extends `BaseNode` with an optional `dynamicBindings` field for template data-binding. `VCNode` (in `src/core/visualComponents/schemas.ts`) is a direct re-export — `VCNode === BaseNode`.
 

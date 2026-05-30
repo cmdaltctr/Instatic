@@ -75,6 +75,15 @@ export const BaseNodeSchema = Type.Object({
   // Empty array when no classes are applied.
   classIds: withFallback(Type.Array(Type.String()), []),
 
+  // Per-node inline styles — emitted by the publisher as a literal
+  // `style="…"` attribute on the node's root element. This is the editor's
+  // "inline style" layer: an independent style source that coexists with
+  // `classIds` and, like a real HTML inline style, is BASE-ONLY (it cannot be
+  // breakpoint- or condition-scoped). Keys are camelCase CSS property names
+  // (same shape as a StyleRule's `styles` bag). Absent / empty when the node
+  // has no inline styles. Values are sanitised at the publish boundary.
+  inlineStyles: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+
   // Prop bindings for render-time parameter substitution.
   // Maps prop key → { paramId } (stable VCParam.id reference).
   // When present, the renderer substitutes instanceProps[param.name] for

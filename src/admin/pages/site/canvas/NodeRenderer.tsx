@@ -23,7 +23,7 @@ import { WarningDiamondSolidIcon } from 'pixel-art-icons/icons/warning-diamond-s
 import { ErrorBoundary } from '@ui/components/ErrorBoundary'
 import { ModuleSandboxFrame } from './ModuleSandboxFrame'
 import { CanvasBreakpointContext, CanvasSelectionContext, CanvasTemplateContext } from './CanvasContexts'
-import { getCanvasNodeClassIds, getCanvasNodeClassName } from './canvasNodeClassName'
+import { getCanvasNodeClassIds, getCanvasNodeClassName, getCanvasNodeInlineStyle } from './canvasNodeClassName'
 import { findEnclosingComponentRef, type AnnotatedPageNode } from './canvasSelectionUtils'
 import { useLoopPreviewItems } from './useLoopPreviewItems'
 import styles from './NodeRenderer.module.css'
@@ -174,12 +174,17 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   // `:nth-child()`, etc.) because it sat between every authored element.
   // Moving the bag onto the module's own root removes the wrapper entirely
   // and the canvas DOM matches the published DOM exactly.
+  // Per-node inline styles → React style object on the root element, matching
+  // the published `style="…"` attribute (sanitised to the same gate).
+  const inlineStyle = getCanvasNodeInlineStyle(node.inlineStyles)
+
   const nodeWrapperProps: NodeWrapperPropsType = {
     'data-node-id': nodeId,
     'data-module-id': node.moduleId,
     tabIndex: 0,
     role: 'button',
     'aria-pressed': isSelected,
+    ...(inlineStyle ? { style: inlineStyle } : {}),
     ...(isHovered && !isSelected ? { 'data-hovered': 'true' as const } : {}),
     onClickCapture: (e) => {
       if (!isClosestCanvasNodeTarget(e.target, e.currentTarget)) return

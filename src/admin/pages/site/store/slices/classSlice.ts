@@ -97,6 +97,15 @@ export interface ClassSlice {
   activeClassId: string | null
   setActiveClass(id: string | null): void
 
+  /**
+   * When true, the Properties panel edits the selected node's inline styles
+   * (`node.inlineStyles`) instead of a class. Mutually exclusive with
+   * `activeClassId` — selecting a class clears this, and enabling this clears
+   * the active class. Reset to false whenever the node selection changes.
+   */
+  inlineStyleEditing: boolean
+  setInlineStyleEditing(active: boolean): void
+
   /** Transient class assignment previewed on the canvas while hovering a suggestion. */
   previewClassAssignment: ClassPreviewAssignment | null
   setPreviewNodeClass(nodeId: string, classId: string): void
@@ -185,6 +194,15 @@ export interface ClassSlice {
    * if the property isn't set anywhere.
    */
   removeClassStyleProperty(classId: string, property: keyof CSSPropertyBag): void
+
+  /**
+   * Fully remove SEVERAL CSS properties from a class in a single undo step —
+   * each from base styles and every per-context override. Used when one action
+   * must prune a group of related properties at once (e.g. clearing `display`
+   * also clears the flex/grid container properties it governed, which would
+   * otherwise linger as invisible orphans). No-ops if none are set anywhere.
+   */
+  clearClassStyleProperties(classId: string, properties: ReadonlyArray<keyof CSSPropertyBag>): void
 
   /** Ensure a hidden node-scoped class exists for module instance style fields. */
   ensureNodeStyleClass(nodeId: string, moduleName?: string): StyleRule | null
@@ -373,13 +391,24 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
   // ── UI state ───────────────────────────────────────────────────────────────
 
   activeClassId: null,
+  inlineStyleEditing: false,
   previewClassAssignment: null,
   previewClassStyles: null,
 
   setActiveClass(id) {
-    // Guideline #242 no-op guard
-    if (Object.is(get().activeClassId, id)) return
-    set({ activeClassId: id })
+    const { activeClassId, inlineStyleEditing } = get()
+    // Selecting a real class always switches away from inline editing.
+    const nextInline = id !== null ? false : inlineStyleEditing
+    // Guideline #242 no-op guard — bail only when nothing actually changes.
+    if (Object.is(activeClassId, id) && nextInline === inlineStyleEditing) return
+    set({ activeClassId: id, inlineStyleEditing: nextInline })
+  },
+
+  setInlineStyleEditing(active) {
+    if (get().inlineStyleEditing === active) return
+    // Enabling inline editing clears the active class so the two targets stay
+    // mutually exclusive; disabling leaves the active class untouched.
+    set({ inlineStyleEditing: active, ...(active ? { activeClassId: null } : {}) })
   },
 
   setPreviewNodeClass(nodeId, classId) {
@@ -669,6 +698,34 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
       for (const contextId of contextIdsWithProperty) {
         const bag = draftClass.contextStyles[contextId]
         if (bag) delete (bag as Record<string, unknown>)[propKey]
+      }
+      draftClass.updatedAt = Date.now()
+      return true
+    })
+  },
+
+  clearClassStyleProperties(classId, properties) {
+    const { site } = get()
+    const cls = site?.styleRules[classId]
+    if (!cls) return
+    if (isGeneratedClassLocked(cls)) return
+
+    const keys = properties.map((p) => p as string)
+    // Determine whether anything is actually set, so a no-op clear doesn't push
+    // an empty history entry (mirrors removeClassStyleProperty's guard).
+    const anySet =
+      keys.some((k) => k in cls.styles) ||
+      Object.values(cls.contextStyles).some((bag) => keys.some((k) => k in (bag ?? {})))
+    if (!anySet) return
+
+    mutateSite((site) => {
+      const draftClass = site.styleRules[classId]
+      if (!draftClass) return false
+      for (const key of keys) {
+        delete (draftClass.styles as Record<string, unknown>)[key]
+        for (const bag of Object.values(draftClass.contextStyles)) {
+          if (bag) delete (bag as Record<string, unknown>)[key]
+        }
       }
       draftClass.updatedAt = Date.now()
       return true

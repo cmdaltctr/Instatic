@@ -236,25 +236,20 @@ function normalizeFragment(
 
   for (const [id, node] of Object.entries(fragment.nodes)) {
     const newProps = normalizeNodeProps(node.props, htmlFilePath, fileMap, assetMap)
-    normalizedNodes[id] = { ...node, props: newProps }
-  }
-
-  // Inline background images live in `nodeStyles` as CSS `url(...)` payloads —
-  // normalise them to FileMap keys exactly like CSS-rule background values so
-  // `applyAssetRewrites` can swap in the uploaded media URL.
-  let normalizedNodeStyles: ImportFragment['nodeStyles']
-  if (fragment.nodeStyles) {
-    normalizedNodeStyles = {}
-    for (const [id, bag] of Object.entries(fragment.nodeStyles)) {
-      normalizedNodeStyles[id] = normalizeCssBag(bag, htmlFilePath, fileMap, assetMap)
+    // Inline background images live on `node.inlineStyles` as CSS `url(...)`
+    // payloads — normalise them to FileMap keys exactly like CSS-rule
+    // background values so `applyAssetRewrites` can swap in the media URL.
+    const newInlineStyles = node.inlineStyles
+      ? normalizeCssBag(node.inlineStyles as Record<string, string>, htmlFilePath, fileMap, assetMap)
+      : undefined
+    normalizedNodes[id] = {
+      ...node,
+      props: newProps,
+      ...(newInlineStyles ? { inlineStyles: newInlineStyles } : {}),
     }
   }
 
-  return {
-    nodes: normalizedNodes,
-    rootIds: fragment.rootIds,
-    ...(normalizedNodeStyles ? { nodeStyles: normalizedNodeStyles } : {}),
-  }
+  return { nodes: normalizedNodes, rootIds: fragment.rootIds }
 }
 
 /**

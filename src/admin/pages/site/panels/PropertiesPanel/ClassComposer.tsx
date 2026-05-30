@@ -8,28 +8,8 @@
 
 import { useEditorStore } from '@site/store/store'
 import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
-import { ClassPropertyRow } from './ClassPropertyRow'
-import { Section } from '@ui/components/Section'
-import { SpacingBoxControl } from './SpacingBoxControl/SpacingBoxControl'
-import { BorderControl } from './BorderControl/BorderControl'
-import { CustomPropertiesSection } from './CustomPropertiesSection'
-import { LayoutSection } from './LayoutSection'
-import { PositionSection } from './PositionSection'
-import {
-  CLASS_STYLE_SECTIONS,
-  cssPropertyLabel,
-  getCSSPropertyDefaultValue,
-  getActiveStyleTab,
-  type ClassStyleSectionDefinition,
-} from './cssControlTypes'
-import { hasStyleValue } from './styleValueUtils'
-import styles from './ClassComposer.module.css'
-import sectionStyles from '@ui/components/Section/Section.module.css'
-
-const SPACING_SECTION_ID = 'spacing'
-const LAYOUT_SECTION_ID = 'layout'
-const POSITION_SECTION_ID = 'position'
-const BORDER_SECTION_ID = 'border'
+import { StyleSectionsEditor } from './StyleSectionsEditor'
+import { getActiveStyleTab } from './cssControlTypes'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -68,6 +48,7 @@ export function ClassComposer({
   const updateClassStyles = useEditorStore((s) => s.updateClassStyles)
   const setClassContextStyles = useEditorStore((s) => s.setClassContextStyles)
   const removeClassStyleProperty = useEditorStore((s) => s.removeClassStyleProperty)
+  const clearClassStyleProperties = useEditorStore((s) => s.clearClassStyleProperties)
   const setPreviewClassStyles = useEditorStore((s) => s.setPreviewClassStyles)
   const clearPreviewClassStyles = useEditorStore((s) => s.clearPreviewClassStyles)
 
@@ -88,8 +69,6 @@ export function ClassComposer({
   const currentStyles: Record<string, unknown> = activeContextId
     ? { ...cls.styles, ...storedStyles }
     : cls.styles
-
-  const visibleStyleSections = getVisibleStyleSections(styleQuery)
 
   const handleChange = (key: keyof CSSPropertyBag, value: string | number | undefined) => {
     const patch = { [key]: value ?? null } as Partial<CSSPropertyBag>
@@ -125,6 +104,12 @@ export function ClassComposer({
     removeClassStyleProperty(classId, key)
   }
 
+  // Clear a group of properties everywhere (base + every context) in one undo
+  // step — used when clearing `display` must also prune its flex/grid deps.
+  const handleClearProperties = (keys: ReadonlyArray<keyof CSSPropertyBag>) => {
+    clearClassStyleProperties(classId, keys)
+  }
+
   // Preview a transient style patch on the canvas while a property
   // control's hover-suggestion menu is open. The preview lives entirely
   // in store UI state — no class document mutation, no history entry.
@@ -151,300 +136,17 @@ export function ClassComposer({
   const sectionKey = activeContextId ?? 'base'
 
   return (
-    <div className={styles.styleSections}>
-      {visibleStyleSections.map((section) => (
-        <div key={section.id} data-style-section={section.id}>
-          <ClassStyleSection
-            section={section}
-            currentStyles={currentStyles}
-            storedStyles={storedStyles}
-            activeTab={sectionKey}
-            onChange={handleChange}
-            onRemove={handleRemoveProperty}
-            onClearProperty={handleClearProperty}
-            onPreview={handlePreview}
-            onClearPreview={handleClearPreview}
-          />
-        </div>
-      ))}
-      {/* Custom properties — generic editor for the long tail of CSS the
-          curated sections don't claim. Hidden while a style search is active
-          (the search filters the curated sections; the raw editor isn't a
-          search target). */}
-      {!styleQuery.trim() && (
-        <div data-style-section="custom">
-          <CustomPropertiesSection
-            key={sectionKey}
-            storedStyles={storedStyles}
-            onChange={handleChange}
-            onRemove={handleRemoveProperty}
-          />
-        </div>
-      )}
-      {visibleStyleSections.length === 0 && styleQuery.trim() && (
-        <div className={styles.noStyleMatches}>No matching styles.</div>
-      )}
-    </div>
+    <StyleSectionsEditor
+      storedStyles={storedStyles}
+      currentStyles={currentStyles}
+      sectionKey={sectionKey}
+      styleQuery={styleQuery}
+      onChange={handleChange}
+      onRemove={handleRemoveProperty}
+      onClearProperty={handleClearProperty}
+      onClearProperties={handleClearProperties}
+      onPreview={handlePreview}
+      onClearPreview={handleClearPreview}
+    />
   )
-}
-
-// ---------------------------------------------------------------------------
-// ClassStyleSection
-// ---------------------------------------------------------------------------
-
-interface ClassStyleSectionProps {
-  section: ClassStyleSectionDefinition
-  currentStyles: Record<string, unknown>
-  storedStyles: Record<string, unknown>
-  activeTab: string
-  onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
-  onRemove: (property: keyof CSSPropertyBag) => void
-  onClearProperty: (property: keyof CSSPropertyBag) => void
-  onPreview: (patch: Partial<CSSPropertyBag>) => void
-  onClearPreview: () => void
-}
-
-function ClassStyleSection({
-  section,
-  currentStyles,
-  storedStyles,
-  activeTab,
-  onChange,
-  onRemove,
-  onClearProperty,
-  onPreview,
-  onClearPreview,
-}: ClassStyleSectionProps) {
-  const setCount = section.properties.filter((prop) => hasStyleValue(storedStyles[prop])).length
-
-  // Per-property adapter over the patch-shaped section preview channel, used
-  // by the generic ClassPropertyRow rows (each owns a single property).
-  const previewProperty = (
-    property: keyof CSSPropertyBag,
-    value: string | number | undefined,
-  ) => onPreview({ [property]: value ?? null } as Partial<CSSPropertyBag>)
-
-  return (
-    <Section
-      title={section.title}
-      icon={section.icon}
-      defaultOpen
-      indicator={setCount > 0}
-      indicatorTestId={`class-style-section-dot-${section.id}`}
-      meta={setCount > 0 ? `${setCount} set` : undefined}
-    >
-      <div className={sectionStyles.sectionBody}>
-        {section.id === SPACING_SECTION_ID ? (
-          // Spacing section uses a single visual box-model widget instead of
-          // a stack of 10 padding/margin rows. The widget owns shorthand
-          // collapse and writes through the same onChange/onRemove pipeline.
-          <SpacingBoxControl
-            key={activeTab}
-            storedStyles={storedStyles}
-            currentStyles={currentStyles}
-            onChange={onChange}
-            onRemove={onRemove}
-            onPreview={onPreview}
-            onClearPreview={onClearPreview}
-          />
-        ) : section.id === LAYOUT_SECTION_ID ? (
-          // Layout uses a task-shaped editor: an unlabeled segmented
-          // Display switcher with a dropdown trail, plus icon switchers
-          // for flex direction / wrap / alignment. Generic rows for the
-          // long-tail layout properties still appear below.
-          <LayoutSection
-            key={activeTab}
-            storedStyles={storedStyles}
-            currentStyles={currentStyles}
-            activeTab={activeTab}
-            onChange={onChange}
-            onRemove={onRemove}
-            onClearProperty={onClearProperty}
-            onPreview={onPreview}
-            onClearPreview={onClearPreview}
-          />
-        ) : section.id === POSITION_SECTION_ID ? (
-          // Position uses a task-shaped editor: a segmented Position
-          // switcher with the four directional offsets revealed when the
-          // value actually honors them, plus a z-index row that always
-          // stays available inside the section.
-          <PositionSection
-            key={activeTab}
-            storedStyles={storedStyles}
-            currentStyles={currentStyles}
-            activeTab={activeTab}
-            onChange={onChange}
-            onRemove={onRemove}
-            onClearProperty={onClearProperty}
-            onPreview={onPreview}
-            onClearPreview={onClearPreview}
-          />
-        ) : section.id === BORDER_SECTION_ID ? (
-          // Border uses a visual per-side editor (width / style / colour per
-          // edge with a link toggle) + a radius corner editor + an outline
-          // pair. The raw shorthand rows (border / borderTop / borderRadius /
-          // …) live in the Advanced disclosure below for power users who want
-          // to paste a shorthand string directly.
-          <>
-            <BorderControl
-              key={activeTab}
-              storedStyles={storedStyles}
-              currentStyles={currentStyles}
-              onChange={onChange}
-              onClearProperty={onClearProperty}
-              onPreview={onPreview}
-              onClearPreview={onClearPreview}
-            />
-            <AdvancedRows
-              activeTab={activeTab}
-              properties={BORDER_ADVANCED_PROPERTIES}
-              storedStyles={storedStyles}
-              currentStyles={currentStyles}
-              onChange={onChange}
-              onRemove={onRemove}
-              onPreview={previewProperty}
-              onClearPreview={onClearPreview}
-            />
-          </>
-        ) : (
-          section.properties.map((prop) => {
-            const storedValue = storedStyles[prop]
-            const isSet = hasStyleValue(storedValue)
-            const currentValue = currentStyles[prop]
-            const fallbackValue = hasStyleValue(currentValue)
-              ? currentValue
-              : getCSSPropertyDefaultValue(prop)
-
-            return (
-              <ClassPropertyRow
-                key={`${activeTab}-${String(prop)}`}
-                property={prop}
-                // storedValue is narrowed to string | number by the isSet guard above
-                value={isSet ? (storedValue as string | number) : undefined}
-                placeholder={!isSet ? fallbackValue : undefined}
-                isSet={isSet}
-                onChange={onChange}
-                onRemove={onRemove}
-                onPreview={previewProperty}
-                onClearPreview={onClearPreview}
-              />
-            )
-          })
-        )}
-      </div>
-    </Section>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Border advanced rows — raw CSS shorthand props that the visual
-// BorderControl deliberately doesn't surface. Kept available behind a
-// disclosure for power users who paste shorthand strings.
-// ---------------------------------------------------------------------------
-
-const BORDER_ADVANCED_PROPERTIES: ReadonlyArray<keyof CSSPropertyBag> = [
-  'border',
-  'borderTop',
-  'borderRight',
-  'borderBottom',
-  'borderLeft',
-  'borderWidth',
-  'borderStyle',
-  'borderColor',
-  'borderRadius',
-  'appearance',
-]
-
-interface AdvancedRowsProps {
-  activeTab: string
-  properties: ReadonlyArray<keyof CSSPropertyBag>
-  storedStyles: Record<string, unknown>
-  currentStyles: Record<string, unknown>
-  onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
-  onRemove: (property: keyof CSSPropertyBag) => void
-  /** Per-property hover-preview adapter (see ClassStyleSection.previewProperty). */
-  onPreview?: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
-  onClearPreview?: () => void
-}
-
-/**
- * A `<details>` disclosure wrapping a stack of raw property rows. Used for the
- * Border section's shorthand props. Native `<details>`/`<summary>` is semantic
- * HTML (not a bare interactive control), so it's outside the button-primitive
- * gate without needing an allowlist entry.
- */
-function AdvancedRows({
-  activeTab,
-  properties,
-  storedStyles,
-  currentStyles,
-  onChange,
-  onRemove,
-  onPreview,
-  onClearPreview,
-}: AdvancedRowsProps) {
-  // Open by default when any advanced prop already carries a value, so an
-  // imported class that set `border: 1px solid red` as a shorthand is visible.
-  const anySet = properties.some((prop) => hasStyleValue(storedStyles[prop]))
-
-  return (
-    <details className={styles.advanced} open={anySet}>
-      <summary className={styles.advancedSummary}>Advanced</summary>
-      <div className={styles.advancedBody}>
-        {properties.map((prop) => {
-          const storedValue = storedStyles[prop]
-          const isSet = hasStyleValue(storedValue)
-          const currentValue = currentStyles[prop]
-          const fallbackValue = hasStyleValue(currentValue)
-            ? currentValue
-            : getCSSPropertyDefaultValue(prop)
-          return (
-            <ClassPropertyRow
-              key={`${activeTab}-${String(prop)}`}
-              property={prop}
-              value={isSet ? (storedValue as string | number) : undefined}
-              placeholder={!isSet ? fallbackValue : undefined}
-              isSet={isSet}
-              onChange={onChange}
-              onRemove={onRemove}
-              onPreview={onPreview}
-              onClearPreview={onClearPreview}
-            />
-          )
-        })}
-      </div>
-    </details>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
-
-function getVisibleStyleSections(
-  query: string,
-): ReadonlyArray<ClassStyleSectionDefinition> {
-  const normalizedQuery = query.trim().toLowerCase()
-
-  return CLASS_STYLE_SECTIONS
-    .map((section) => ({
-      ...section,
-      properties: section.properties.filter(
-        (prop) =>
-          !normalizedQuery ||
-          sectionMatchesQuery(section, normalizedQuery) ||
-          propertyMatchesQuery(prop, normalizedQuery),
-      ),
-    }))
-    .filter((section) => section.properties.length > 0)
-}
-
-function sectionMatchesQuery(section: ClassStyleSectionDefinition, query: string): boolean {
-  return section.id.toLowerCase().includes(query) || section.title.toLowerCase().includes(query)
-}
-
-function propertyMatchesQuery(prop: keyof CSSPropertyBag, query: string): boolean {
-  const raw = String(prop).toLowerCase()
-  const label = cssPropertyLabel(String(prop)).toLowerCase()
-  return raw.includes(query) || label.includes(query)
 }

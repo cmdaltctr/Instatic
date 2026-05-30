@@ -695,43 +695,47 @@ describe('stripUnsafe — inline style="" attributes', () => {
 // Inline background-image harvesting (the one inline-CSS exception)
 // ---------------------------------------------------------------------------
 
-describe('inline background images → fragment.nodeStyles', () => {
-  it('captures background-image longhand for the matching node', () => {
-    const result = importHtml(`<div style="background-image: url('img/bg.png'); padding: 20px">Hi</div>`)
-    const id = result.rootIds[0]!
-    expect(result.nodeStyles?.[id]?.backgroundImage).toContain('img/bg.png')
+describe('inline background images → node.inlineStyles', () => {
+  it('captures background-image longhand onto the matching node', () => {
+    const node = single(`<div style="background-image: url('img/bg.png'); padding: 20px">Hi</div>`)
+    expect(node.inlineStyles?.backgroundImage).toContain('img/bg.png')
     // The non-background inline declaration (padding) is NOT captured.
-    expect(result.nodeStyles?.[id]).not.toHaveProperty('padding')
-    // And the raw inline style attribute is still reported as stripped.
+    expect(node.inlineStyles).not.toHaveProperty('padding')
+  })
+
+  it('still reports the raw inline style attribute as stripped', () => {
+    const result = importHtml(`<div style="background-image: url('img/bg.png')">Hi</div>`)
     expect(result.stripped.inlineStyles).toBe(1)
   })
 
   it('captures the url() and companions from a background shorthand', () => {
-    const result = importHtml(
+    const node = single(
       `<section style="background: url(hero.jpg) no-repeat center / cover">x</section>`,
     )
-    const bag = result.nodeStyles?.[result.rootIds[0]!]
-    expect(bag?.backgroundImage).toContain('hero.jpg')
-    expect(bag?.backgroundRepeat).toBe('no-repeat')
+    expect(node.inlineStyles?.backgroundImage).toContain('hero.jpg')
+    expect(node.inlineStyles?.backgroundRepeat).toBe('no-repeat')
   })
 
   it('does NOT capture a colour-only background (no url image)', () => {
-    const result = importHtml(`<div style="background: #fff; color: red">x</div>`)
-    expect(result.nodeStyles).toBeUndefined()
+    const node = single(`<div style="background: #fff; color: red">x</div>`)
+    expect(node.inlineStyles).toBeUndefined()
   })
 
-  it('omits nodeStyles entirely when no element has an inline background image', () => {
+  it('leaves nodes without an inline background image free of inlineStyles', () => {
     const result = importHtml('<div><p>Plain</p></div>')
-    expect(result.nodeStyles).toBeUndefined()
+    for (const node of Object.values(result.nodes)) {
+      expect(node.inlineStyles).toBeUndefined()
+    }
   })
 
-  it('keys each captured background by its own node id', () => {
+  it('attaches each captured background to its own node', () => {
     const result = importHtml(
       `<div style="background-image:url(a.png)"></div><div style="background-image:url(b.png)"></div>`,
     )
-    const bags = Object.values(result.nodeStyles ?? {})
-    expect(bags).toHaveLength(2)
-    const urls = bags.map((b) => b.backgroundImage).join(' ')
+    const urls = Object.values(result.nodes)
+      .map((n) => n.inlineStyles?.backgroundImage)
+      .filter(Boolean)
+      .join(' ')
     expect(urls).toContain('a.png')
     expect(urls).toContain('b.png')
   })

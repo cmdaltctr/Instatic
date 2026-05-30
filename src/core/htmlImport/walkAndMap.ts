@@ -51,14 +51,6 @@ export interface ImportFragment {
   nodes: Record<string, PageNode>
   /** IDs of the document-order top-level nodes (doc.body element children). */
   rootIds: string[]
-  /**
-   * Per-node inline background styles, keyed by node id. Captured from each
-   * element's `style="background-image: url(…)"` (the only inline CSS the
-   * importer keeps — see `inlineStyle.ts`). Materialised downstream into a
-   * node-scoped "module-style" StyleRule attached via `classIds`. Absent when
-   * no element carried an inline background image.
-   */
-  nodeStyles?: Record<string, Record<string, string>>
 }
 
 /** The result returned by the convenience entry point importHtml(). */
@@ -79,13 +71,13 @@ const TEXT_NODE = 3
 /**
  * Mutable accumulator threaded through the recursive walk.
  *
- * - `nodes` / `nodeStyles` are written as elements are mapped.
+ * - `nodes` is written as elements are mapped.
  * - `backgrounds` is the read-only harvest of inline background styles keyed by
- *   the source element (see `harvestInlineBackgrounds`), looked up per element.
+ *   the source element (see `harvestInlineBackgrounds`), looked up per element
+ *   and written onto the produced node's `inlineStyles`.
  */
 interface WalkContext {
   nodes: Record<string, PageNode>
-  nodeStyles: Record<string, Record<string, string>>
   backgrounds: Map<Element, Record<string, string>>
 }
 
@@ -169,11 +161,11 @@ function processElement(el: Element, ctx: WalkContext): string {
   // auto-creates bare classes for unknown names) when the fragment is inserted.
   node.classIds = Array.from(el.classList)
 
-  // Capture the element's inline background image (harvested before stripUnsafe
-  // removed the `style` attribute). Materialised into a node-scoped class when
-  // the fragment enters the live tree — see `importLinking.ts`.
+  // Attach the element's inline background image (harvested before stripUnsafe
+  // removed the `style` attribute) as the node's inline styles — the editor's
+  // first-class per-node `style=""` layer.
   const bg = ctx.backgrounds.get(el)
-  if (bg) ctx.nodeStyles[node.id] = bg
+  if (bg) node.inlineStyles = bg
 
   if (rule.recurse) {
     // Walk childNodes (not just children) so direct text is preserved in
@@ -204,17 +196,13 @@ export function walkAndMap(
   doc: Document,
   backgrounds: Map<Element, Record<string, string>> = new Map(),
 ): ImportFragment {
-  const ctx: WalkContext = { nodes: {}, nodeStyles: {}, backgrounds }
+  const ctx: WalkContext = { nodes: {}, backgrounds }
 
   if (!doc.body) return { nodes: ctx.nodes, rootIds: [] }
 
   const rootIds = mapChildNodes(doc.body, ctx)
 
-  return {
-    nodes: ctx.nodes,
-    rootIds,
-    ...(Object.keys(ctx.nodeStyles).length > 0 ? { nodeStyles: ctx.nodeStyles } : {}),
-  }
+  return { nodes: ctx.nodes, rootIds }
 }
 
 /**
@@ -225,7 +213,7 @@ export function walkAndMap(
  *    BEFORE step 3 removes the `style` attribute
  * 3. stripUnsafe — removes <script>, <style>, inline event handlers, style=""
  * 4. walkAndMap  — maps every element to a PageNode via HTML_TO_MODULE_RULES,
- *    attaching the harvested background to its node via `nodeStyles`
+ *    attaching the harvested background to its node's `inlineStyles`
  *
  * Returns an ImportResult that merges the fragment with the StripReport so
  * callers can surface a "Stripped: N scripts, M handlers" toast.

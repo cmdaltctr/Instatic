@@ -53,30 +53,26 @@ importHtml(source: string)
                                     removes the style attribute. Keyed by Element.
   3. stripUnsafe(doc)             — mutates doc in place; returns StripReport
   4. walkAndMap(doc, backgrounds) — maps doc.body element children to PageNodes,
-                                    attaching each harvested background to its node
-                                    via nodeStyles. Returns { nodes, rootIds, nodeStyles? }
-→ { nodes, rootIds, nodeStyles?, stripped }   (ImportResult)
+                                    attaching each harvested background to its
+                                    node's `inlineStyles`. Returns { nodes, rootIds }
+→ { nodes, rootIds, stripped }   (ImportResult)
 ```
 
 ### Return type
 
 ```ts
 interface ImportResult {
-  /** All produced nodes, keyed by id. */
+  /** All produced nodes, keyed by id. A node may carry `inlineStyles` (the
+   *  per-node `style=""` layer) — e.g. a harvested inline background image. */
   nodes: Record<string, PageNode>
   /** IDs of the top-level nodes (direct children of doc.body), in document order. */
   rootIds: string[]
-  /**
-   * Per-node inline background styles (the one inline-CSS exception — see below),
-   * keyed by node id. Absent when no element carried an inline background image.
-   */
-  nodeStyles?: Record<string, Record<string, string>>
   /** Counts of constructs removed by stripUnsafe. */
   stripped: StripReport
 }
 ```
 
-Callers splice the fragment into the page tree via `insertImportedNodes(parentId, fragment)` in the editor store — one `mutateActiveTree` call, one undo step. During that step each `nodeStyles[nodeId]` entry is materialised into a node-scoped "module-style" StyleRule (`scope: { type: 'node', … }`) and attached to the node's `classIds`, so the editor's `BackgroundImageControl` shows the imported image. The whole-site Super Import path (`mutateAllPagesAndSite`) does the same in `addPage` / `overwritePage`.
+Callers splice the fragment into the page tree via `insertImportedNodes(parentId, fragment)` in the editor store — one `mutateActiveTree` call, one undo step. Any `node.inlineStyles` set during the walk rides along on the node verbatim (it is a first-class node field), so the publisher emits it as a `style="…"` attribute and the editor's inline-style layer (and `BackgroundImageControl`) shows the imported image. The whole-site Super Import path (`mutateAllPagesAndSite`) preserves it the same way; the Super Import asset pipeline additionally uploads the referenced image and rewrites the `url(…)` to its media URL.
 
 ---
 
@@ -122,7 +118,7 @@ Callers splice the fragment into the page tree via `insertImportedNodes(parentId
 
 After insert, `ImportHtmlModal` builds a toast body from non-zero counts, e.g. `"Stripped: 2 <script>, 3 inline handlers"`. If nothing was stripped, the toast shows only the node count.
 
-**The one inline-CSS exception — background images.** Before `stripUnsafe` removes a `style` attribute, `harvestInlineBackgrounds` (`inlineStyle.ts`) extracts the image-bearing background subset — `background-image` plus `background-size` / `background-position` / `background-repeat`, and the `url(…)` out of a `background:` shorthand — but **only when an actual `url(…)` image is present**. Colours, plain gradients, and every other inline declaration are still dropped (and the raw attribute is still counted in `stripped.inlineStyles`). The captured subset rides through the fragment as `nodeStyles` and becomes a node-scoped module-style class on insert. In Super Import the `url(…)` is uploaded to the media library and rewritten exactly like a CSS-rule background.
+**The one inline-CSS exception — background images.** Before `stripUnsafe` removes a `style` attribute, `harvestInlineBackgrounds` (`inlineStyle.ts`) extracts the image-bearing background subset — `background-image` plus `background-size` / `background-position` / `background-repeat`, and the `url(…)` out of a `background:` shorthand — but **only when an actual `url(…)` image is present**. Colours, plain gradients, and every other inline declaration are still dropped (and the raw attribute is still counted in `stripped.inlineStyles`). The captured subset is attached to the produced node as `node.inlineStyles` — the editor's first-class per-node `style=""` layer — which the publisher emits verbatim and the user can edit via the Properties panel's inline-style mode. In Super Import the `url(…)` is uploaded to the media library and rewritten exactly like a CSS-rule background.
 
 ---
 

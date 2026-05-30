@@ -27,7 +27,7 @@ import type { NewStyleRule, ImportFontFamily } from '@core/siteImport'
 import type { FontEntry, FontFile } from '@core/fonts/schemas'
 import type { EditorStore } from '@site/store/types'
 import { MAX_HISTORY } from './defaults'
-import { indexStyleRulesByName, linkImportedClassNames, materializeImportedNodeStyle } from './importLinking'
+import { indexStyleRulesByName, linkImportedClassNames } from './importLinking'
 import type { SiteMutationResult, SiteSliceHelpers, SiteSliceImmerRecipe, SuperImportHelpers } from './types'
 
 /**
@@ -331,10 +331,11 @@ export function buildSiteHelpers(
           // in as children of that root — same logical step as insertImportedNodes.
           const page = addPage(site as SiteDocument, title, slug)
           for (const [id, node] of Object.entries(nodeFragment.nodes)) {
-            const classIds = linkImportedClassNames(node.classIds, site.styleRules, byName)
-            const scopedId = materializeImportedNodeStyle(nodeFragment.nodeStyles, id, site.styleRules)
-            if (scopedId) classIds.push(scopedId)
-            page.nodes[id] = { ...node, classIds }
+            // `node.inlineStyles` rides along on the spread — first-class field.
+            page.nodes[id] = {
+              ...node,
+              classIds: linkImportedClassNames(node.classIds, site.styleRules, byName),
+            }
           }
           page.nodes[page.rootNodeId]!.children = [...nodeFragment.rootIds]
           didMutate = true
@@ -375,10 +376,10 @@ export function buildSiteHelpers(
 
           const newNodes: Record<string, PageNode> = { [rootNode.id]: rootNode }
           for (const [id, node] of Object.entries(nodeFragment.nodes)) {
-            const classIds = linkImportedClassNames(node.classIds, site.styleRules, byName)
-            const scopedId = materializeImportedNodeStyle(nodeFragment.nodeStyles, id, site.styleRules)
-            if (scopedId) classIds.push(scopedId)
-            newNodes[id] = { ...node, classIds }
+            newNodes[id] = {
+              ...node,
+              classIds: linkImportedClassNames(node.classIds, site.styleRules, byName),
+            }
           }
 
           // Replace tree fields; preserve identity + ownership fields.

@@ -18,6 +18,7 @@
 
 import type { SiteDocument } from '@core/page-tree'
 import { classNamesForClassIds } from '@core/page-tree/classNames'
+import { bagToInlineStyle } from './classCss'
 import { escapeHtml } from './utils'
 
 /**
@@ -86,4 +87,54 @@ export function injectNodeClassIds(
     .join(' ')
   if (!classAttr) return html
   return injectClassIntoRootElement(html, classAttr)
+}
+
+/**
+ * Inject (or merge into) a `style="…"` attribute on the ROOT element of an HTML
+ * string. Author inline styles are appended AFTER any style the module already
+ * emitted so the author's declarations win (last declaration wins within an
+ * inline style attribute).
+ *
+ * `styleAttr` is the already-built declaration string (`prop: value; …`); this
+ * function HTML-escapes it for the attribute context.
+ */
+function injectStyleIntoRootElement(html: string, styleAttr: string): string {
+  const tagMatch = html.match(/<([a-zA-Z][\w-]*)\b([^>]*)>/)
+  if (!tagMatch) return html
+
+  const [fullMatch, tagName, attrs] = tagMatch
+  const tagStart = tagMatch.index ?? 0
+  const escaped = escapeHtml(styleAttr)
+
+  const styleRe = /\bstyle="([^"]*)"/
+  const existingStyle = attrs.match(styleRe)
+
+  let newAttrs: string
+  if (existingStyle) {
+    // Append author declarations after the module's own so the author wins.
+    const merged = `${existingStyle[1].replace(/;\s*$/, '')}; ${escaped}`
+    newAttrs = attrs.replace(styleRe, `style="${merged}"`)
+  } else {
+    newAttrs = ` style="${escaped}"${attrs}`
+  }
+
+  const newTag = `<${tagName}${newAttrs}>`
+  return html.slice(0, tagStart) + newTag + html.slice(tagStart + fullMatch.length)
+}
+
+/**
+ * Inject a node's inline styles onto its rendered root element as a `style="…"`
+ * attribute. Serialises the bag via `bagToInlineStyle` (same emittable-property
+ * / sanitisation rules as published class CSS). Returns `html` unchanged when
+ * the node has no inline styles, when nothing survives sanitisation, or when
+ * `html` has no element tag.
+ */
+export function injectNodeInlineStyles(
+  html: string,
+  inlineStyles: Record<string, unknown> | undefined,
+): string {
+  if (!inlineStyles || Object.keys(inlineStyles).length === 0) return html
+  const styleAttr = bagToInlineStyle(inlineStyles)
+  if (!styleAttr) return html
+  return injectStyleIntoRootElement(html, styleAttr)
 }

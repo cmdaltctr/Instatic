@@ -153,6 +153,11 @@ function parseVCNode(raw: unknown): VCNode | null {
 
   const propBindings = parsePropBindings(r.propBindings)
 
+  const inlineStyles =
+    r.inlineStyles && typeof r.inlineStyles === 'object' && !Array.isArray(r.inlineStyles)
+      ? (r.inlineStyles as Record<string, unknown>)
+      : {}
+
   return {
     id: r.id,
     moduleId: r.moduleId,
@@ -164,6 +169,7 @@ function parseVCNode(raw: unknown): VCNode | null {
     ...(typeof r.locked === 'boolean' ? { locked: r.locked } : {}),
     ...(typeof r.hidden === 'boolean' ? { hidden: r.hidden } : {}),
     ...(propBindings !== undefined ? { propBindings } : {}),
+    ...(Object.keys(inlineStyles).length > 0 ? { inlineStyles } : {}),
   }
 }
 

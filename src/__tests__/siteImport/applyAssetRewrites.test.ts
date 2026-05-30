@@ -183,11 +183,11 @@ describe('applyAssetRewrites — CSS styles', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Inline background (fragment.nodeStyles) rewrites
+// Inline background (node.inlineStyles) rewrites
 // ---------------------------------------------------------------------------
 
-describe('applyAssetRewrites — inline background nodeStyles', () => {
-  it('rewrites a normalised url() inside fragment.nodeStyles to the media URL', () => {
+describe('applyAssetRewrites — inline background node.inlineStyles', () => {
+  it('rewrites a normalised url() on node.inlineStyles to the media URL', () => {
     const plan: ImportPlan = {
       pages: [
         {
@@ -205,9 +205,9 @@ describe('applyAssetRewrites — inline background nodeStyles', () => {
                 breakpointOverrides: {},
                 children: [],
                 classIds: [],
+                inlineStyles: { backgroundImage: `url('images/hero.png')` },
               },
             },
-            nodeStyles: { n1: { backgroundImage: `url('images/hero.png')` } },
           },
         },
       ],
@@ -222,7 +222,7 @@ describe('applyAssetRewrites — inline background nodeStyles', () => {
       unusedCss: [],
     }
     const result = applyAssetRewrites(plan, REWRITE_MAP)
-    const bag = result.pages[0].nodeFragment.nodeStyles!['n1']
+    const bag = result.pages[0].nodeFragment.nodes['n1']!.inlineStyles!
     expect(bag.backgroundImage).toBe(`url('/media/abc123.png')`)
   })
 })

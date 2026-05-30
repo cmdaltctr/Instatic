@@ -130,8 +130,15 @@ function tryCollapseSides(
  * shorthand is emitted at the position of the first encountered side so it
  * appears in the natural order relative to other declarations.
  */
-export function bagToCSS(bag: Record<string, unknown>): string {
-  const lines: string[] = []
+/**
+ * Extract the ordered, emittable, sanitised `[kebab-property, value]` pairs
+ * from a style bag. This is the shared core behind both the block serialiser
+ * (`bagToCSS`) and the inline serialiser (`bagToInlineStyle`) — side-shorthand
+ * collapse, the property denylist, and value sanitisation all live here so the
+ * two formatters can never drift.
+ */
+function bagToDeclarations(bag: Record<string, unknown>): Array<[string, string]> {
+  const decls: Array<[string, string]> = []
   // Track which prefixes have already been emitted as a collapsed shorthand
   // so we skip the remaining three side properties for that prefix.
   const collapsedPrefixes = new Set<SideShorthandPrefix>()
@@ -145,7 +152,7 @@ export function bagToCSS(bag: Record<string, unknown>): string {
       if (collapsedPrefixes.has(sidePrefix)) continue
       const shorthand = tryCollapseSides(bag, sidePrefix)
       if (shorthand !== null) {
-        lines.push(`  ${sidePrefix}: ${shorthand};`)
+        decls.push([sidePrefix, shorthand])
         collapsedPrefixes.add(sidePrefix)
         continue
       }
@@ -154,9 +161,35 @@ export function bagToCSS(bag: Record<string, unknown>): string {
 
     const sanitised = sanitiseCssValue(value as string | number)
     if (sanitised === null) continue
-    lines.push(`  ${toKebab(prop)}: ${sanitised};`)
+    decls.push([toKebab(prop), sanitised])
   }
-  return lines.join('\n')
+  return decls
+}
+
+/**
+ * Serialise a style map to a CSS declaration block string (multi-line, indented,
+ * for use inside a `{ … }` rule body). See `bagToDeclarations` for the shared
+ * extraction rules.
+ */
+export function bagToCSS(bag: Record<string, unknown>): string {
+  return bagToDeclarations(bag)
+    .map(([prop, value]) => `  ${prop}: ${value};`)
+    .join('\n')
+}
+
+/**
+ * Serialise a style map to a compact single-line declaration string suitable
+ * for an inline `style="…"` attribute (`prop: value; prop: value`). The caller
+ * is responsible for HTML-escaping the result for the attribute context. Same
+ * emittable-property / sanitisation / side-collapse rules as `bagToCSS`.
+ *
+ * Returns `''` when no declaration survives the gate (the caller then emits no
+ * `style` attribute at all).
+ */
+export function bagToInlineStyle(bag: Record<string, unknown>): string {
+  return bagToDeclarations(bag)
+    .map(([prop, value]) => `${prop}: ${value}`)
+    .join('; ')
 }
 
 /**

@@ -39,9 +39,16 @@ interface StyleCategoryRailProps {
    */
   definition?: AnyModuleDefinition | null
   /**
-   * Currently active class. When null, CSS category buttons are disabled.
+   * Currently active class. When null AND not editing inline styles, the CSS
+   * category buttons are disabled.
    */
   activeClass: StyleRule | null
+  /**
+   * True when the panel is editing the node's inline styles. Unlocks the CSS
+   * category buttons just like an active class does — inline editing is a real
+   * style-editing target, it just writes `node.inlineStyles` instead of a rule.
+   */
+  editingInline?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -87,8 +94,9 @@ export function StyleCategoryRail({
   onSectionClick,
   definition,
   activeClass,
+  editingInline = false,
 }: StyleCategoryRailProps) {
-  const stylesLocked = activeClass === null
+  const stylesLocked = activeClass === null && !editingInline
   const disabledTooltip = 'Add a class to unlock styles'
 
   return (

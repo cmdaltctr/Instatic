@@ -14,7 +14,7 @@
 import type { PageNode } from '@core/page-tree'
 import type { LoopItem } from '@core/loops/types'
 import { resolveHtmlTag } from '@modules/base/utils/htmlTag'
-import { injectNodeClassIds } from './classInjection'
+import { injectNodeClassIds, injectNodeInlineStyles } from './classInjection'
 import { escapeHtml } from './utils'
 import type { RenderContext } from './renderContext'
 
@@ -106,6 +106,7 @@ export function renderLoop(
   const tag = resolveHtmlTag(props.tag, props.customTag)
   const html = `<${tag}${attrs}>${body}</${tag}>`
 
-  // Inject the loop's own classIds onto the wrapper element.
-  return injectNodeClassIds(html, node.classIds, ctx.site)
+  // Inject the loop's own classIds + inline styles onto the wrapper element.
+  const withClasses = injectNodeClassIds(html, node.classIds, ctx.site)
+  return injectNodeInlineStyles(withClasses, node.inlineStyles)
 }

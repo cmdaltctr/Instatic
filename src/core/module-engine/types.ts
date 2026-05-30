@@ -108,6 +108,13 @@ export interface NodeWrapperProps {
   role: 'button'
   'aria-pressed': boolean
   'data-hovered'?: 'true'
+  /**
+   * The node's inline styles (`node.inlineStyles`) as a React style object, so
+   * the canvas preview matches the published `style="…"` attribute. Present
+   * only when the node has inline styles; sanitised to the same gate the
+   * publisher applies. Modules spread this onto their root element.
+   */
+  style?: Record<string, string | number>
   onClickCapture?: (e: SyntheticMouseEvent) => void
   onClick?: (e: SyntheticMouseEvent) => void
   onDoubleClickCapture?: (e: SyntheticMouseEvent) => void

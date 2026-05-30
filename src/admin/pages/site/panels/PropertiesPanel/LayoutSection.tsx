@@ -81,6 +81,13 @@ interface LayoutSectionProps {
    */
   onClearProperty: (property: keyof CSSPropertyBag) => void
   /**
+   * Clear several properties in one undo step. Used when clearing `display`
+   * must also prune the flex/grid container properties it governed — otherwise
+   * they linger as invisible orphans (their controls only render while the
+   * matching display is active), leaving the section badge stuck on "N set".
+   */
+  onClearProperties: (properties: ReadonlyArray<keyof CSSPropertyBag>) => void
+  /**
    * Patch-shaped hover-preview channel (see ClassComposer.handlePreview).
    * Forwarded to the display dropdown, the gap token input, and the generic
    * fallback rows so hovering a suggestion previews on the canvas.
@@ -88,6 +95,27 @@ interface LayoutSectionProps {
   onPreview?: (patch: Partial<CSSPropertyBag>) => void
   onClearPreview?: () => void
 }
+
+/**
+ * Container properties whose visual controls only render while `display` is
+ * `flex` or `grid`. When `display` is cleared they would otherwise become
+ * invisible orphans — still stored, still counted, but with no row to clear
+ * them. Clearing `display` prunes these alongside it. (Item-level properties
+ * like `alignSelf` / `justifySelf` / `flex` / `gridColumn` / `gridRow` depend
+ * on the PARENT's display, render unconditionally, and are NOT pruned.)
+ */
+const DISPLAY_DEPENDENT_PROPS: ReadonlyArray<keyof CSSPropertyBag> = [
+  'flexDirection',
+  'flexWrap',
+  'alignItems',
+  'justifyContent',
+  'justifyItems',
+  'gap',
+  'rowGap',
+  'columnGap',
+  'gridTemplateColumns',
+  'gridTemplateRows',
+]
 
 // ---------------------------------------------------------------------------
 // LayoutSection
@@ -145,10 +173,15 @@ export function LayoutSection({
   onChange,
   onRemove,
   onClearProperty,
+  onClearProperties,
   onPreview,
   onClearPreview,
 }: LayoutSectionProps) {
   const display = readString(currentStyles, 'display')
+
+  // Clearing display prunes the flex/grid container properties it governed, in
+  // one undo step, so the section never reports phantom "N set" orphans.
+  const clearDisplayAndDeps = () => onClearProperties(['display', ...DISPLAY_DEPENDENT_PROPS])
   const flexDirection = readString(currentStyles, 'flexDirection') ?? 'row'
   const flexWrap = readString(currentStyles, 'flexWrap')
   const alignItems = readString(currentStyles, 'alignItems')
@@ -170,7 +203,7 @@ export function LayoutSection({
         primarySegments={DISPLAY_PRIMARY_SEGMENTS}
         allOptions={DISPLAY_OPTIONS}
         onChange={(v) => onChange('display', v)}
-        onClear={() => onClearProperty('display')}
+        onClear={clearDisplayAndDeps}
         onPreview={onPreview ? (v) => onPreview({ display: v } as Partial<CSSPropertyBag>) : undefined}
         onClearPreview={onClearPreview}
       />
