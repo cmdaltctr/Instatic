@@ -266,18 +266,37 @@ The `CanvasRoot` → `BreakpointFrame` → `ModuleSandboxFrame` → `NodeRendere
 
 Selection isn't a React overlay — it's a `box-shadow: var(--canvas-selection-ring)` applied to the selected node inside the iframe. Same for hover (`--canvas-hover-ring`). The two ring colors (neon green and neon pink) are the only chromatic UI on the canvas; they're bright enough to be visible against any user content.
 
+### CSS injection into the iframe
+
+Each iframe `<head>` receives three `<style>` elements, in this order:
+
+| Element | Injector | Cascade layer | Contents |
+|---|---|---|---|
+| `<style id="pb-editor-chrome">` | `EditorChromeInjector` | **unlayered** | Editor-only chrome: placeholder, slot-instance, list placeholder, unknown-module fallback |
+| `<style id="mc-classes">` | `ClassStyleInjector` | `@layer user-authored` | Publisher reset + framework CSS + class registry CSS |
+| `<style id="mc-user-styles">` | `UserStylesheetInjector` | `@layer user-authored` | User-uploaded stylesheets (verbatim, unscoped) |
+
+The **unlayered-vs-layered** split is the cascade isolation mechanism: CSS rules outside any `@layer` always beat rules inside `@layer`-d blocks, regardless of specificity. Author CSS (both the class registry and user stylesheets) goes into `@layer user-authored`, so it can never override the editor chrome even with a high-specificity selector.
+
+`EditorChromeInjector` targets chrome elements via **stable data-attribute selectors** (`data-canvas-module-placeholder`, `data-pb-slot-instance`, `data-pb-unknown-module`, etc.) rather than hashed CSS-Module class names, which only exist in the parent document. At mount, it copies the required design tokens (`--editor-text-muted`, `--canvas-placeholder-bg`, `--editor-radius`, etc.) from the parent document's `:root` onto the iframe's `:root` so `var(--editor-*)` resolves correctly inside the iframe.
+
+Full details: [`docs/features/canvas-iframe-per-frame.md`](../features/canvas-iframe-per-frame.md).
+
 ### Key canvas files
 
 | File                            | Owns                                                            |
 |---------------------------------|-----------------------------------------------------------------|
 | `CanvasRoot.tsx`                | Top-level canvas mount                                          |
 | `BreakpointFrame.tsx`           | One iframe per active breakpoint                                |
-| `ModuleSandboxFrame.tsx`        | The iframe itself + bridge                                      |
+| `IframeFrameSurface.tsx`        | The iframe element + portal + style injectors                   |
+| `EditorChromeInjector.tsx`      | Unlayered editor-chrome CSS into each iframe head               |
+| `ClassStyleInjector.tsx`        | Class registry + publisher reset CSS into each iframe head      |
+| `UserStylesheetInjector.tsx`    | User-uploaded CSS into each iframe head                         |
 | `NodeRenderer.tsx`              | Renders a single node and its children inside the iframe        |
 | `CanvasTransformLayer.tsx`      | Zoom + pan transform                                            |
 | `CanvasPreviewSurface.tsx`      | The "preview" mode that hides editor affordances                |
 | `CanvasModeToggle.tsx`          | Toggles edit vs. preview                                        |
-| `CanvasBreakpointSelector.tsx`  | Picks which breakpoints are currently displayed                 |
+| `CanvasContextSelector.tsx`     | Editing-context switcher: viewports + custom conditions (@media/@container/@supports) |
 | `CanvasLayerContextMenu.tsx`    | Right-click on a layer                                          |
 | `canvasDnd.ts`                  | Drag-and-drop (insert / move / wrap)                            |
 | `canvasDomGeometry.ts`          | Cross-iframe DOM measurement                                    |

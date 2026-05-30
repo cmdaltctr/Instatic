@@ -36,6 +36,8 @@ interface NodeRendererProps {
   nodeId: string
 }
 
+// React Compiler exception #2: memo() re-render bailout on a hot, recursive
+// per-node canvas renderer (O(N) critical path) — kept intentionally.
 export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererProps) {
   // Per-node subscription — editing this node's props only re-renders THIS component.
   // Uses selectActiveCanvasPage (Task #438) so VC canvas mode works alongside page mode.
@@ -130,6 +132,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
     return (
       <div
         className={styles.unknownModule}
+        data-pb-unknown-module=""
         title={`Unknown module: ${node.moduleId}`}
       >
         <WarningDiamondSolidIcon size={14} /> Unknown module: {node.moduleId}

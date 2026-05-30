@@ -63,10 +63,8 @@
 
 import {
   forwardRef,
-  useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -76,6 +74,7 @@ import { createPortal } from 'react-dom'
 import { cn } from '@ui/cn'
 import { ClassStyleInjector } from './ClassStyleInjector'
 import { UserStylesheetInjector } from './UserStylesheetInjector'
+import { EditorChromeInjector } from './EditorChromeInjector'
 import { CANVAS_VIEWPORT_HEIGHT, type CanvasViewport } from './resolveViewportUnits'
 import styles from './IframeFrameSurface.module.css'
 
@@ -141,7 +140,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
     // contentDocument is often already populated by the time React commits
     // the iframe element; we still listen for `load` as a fallback in case
     // the browser deferred parsing.
-    const attachIframeDoc = useCallback((iframe: HTMLIFrameElement | null) => {
+    const attachIframeDoc = (iframe: HTMLIFrameElement | null) => {
       iframeRef.current = iframe
       if (!iframe) {
         setIframeDoc(null)
@@ -159,7 +158,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
       ;(iframe as HTMLIFrameElement & { _pbCleanup?: () => void })._pbCleanup = () => {
         iframe.removeEventListener('load', tryCapture)
       }
-    }, [])
+    }
 
     useEffect(() => {
       return () => {
@@ -524,11 +523,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
     // breakpoint width (the iframe's real width); height is a fixed
     // device-like value. Pinning `vh`/`vmax`/… to this stops authored
     // viewport units from feeding the grow-to-content height loop above.
-    // Memoised so the injector effects don't re-run on unrelated re-renders.
-    const viewport: CanvasViewport = useMemo(
-      () => ({ width, height: CANVAS_VIEWPORT_HEIGHT }),
-      [width],
-    )
+    const viewport: CanvasViewport = { width, height: CANVAS_VIEWPORT_HEIGHT }
 
     return (
       <>
@@ -548,6 +543,9 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
         {iframeDoc &&
           createPortal(
             <>
+              {/* Editor-chrome stylesheet — UNLAYERED so it beats @layer user-authored author CSS */}
+              <EditorChromeInjector targetDocument={iframeDoc} parentDocument={document} />
+              {/* Author CSS — both wrapped in @layer user-authored inside the injectors */}
               <ClassStyleInjector targetDocument={iframeDoc} viewport={viewport} />
               <UserStylesheetInjector targetDocument={iframeDoc} viewport={viewport} />
               {children}

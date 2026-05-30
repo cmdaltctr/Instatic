@@ -34,6 +34,7 @@
 
 import { useEffect } from 'react'
 import { useEditorStore } from '@site/store/store'
+import type { ConditionDef } from '@core/page-tree'
 import { generateCanvasClassCSS, generatePreviewClassCSS } from './canvasClassCss'
 import { resolveViewportUnitsForCanvas, type CanvasViewport } from './resolveViewportUnits'
 
@@ -68,11 +69,15 @@ const PREVIEW_STYLE_TAG_ID = 'mc-classes-preview'
  */
 const EMPTY_BREAKPOINTS: Array<{ id: string; width: number }> = []
 
+/** Stable empty fallback for the conditions selector (Guideline #239). */
+const EMPTY_CONDITIONS: ConditionDef[] = []
+
 export function ClassStyleInjector({ targetDocument, viewport }: ClassStyleInjectorProps = {}) {
   // Subscribe to class registry — shallow equality so we only re-run when
   // the classes object reference changes (Immer always creates a new ref on mutation)
   const classes = useEditorStore((s) => s.site?.styleRules ?? null)
   const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? EMPTY_BREAKPOINTS)
+  const conditions = useEditorStore((s) => s.site?.conditions ?? EMPTY_CONDITIONS)
   const frameworkColors = useEditorStore((s) => s.site?.settings.framework?.colors ?? null)
   const frameworkTypography = useEditorStore((s) => s.site?.settings.framework?.typography ?? null)
   const frameworkSpacing = useEditorStore((s) => s.site?.settings.framework?.spacing ?? null)
@@ -98,14 +103,24 @@ export function ClassStyleInjector({ targetDocument, viewport }: ClassStyleInjec
     const generated = generateCanvasClassCSS(
       classes && Object.keys(classes).length > 0 ? classes : {},
       breakpoints,
+      conditions,
       frameworkColors,
       frameworkTypography,
       frameworkSpacing,
       frameworkPreferences,
       fonts,
     )
-    styleEl.textContent = forCanvas(generated) || '/* no classes */'
-  }, [targetDocument, viewport, classes, breakpoints, frameworkColors, frameworkTypography, frameworkSpacing, frameworkPreferences, fonts])
+    // Wrap in a named cascade layer so editor-chrome CSS (unlayered, from
+    // EditorChromeInjector) always wins over author CSS regardless of specificity.
+    // The publisher reset, framework CSS, and class rules are all inside the layer;
+    // their relative cascade among themselves is preserved (source order + specificity
+    // within the layer). User CSS (also @layer user-authored) still wins over the
+    // zero-specificity :where() publisher reset — same as before.
+    const css = forCanvas(generated)
+    styleEl.textContent = css
+      ? `@layer user-authored {\n${css}\n}`
+      : '/* no classes */'
+  }, [targetDocument, viewport, classes, breakpoints, conditions, frameworkColors, frameworkTypography, frameworkSpacing, frameworkPreferences, fonts])
 
   // Preview overlay — a higher-specificity rule emitted while a user is
   // hovering a suggestion in a property control (e.g. spacing token
@@ -133,7 +148,12 @@ export function ClassStyleInjector({ targetDocument, viewport }: ClassStyleInjec
       breakpointId: previewClassStyles.breakpointId ?? null,
       styles: previewClassStyles.styles,
     })
-    previewEl.textContent = viewport ? resolveViewportUnitsForCanvas(previewCss, viewport) : previewCss
+    const resolvedPreviewCss = viewport ? resolveViewportUnitsForCanvas(previewCss, viewport) : previewCss
+    // Keep in the same @layer so the doubled-selector preview rule still wins
+    // over the regular class rule within the layer (higher specificity).
+    previewEl.textContent = resolvedPreviewCss
+      ? `@layer user-authored {\n${resolvedPreviewCss}\n}`
+      : ''
   }, [targetDocument, viewport, classes, previewClassStyles])
 
   // Cleanup: remove the style elements when the component unmounts. We

@@ -74,19 +74,32 @@ export function CanvasModulePlaceholder({
     <div
       className={cn(styles.root, styles[`variant-${variant}`], className)}
       data-canvas-module-placeholder=""
+      data-variant={variant}
       role="presentation"
     >
-      {icon ? <span className={styles.icon} aria-hidden="true">{icon}</span> : null}
-      <span className={styles.label}>{label}</span>
+      {icon ? (
+        <span
+          className={styles.icon}
+          data-pb-placeholder-icon=""
+          aria-hidden="true"
+        >
+          {icon}
+        </span>
+      ) : null}
+      <span className={styles.label} data-pb-placeholder-label="">{label}</span>
       {variant === 'block' && description ? (
-        <span className={styles.description}>{description}</span>
+        <span className={styles.description} data-pb-placeholder-description="">{description}</span>
       ) : null}
       {variant === 'block' && actions ? (
         // `data-canvas-interactive` opts the action row out of the canvas
         // selection capture in `NodeWrapper`, so clicks on the inner buttons
         // actually reach their `onClick` handlers instead of selecting the
         // node and stopping propagation.
-        <div className={styles.actions} data-canvas-interactive="true">
+        <div
+          className={styles.actions}
+          data-pb-placeholder-actions=""
+          data-canvas-interactive="true"
+        >
           {actions}
         </div>
       ) : null}

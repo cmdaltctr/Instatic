@@ -30,6 +30,6 @@ export const ListEditor: React.FC<ModuleComponentProps<ListProps>> = ({ props, m
     { ...nodeWrapperProps, className: mcClassName },
     items.length > 0
       ? items.map((item, i) => React.createElement('li', { key: i }, item))
-      : React.createElement('li', { className: styles.placeholder }, 'List item 1'),
+      : React.createElement('li', { className: styles.placeholder, 'data-pb-list-placeholder': '' }, 'List item 1'),
   )
 }

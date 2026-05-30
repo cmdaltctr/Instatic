@@ -24,7 +24,7 @@
  * wrapping.
  */
 
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { collectUserStylesheetCss } from '@core/publisher/userStylesheets'
 import { resolveViewportUnitsForCanvas, type CanvasViewport } from './resolveViewportUnits'
@@ -55,14 +55,10 @@ export function UserStylesheetInjector({ targetDocument, viewport }: UserStylesh
   // exact bytes the published page receives — scope, priority, and enable
   // state all honoured. Viewport units are then pinned to the frame viewport
   // (canvas-only) so authored `vh`/`vmax`/… can't make the grow-to-content
-  // iframe height explode. Memoised on `site` + active page + viewport so the
-  // effect skips when nothing relevant changed.
-  const css = useMemo(() => {
-    if (!site) return ''
-    const activePage = site.pages.find((page) => page.id === activePageId) ?? site.pages[0]
-    const collected = collectUserStylesheetCss(site, activePage)
-    return viewport ? resolveViewportUnitsForCanvas(collected, viewport) : collected
-  }, [site, activePageId, viewport])
+  // iframe height explode.
+  const activePage = site ? site.pages.find((page) => page.id === activePageId) ?? site.pages[0] : undefined
+  const collected = site && activePage ? collectUserStylesheetCss(site, activePage) : ''
+  const css = viewport ? resolveViewportUnitsForCanvas(collected, viewport) : collected
 
   useEffect(() => {
     const targetDoc = targetDocument ?? document
@@ -73,7 +69,13 @@ export function UserStylesheetInjector({ targetDocument, viewport }: UserStylesh
       styleEl.setAttribute('data-source', 'UserStylesheetInjector')
       targetDoc.head.appendChild(styleEl)
     }
-    styleEl.textContent = css || '/* no user stylesheets */'
+    // Wrap in a named cascade layer so editor-chrome CSS (unlayered, from
+    // EditorChromeInjector) always wins over user-authored stylesheets regardless
+    // of specificity. User styles still cascade among themselves normally inside
+    // the layer (source order + specificity preserved).
+    styleEl.textContent = css
+      ? `@layer user-authored {\n${css}\n}`
+      : '/* no user stylesheets */'
   }, [targetDocument, css])
 
   useEffect(() => {

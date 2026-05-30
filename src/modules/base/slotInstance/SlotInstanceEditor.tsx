@@ -26,12 +26,12 @@ export const SlotInstanceEditor: React.FC<ModuleComponentProps<SlotInstanceProps
     typeof props.slotName === 'string' && props.slotName ? props.slotName : 'children'
 
   return (
-    <div {...nodeWrapperProps} className={styles.container}>
-      <div className={styles.header}>
+    <div {...nodeWrapperProps} className={styles.container} data-pb-slot-instance="">
+      <div className={styles.header} data-pb-slot-instance-header="">
         <TargetSolidIcon size={11} color="currentColor" aria-hidden="true" />
-        <span className={styles.label}>Slot: {slotName}</span>
+        <span className={styles.label} data-pb-slot-label="">Slot: {slotName}</span>
       </div>
-      <div className={styles.content}>{children}</div>
+      <div className={styles.content} data-pb-slot-instance-content="">{children}</div>
     </div>
   )
 }

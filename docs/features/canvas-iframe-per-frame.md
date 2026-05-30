@@ -100,15 +100,35 @@ removed in the same change.
 
 ### 3. CSS injection inside the iframe
 
-- Refactor `ClassStyleInjector` and `UserStylesheetInjector` to accept a
-  target document (default: `document`) and inject `<style>` tags into that
-  document's `<head>`.
-- For each iframe, mount a parallel pair of injectors targeting that iframe's
-  document. The same source CSS that goes to the published site goes into
-  each iframe — verbatim, no rewriting.
-- The publisher reset CSS, the framework / class bundle CSS, and the user
-  stylesheets all need to be in the iframe. So does `@font-face` from the
-  fonts library so custom fonts render correctly inside the iframe.
+Three style injectors are mounted per iframe, in this order:
+
+| Injector | `<style>` id | Layer | Purpose |
+|---|---|---|---|
+| `EditorChromeInjector` | `pb-editor-chrome` | unlayered | Editor-only chrome styles: placeholder, slot-instance, unknown-module, etc. |
+| `ClassStyleInjector` | `mc-classes` | `@layer user-authored` | Publisher reset + framework CSS + class registry CSS |
+| `UserStylesheetInjector` | `mc-user-styles` | `@layer user-authored` | User-uploaded stylesheets (verbatim, unscoped) |
+
+**`EditorChromeInjector`** (`src/admin/pages/site/canvas/EditorChromeInjector.tsx`):
+- At mount, copies design tokens (`--editor-text-muted`, `--canvas-placeholder-bg`,
+  `--editor-radius`, etc.) from the parent editor document's `:root` onto the
+  iframe's `:root`, so `var(--editor-*)` resolves correctly inside the chrome CSS.
+- Styles editor-chrome elements (empty states, slot boundaries, unknown-module
+  fallback) via **stable data-attribute selectors** (`data-canvas-module-placeholder`,
+  `data-pb-slot-instance`, `data-pb-list-placeholder`, `data-pb-unknown-module`, etc.)
+  rather than hashed CSS-Module class names (which only exist in the parent document).
+- The corresponding data attributes are added to the component TSX alongside the
+  existing CSS-Module class names — so CSS Modules still style the components in
+  the parent document or in tests; the data attrs give the iframe chrome CSS a
+  stable target.
+- Lives OUTSIDE `@layer user-authored` (unlayered).
+
+**`ClassStyleInjector`** and **`UserStylesheetInjector`** both wrap their generated
+CSS in `@layer user-authored { ... }`. Unlayered CSS (the editor chrome from
+`EditorChromeInjector`) always beats `@layer`-d CSS in the cascade regardless of
+selector specificity, so user CSS can no longer accidentally bleed into editor chrome.
+Within the layer, the relative cascade between the publisher reset (`:where()`, zero
+specificity) and user CSS is preserved — user rules still win over the reset exactly
+as on the published site.
 
 ### 4. Selection / hover overlay positioning
 
@@ -214,12 +234,15 @@ When the iframe path is the default:
   gone. The canvas runs the same CSS bytes the publisher does.
 - The CSS scoper tests — gone.
 
-What stays: `UserStylesheetInjector` (still injects user CSS, now targeting
-each iframe's document instead of the editor doc), `ClassStyleInjector` (same),
-`collectUserStylesheetCss` (shared between publisher and canvas). The injector
-calls `collectUserStylesheetCss(site, activePage)` so the canvas loads exactly
-the stylesheets that target the active page — same scope, priority, and enable
-state the published page gets.
+What stays: `UserStylesheetInjector` (injects user CSS into each iframe's
+document, wrapped in `@layer user-authored`), `ClassStyleInjector` (same —
+includes the publisher reset + framework + class registry CSS, also wrapped in
+`@layer user-authored`), `EditorChromeInjector` (new — injects unlayered
+editor-chrome styles into each iframe, forwarding design tokens from the parent
+document), `collectUserStylesheetCss` (shared between publisher and canvas).
+The injector calls `collectUserStylesheetCss(site, activePage)` so the canvas
+loads exactly the stylesheets that target the active page — same scope,
+priority, and enable state the published page gets.
 
 ## Remaining work
 
