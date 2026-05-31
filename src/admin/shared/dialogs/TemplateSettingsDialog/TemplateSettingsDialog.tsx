@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import type { Page, PageTemplateConfig } from '@core/page-tree'
 import {
   normalizePageSlug,
@@ -55,7 +56,20 @@ export function TemplateSettingsDialog({
   const [slug, setSlug] = useState(page.slug)
   const [tableSlug, setTableSlug] = useState(page.template?.tableSlug ?? 'posts')
   const [priority, setPriority] = useState(String(page.template?.priority ?? 100))
-  const [collections, setCollections] = useState<DataTable[]>(FALLBACK_COLLECTIONS)
+  // A template renders an entry at a public URL — only tables with a non-empty
+  // `routeBase` are routable and can be a template source (both `postType` and
+  // `data` kinds qualify). Falls back to a synthetic Posts table when the load
+  // fails or returns nothing routable.
+  const { data: loadedCollections } = useAsyncResource(
+    async () => {
+      const allTables = await listCmsDataTables()
+      const routable = allTables.filter((t) => t.routeBase.trim() !== '')
+      return routable.length > 0 ? routable : FALLBACK_COLLECTIONS
+    },
+    [],
+    { swallowErrors: true },
+  )
+  const collections: DataTable[] = loadedCollections ?? FALLBACK_COLLECTIONS
   const inputRef = useRef<HTMLInputElement>(null)
   const nameInputId = useId()
   const slugInputId = useId()
@@ -70,24 +84,6 @@ export function TemplateSettingsDialog({
 
   useEffect(() => {
     requestAnimationFrame(() => inputRef.current?.select())
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    listCmsDataTables()
-      .then((allTables) => {
-        // A template renders an entry at a public URL — only tables with a
-        // non-empty `routeBase` are routable and can be a template source.
-        // Both `postType` and `data` kinds qualify when `routeBase` is set.
-        const nextCollections = allTables.filter((t) => t.routeBase.trim() !== '')
-        if (!cancelled && nextCollections.length > 0) setCollections(nextCollections)
-      })
-      .catch(() => {
-        if (!cancelled) setCollections(FALLBACK_COLLECTIONS)
-      })
-    return () => {
-      cancelled = true
-    }
   }, [])
 
   function handleSubmit(event: FormEvent) {

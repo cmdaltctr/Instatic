@@ -15,7 +15,8 @@
  *   4. On success the dialog closes and notifies the parent so the plugin
  *      list can re-render with the new settings.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import {
@@ -44,34 +45,31 @@ export function PluginSettingsDialog({
   onSaved,
 }: PluginSettingsDialogProps) {
   const { runStepUp } = useStepUp()
-  // pluginId is the load-key — when it changes we discard the old load.
-  const [loadedFor, setLoadedFor] = useState<string | null>(null)
-  const [schema, setSchema] = useState<PluginSettingsSchema | null>(null)
-  const [values, setValues] = useState<PluginSettingsRecord>({})
-  const [saving, setSaving] = useState(false)
-  // Load and save errors are surfaced under different alert titles so the
-  // operator can tell whether the dialog failed to read the current settings
-  // or failed to persist their edits.
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const loading = loadedFor !== pluginId
+  const {
+    data,
+    loading,
+    error: loadError,
+  } = useAsyncResource(() => getCmsPluginSettings(pluginId), [pluginId], {
+    fallbackError: 'Failed to load settings',
+  })
+  const schema: PluginSettingsSchema | null = data?.schema ?? null
 
-  useEffect(() => {
-    let cancelled = false
-    void getCmsPluginSettings(pluginId)
-      .then((body) => {
-        if (cancelled) return
-        setSchema(body.schema)
-        setValues({ ...body.settings })
-        setLoadedFor(pluginId)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setLoadError(err instanceof Error ? err.message : 'Failed to load settings')
-        setLoadedFor(pluginId)
-      })
-    return () => { cancelled = true }
-  }, [pluginId])
+  // Editable form values, seeded from the loaded settings the first time each
+  // load resolves. Render-time seeding (keyed on the stable `data.settings`
+  // reference) avoids a setState-in-effect cascade — the same idiom
+  // `useImportPreview` uses to reset derived state when its input changes.
+  const [values, setValues] = useState<PluginSettingsRecord>({})
+  const [seededFrom, setSeededFrom] = useState<PluginSettingsRecord | null>(null)
+  if (data && data.settings !== seededFrom) {
+    setSeededFrom(data.settings)
+    setValues({ ...data.settings })
+  }
+
+  const [saving, setSaving] = useState(false)
+  // Save errors are surfaced under a different alert title than the load error
+  // so the operator can tell whether reading the current settings or persisting
+  // their edits failed.
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   function setValue(id: string, next: PluginSettingsValue) {
     setValues((current) => ({ ...current, [id]: next }))

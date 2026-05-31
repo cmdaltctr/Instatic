@@ -25,20 +25,22 @@
  * TypeBox schema below via the canonical `apiRequest` (`@core/http`).
  * On any failure — non-OK status, abort, or a payload that doesn't match —
  * the hook keeps `null` (the widget keeps showing its skeleton, which is
- * better than throwing and blanking the dashboard).
+ * better than throwing and blanking the dashboard). That swallow-on-failure
+ * behaviour is `useAsyncResource`'s `swallowErrors` mode.
  *
- * Cancellation: each effect tracks a `cancelled` flag so a fast
- * unmount-then-remount doesn't race the response into a stale state.
+ * Cancellation + boundary validation are handled by the shared
+ * `useAsyncResource` primitive (each load aborts its in-flight request on
+ * unmount and discards stale responses).
  *
  * No SWR / cache here yet — the dashboard is a single mount per
  * session and the responses are small. If we later cache across
  * mounts, do it module-level so multiple sibling widgets that share a
  * domain (none today) reuse one fetch.
  */
-import { useEffect, useState } from 'react'
 import type { TSchema, TProperties } from '@sinclair/typebox'
 import { Type, type Static } from '@core/utils/typeboxHelpers'
-import { apiRequest, isAbortError } from '@core/http'
+import { apiRequest } from '@core/http'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 
 // ---------------------------------------------------------------------------
 // Response shapes (must stay in sync with `server/handlers/cms/dashboard.ts`).
@@ -187,28 +189,16 @@ export type DashboardActivityStats = Static<typeof DashboardActivityStatsSchema>
 // ---------------------------------------------------------------------------
 
 /**
- * Generic `useEffect`-based fetcher with cancellation + TypeBox boundary
- * validation. Each per-domain hook below is a one-liner over this. On any
- * failure the hook stays `null` and the widget keeps its skeleton.
+ * Generic per-domain fetcher over {@link useAsyncResource}: TypeBox boundary
+ * validation via `apiRequest`, abort-on-unmount, and `swallowErrors` so any
+ * failure leaves the value `null` and the widget keeps its skeleton.
  */
 function useDashboardEndpoint<S extends TSchema>(endpoint: string, schema: S): Static<S> | null {
-  const [data, setData] = useState<Static<S> | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const body = await apiRequest(`/admin/api/cms/dashboard/${endpoint}`, { schema })
-        if (!cancelled) setData(body)
-      } catch (err) {
-        if (isAbortError(err)) return
-        console.warn(`[dashboard] /${endpoint} failed:`, err)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [endpoint, schema])
-  return data
+  return useAsyncResource(
+    (signal) => apiRequest(`/admin/api/cms/dashboard/${endpoint}`, { schema, signal }),
+    [endpoint, schema],
+    { swallowErrors: true },
+  ).data
 }
 
 // ---------------------------------------------------------------------------

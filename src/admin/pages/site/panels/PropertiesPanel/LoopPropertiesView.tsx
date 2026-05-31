@@ -13,7 +13,7 @@
  * Achromatic palette (Constraint #376). CSS Modules only (Constraint #402).
  */
 
-import { useEffect, useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { useEditorStore } from '@site/store/store'
 import { loopSourceRegistry } from '@core/loops/registry'
 import type { LoopEntitySource } from '@core/loops/types'
@@ -44,22 +44,12 @@ export function LoopPropertiesView({ nodeId, props }: LoopPropertiesViewProps) {
       : {}
 
   // Data table list — fetched lazily for the data.rows source's tableId picker.
-  // Other sources don't need this.
-  const [tables, setTables] = useState<Array<{ id: string; name: string }> | null>(null)
-  useEffect(() => {
-    if (sourceId !== 'data.rows' || tables !== null) return
-    let cancelled = false
-    listCmsDataTables()
-      .then((list) => {
-        if (!cancelled) setTables(list)
-      })
-      .catch(() => {
-        if (!cancelled) setTables([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [sourceId, tables])
+  // Other sources resolve to `null` (no fetch); a failed load resolves to an
+  // empty list so the picker degrades gracefully.
+  const { data: tables } = useAsyncResource<Array<{ id: string; name: string }> | null>(
+    () => (sourceId === 'data.rows' ? listCmsDataTables().catch(() => []) : Promise.resolve(null)),
+    [sourceId],
+  )
 
   // Build the per-source filter schema with dynamic options patched in.
   function buildFilterSchema(): PropertySchema {

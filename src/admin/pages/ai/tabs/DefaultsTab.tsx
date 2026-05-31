@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { Button } from '@ui/components/Button'
 import { Select } from '@ui/components/Select'
 import { SaveSolidIcon } from 'pixel-art-icons/icons/save-solid'
@@ -32,34 +33,16 @@ const SCOPE_DESCRIPTIONS: Record<ToolScope, string> = {
 }
 
 export function DefaultsTab() {
-  const [credentials, setCredentials] = useState<CredentialView[]>([])
-  const [defaults, setDefaults] = useState<AiDefaults>({})
+  const { data, loading, error, refresh } = useAsyncResource(
+    () => Promise.all([listCredentials(), listDefaults()]).then(([creds, defs]) => ({ creds, defs })),
+    [],
+    { fallbackError: 'Failed to load defaults.' },
+  )
+  const credentials: CredentialView[] = data?.creds ?? []
+  const defaults: AiDefaults = data?.defs ?? {}
   const [modelsByProvider, setModelsByProvider] = useState<Record<string, AiModel[]>>({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [savingScope, setSavingScope] = useState<ToolScope | null>(null)
   const [statusByScope, setStatusByScope] = useState<Record<string, string>>({})
-  const [refreshKey, setRefreshKey] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        setError(null)
-        const [creds, defs] = await Promise.all([listCredentials(), listDefaults()])
-        if (cancelled) return
-        setCredentials(creds)
-        setDefaults(defs)
-      } catch (err) {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Failed to load defaults.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => { cancelled = true }
-  }, [refreshKey])
 
   // Lazy-load models for each provider that has any credentials. Cache
   // per-provider; the picker reads from this map. The fetch is started
@@ -67,7 +50,8 @@ export function DefaultsTab() {
   // current commit (satisfies react-hooks/set-state-in-effect).
   useEffect(() => {
     let cancelled = false
-    const providersInUse = new Set(credentials.map((c) => c.providerId))
+    const creds = data?.creds ?? []
+    const providersInUse = new Set(creds.map((c) => c.providerId))
     for (const provider of providersInUse) {
       if (modelsByProvider[provider]) continue
       void listModels(provider).then((models) => {
@@ -76,7 +60,7 @@ export function DefaultsTab() {
       }).catch(() => { /* swallow — picker shows "loading models…" */ })
     }
     return () => { cancelled = true }
-  }, [credentials, modelsByProvider])
+  }, [data, modelsByProvider])
 
   return (
     <section className={styles.section}>
@@ -112,7 +96,7 @@ export function DefaultsTab() {
                 try {
                   await setDefault(scope, { credentialId, modelId })
                   setStatusByScope((prev) => ({ ...prev, [scope]: 'Saved.' }))
-                  setRefreshKey((n) => n + 1)
+                  refresh()
                 } catch (err) {
                   const message = err instanceof ApiError
                     ? err.message

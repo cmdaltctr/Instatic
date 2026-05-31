@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import type { Page } from '@core/page-tree'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { dataTablePreviewToLoopItem } from '@core/templates/templatePreviewData'
@@ -27,29 +27,23 @@ export function useTemplatePreviewContext(page: Page | null): TemplateRenderData
   const tableSlug = template?.enabled && template.context === 'entry'
     ? template.tableSlug
     : null
-  const [previewState, setPreviewState] = useState<{
+  // Resolves to null when the page isn't an entry-template; a failed load
+  // resolves to an empty stack so bindings stay empty rather than throwing.
+  const { data: previewState } = useAsyncResource<{
     tableSlug: string
     entryStack: TemplateRenderDataContext['entryStack']
-  } | null>(null)
-
-  useEffect(() => {
-    if (!tableSlug) return
-    let cancelled = false
-    getCmsDataTableBySlug(tableSlug)
-      .then((table) => {
-        if (cancelled) return
-        setPreviewState({
-          tableSlug,
-          entryStack: table ? [dataTablePreviewToLoopItem(table)] : [],
-        })
-      })
-      .catch(() => {
-        if (!cancelled) setPreviewState({ tableSlug, entryStack: [] })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [tableSlug])
+  } | null>(
+    () =>
+      tableSlug
+        ? getCmsDataTableBySlug(tableSlug)
+            .then((table) => ({
+              tableSlug,
+              entryStack: table ? [dataTablePreviewToLoopItem(table)] : [],
+            }))
+            .catch(() => ({ tableSlug, entryStack: [] as TemplateRenderDataContext['entryStack'] }))
+        : Promise.resolve(null),
+    [tableSlug],
+  )
 
   // ── Compose the full context ─────────────────────────────────────────
   // The template entry stack is only valid for the currently-loaded

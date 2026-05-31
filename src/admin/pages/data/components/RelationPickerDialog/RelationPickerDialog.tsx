@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { EmptyState } from '@ui/components/EmptyState'
@@ -50,11 +51,17 @@ export function RelationPickerDialog({
   allowMultiple,
   onPick,
 }: RelationPickerDialogProps) {
-  const [rows, setRows] = useState<DataRow[]>([])
-  const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(() => normalizeSelection(currentValue))
+
+  // Load rows when the dialog opens (or the target table changes); resolve to
+  // an empty list while closed so nothing is fetched in the background.
+  const { data, loading, error: loadError } = useAsyncResource(
+    () => (open && targetTable ? listCmsDataRows(targetTable.id) : Promise.resolve<DataRow[]>([])),
+    [open, targetTable],
+    { fallbackError: 'Failed to load rows' },
+  )
+  const rows: DataRow[] = data ?? []
 
   // Re-sync selection when dialog opens or currentValue changes
   useEffect(() => {
@@ -62,37 +69,6 @@ export function RelationPickerDialog({
       setSelected(normalizeSelection(currentValue))
     }
   }, [open, currentValue])
-
-  // Load rows when dialog opens (or target table changes)
-  useEffect(() => {
-    if (!open || !targetTable) {
-      setRows([])
-      setLoading(false)
-      setLoadError(null)
-      return
-    }
-
-    let cancelled = false
-    setLoading(true)
-    setLoadError(null)
-    setRows([])
-
-    listCmsDataRows(targetTable.id)
-      .then((fetched) => {
-        if (cancelled) return
-        setRows(fetched)
-        setLoading(false)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setLoadError(err instanceof Error ? err.message : 'Failed to load rows')
-        setLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [open, targetTable])
 
   const primaryFieldId = targetTable?.primaryFieldId ?? ''
 

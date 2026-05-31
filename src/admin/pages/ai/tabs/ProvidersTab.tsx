@@ -5,7 +5,8 @@
  * is the wire-safe `CredentialView` (no plaintext, no ciphertext).
  */
 
-import { useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { Input } from '@ui/components/Input'
@@ -48,43 +49,31 @@ const PROVIDER_LABEL: Record<ProviderId, string> = {
 }
 
 export function ProvidersTab() {
-  const [credentials, setCredentials] = useState<CredentialView[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    data: loadedCredentials,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAsyncResource(() => listCredentials(), [], {
+    fallbackError: 'Failed to load credentials.',
+  })
+  const credentials: CredentialView[] = loadedCredentials ?? []
   const [showDialog, setShowDialog] = useState(false)
   const [testResults, setTestResults] = useState<Record<string, TestResult & { ts: number }>>({})
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
-  // Bump this to force a re-load (after create / delete). Avoids the
-  // `react-hooks/set-state-in-effect` lint by funneling all loads through
-  // a single effect whose dependency is a plain primitive.
-  const [refreshKey, setRefreshKey] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        setError(null)
-        const list = await listCredentials()
-        if (cancelled) return
-        setCredentials(list)
-      } catch (err) {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Failed to load credentials.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => { cancelled = true }
-  }, [refreshKey])
+  // Errors from mutations (delete/create) live alongside the load error from
+  // the resource; the view shows whichever is present.
+  const [actionError, setActionError] = useState<string | null>(null)
+  const error = loadError ?? actionError
 
   async function handleDelete(id: string) {
     setBusyIds((prev) => new Set(prev).add(id))
     try {
       await deleteCredential(id)
-      setRefreshKey((n) => n + 1)
+      setActionError(null)
+      refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete credential.')
+      setActionError(err instanceof Error ? err.message : 'Failed to delete credential.')
     } finally {
       setBusyIds((prev) => {
         const next = new Set(prev)
@@ -201,7 +190,8 @@ export function ProvidersTab() {
           onClose={() => setShowDialog(false)}
           onCreated={() => {
             setShowDialog(false)
-            setRefreshKey((n) => n + 1)
+            setActionError(null)
+            refresh()
           }}
         />
       )}

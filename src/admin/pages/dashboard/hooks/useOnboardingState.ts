@@ -18,7 +18,7 @@
  * latency. Soft-fails on any individual error so a broken endpoint
  * doesn't brick the dashboard — the step just shows as "not started".
  */
-import { useEffect, useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { cmsAdapter } from '@core/persistence/cms'
 import { listCmsPlugins } from '@core/persistence/cmsPlugins'
 import { listCmsUsers } from '@core/persistence/cmsUsers'
@@ -44,48 +44,33 @@ const INITIAL: OnboardingFacts = {
 }
 
 export function useOnboardingState(): OnboardingFacts {
-  const [facts, setFacts] = useState<OnboardingFacts>(INITIAL)
+  // `Promise.allSettled` never rejects — each individual failure soft-fails to
+  // an empty/undefined value so a broken endpoint doesn't brick the dashboard.
+  const { data } = useAsyncResource<OnboardingFacts>(async () => {
+    const [siteResult, pluginsResult, usersResult] = await Promise.allSettled([
+      cmsAdapter.loadSite('default'),
+      listCmsPlugins(),
+      listCmsUsers(),
+    ])
 
-  useEffect(() => {
-    let cancelled = false
+    const site = siteResult.status === 'fulfilled' ? siteResult.value : undefined
+    const plugins = pluginsResult.status === 'fulfilled' ? pluginsResult.value.plugins : []
+    const users = usersResult.status === 'fulfilled' ? usersResult.value : []
 
-    async function load() {
-      const [siteResult, pluginsResult, usersResult] = await Promise.allSettled([
-        cmsAdapter.loadSite('default'),
-        listCmsPlugins(),
-        listCmsUsers(),
-      ])
+    const hasIdentity = Boolean(site && site.name && site.name !== 'Untitled Site')
+    const hasFavicon = Boolean(site?.settings?.faviconUrl)
+    const hasFramework = Boolean(site?.settings?.framework)
+    const pageCount = Array.isArray(site?.pages) ? site.pages.length : 0
 
-      if (cancelled) return
-
-      const site = siteResult.status === 'fulfilled' ? siteResult.value : undefined
-      const plugins = pluginsResult.status === 'fulfilled' ? pluginsResult.value.plugins : []
-      const users = usersResult.status === 'fulfilled' ? usersResult.value : []
-
-      const hasIdentity = Boolean(
-        site && site.name && site.name !== 'Untitled Site',
-      )
-      const hasFavicon = Boolean(site?.settings?.faviconUrl)
-      const hasFramework = Boolean(site?.settings?.framework)
-      const pageCount = Array.isArray(site?.pages) ? site.pages.length : 0
-      const pluginCount = plugins.length
-      const userCount = users.length
-
-      setFacts({
-        loading: false,
-        identity: hasIdentity || hasFavicon ? 'done' : 'active',
-        framework: hasFramework ? 'done' : 'active',
-        firstPage: pageCount >= 2 ? 'done' : 'todo',
-        plugin: pluginCount > 0 ? 'done' : 'todo',
-        team: userCount > 1 ? 'done' : 'todo',
-      })
-    }
-
-    void load()
-    return () => {
-      cancelled = true
+    return {
+      loading: false,
+      identity: hasIdentity || hasFavicon ? 'done' : 'active',
+      framework: hasFramework ? 'done' : 'active',
+      firstPage: pageCount >= 2 ? 'done' : 'todo',
+      plugin: plugins.length > 0 ? 'done' : 'todo',
+      team: users.length > 1 ? 'done' : 'todo',
     }
   }, [])
 
-  return facts
+  return data ?? INITIAL
 }

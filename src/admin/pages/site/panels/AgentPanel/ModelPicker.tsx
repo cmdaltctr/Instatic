@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { useAgentStore } from '@admin/ai/useAgentStore'
 import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
@@ -43,28 +44,19 @@ export function ModelPicker({ className }: ModelPickerProps) {
 
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
-  const [credentials, setCredentials] = useState<CredentialView[]>([])
   const [modelsByCred, setModelsByCred] = useState<Record<string, AiModel[]>>({})
-  const [refreshKey, setRefreshKey] = useState(0)
 
-  // Load credentials on mount AND every time the popover re-opens. The mount
-  // load is what makes the trigger label show the credential's friendly
-  // displayLabel (instead of a 6-char id slice) before the user has ever
-  // opened the popover. Cheap call — short list.
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        const list = await listCredentials()
-        if (cancelled) return
-        setCredentials(list)
-      } catch {
-        // swallow — UI shows "no credentials" empty state
-      }
-    }
-    void load()
-    return () => { cancelled = true }
-  }, [refreshKey])
+  // Load credentials on mount AND every time the popover re-opens (via
+  // `refresh()` in `toggle`). The mount load is what makes the trigger label
+  // show the credential's friendly displayLabel (instead of a 6-char id slice)
+  // before the user has ever opened the popover. Failures are swallowed — the
+  // UI shows a "no credentials" empty state.
+  const { data: loadedCredentials, refresh: refreshCredentials } = useAsyncResource(
+    () => listCredentials(),
+    [],
+    { swallowErrors: true },
+  )
+  const credentials: CredentialView[] = loadedCredentials ?? []
 
   // Lazy-load models for each credential's provider. Cached per credential
   // id so a later per-credential model list (Ollama with different
@@ -75,11 +67,12 @@ export function ModelPicker({ className }: ModelPickerProps) {
   // label on the trigger). When the popover OPENS we fan out to every
   // credential so the full picker is populated.
   useEffect(() => {
-    if (credentials.length === 0) return
+    const creds = loadedCredentials ?? []
+    if (creds.length === 0) return
     let cancelled = false
     const targets = open
-      ? credentials
-      : credentials.filter((c) => c.id === activeCredentialId)
+      ? creds
+      : creds.filter((c) => c.id === activeCredentialId)
     for (const cred of targets) {
       if (modelsByCred[cred.id]) continue
       void listModels(cred.providerId, cred.id).then((models) => {
@@ -88,7 +81,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
       }).catch(() => { /* swallow */ })
     }
     return () => { cancelled = true }
-  }, [open, credentials, modelsByCred, activeCredentialId])
+  }, [open, loadedCredentials, modelsByCred, activeCredentialId])
 
   const activeLabel = (() => {
     if (!activeCredentialId || !activeModelId) return 'Default'
@@ -106,7 +99,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
 
   function toggle() {
     setOpen((v) => !v)
-    setRefreshKey((n) => n + 1)
+    refreshCredentials()
   }
 
   async function pick(credentialId: string, modelId: string) {

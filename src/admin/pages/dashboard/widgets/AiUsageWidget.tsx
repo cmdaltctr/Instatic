@@ -12,7 +12,7 @@
  * falls back to a "no permission" empty state — same pattern as the
  * existing widgets that gracefully no-op on missing capability.
  */
-import { useEffect, useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { ZapSolidIcon } from 'pixel-art-icons/icons/zap-solid'
 import type { DashboardWidgetRendererProps } from '@core/dashboard'
 import { Sparkline, StatValue } from '@ui/components/charts'
@@ -52,31 +52,28 @@ interface UsageState {
  * `useDashboardEndpoint`) because the AI audit lives under
  * `/admin/api/ai/*` — a different namespace from `/admin/api/cms/dashboard/*`
  * — and uses a `since` query param the dashboard helper doesn't carry.
+ *
+ * The loader maps a 403 (caller lacks `ai.audit.read`) to the `forbidden`
+ * state so the widget hides its content instead of blowing up the dashboard;
+ * any other failure is swallowed by `useAsyncResource` and the widget keeps
+ * its skeleton (state stays null).
  */
 function useAiUsageThisMonth(): UsageState {
-  const [state, setState] = useState<UsageState>({ data: null, forbidden: false })
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
+  const { data } = useAsyncResource<UsageState>(
+    async () => {
       try {
-        const data = await listAiAudit(startOfMonthIso())
-        if (cancelled) return
-        setState({ data, forbidden: false })
+        return { data: await listAiAudit(startOfMonthIso()), forbidden: false }
       } catch (err) {
-        if (cancelled) return
-        // 403 means the caller doesn't hold `ai.audit.read` — the widget
-        // simply hides the numeric content rather than blowing up the
-        // dashboard. Any other error is logged and treated as "no data".
         if (err instanceof ApiError && err.status === 403) {
-          setState({ data: null, forbidden: true })
-          return
+          return { data: null, forbidden: true }
         }
-        console.error('[AiUsageWidget] failed to load /admin/api/ai/audit:', err)
+        throw err
       }
-    })()
-    return () => { cancelled = true }
-  }, [])
-  return state
+    },
+    [],
+    { swallowErrors: true },
+  )
+  return data ?? { data: null, forbidden: false }
 }
 
 export function AiUsageWidget({ span, editing }: DashboardWidgetRendererProps) {

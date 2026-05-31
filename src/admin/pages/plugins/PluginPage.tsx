@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
 import { useParams } from '@admin/lib/routing'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import type { CmsPluginsPayload, PluginAdminPageRoute } from '@core/plugin-sdk'
 import { listCmsPlugins } from '@core/persistence'
 import { AdminPageLayout } from '@admin/layouts/AdminPageLayout'
@@ -22,29 +22,10 @@ function pageDescription(page: PluginAdminPageRoute): string | undefined {
 
 export function PluginPage() {
   const { pluginId = '', pageId = '' } = useParams()
-  const [payload, setPayload] = useState<CmsPluginsPayload>(emptyPayload)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadPlugins() {
-      setLoading(true)
-      setError(null)
-      try {
-        const nextPayload = await listCmsPlugins()
-        if (!cancelled) setPayload(nextPayload)
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load plugin page')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    void loadPlugins()
-    return () => { cancelled = true }
-  }, [])
+  const { data, loading, error } = useAsyncResource(() => listCmsPlugins(), [], {
+    fallbackError: 'Could not load plugin page',
+  })
+  const payload: CmsPluginsPayload = data ?? emptyPayload
 
   const page: PluginAdminPageRoute | null = payload.adminPages.find((candidate) =>
     candidate.pluginId === pluginId && candidate.id === pageId

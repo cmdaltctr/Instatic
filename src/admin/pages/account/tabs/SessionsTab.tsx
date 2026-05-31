@@ -21,7 +21,8 @@
  * lands, the call paths in this file will route through the step-up dialog
  * if the current session has no fresh re-auth window.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { Button } from '@ui/components/Button'
 import { SkeletonRows } from '@ui/components/Skeleton'
 import {
@@ -58,63 +59,36 @@ function formatLastSeen(value: string): string {
   return formatDateTime(value)
 }
 
-/**
- * `reloadKey` ticks every time we want to re-fetch the session list (after a
- * revoke / logout-all). Bumping the state triggers the load effect's
- * dependency check, which keeps the load logic inline (the React 19 hook
- * rules dislike `setState` calls reaching into the effect from a memoised
- * callback closure).
- */
 export function SessionsTab() {
   const { runStepUp } = useStepUp()
-  const [sessions, setSessions] = useState<CmsSession[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    data,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAsyncResource(() => listCmsSessions(), [], { fallbackError: 'Could not load sessions' })
+  const sessions: CmsSession[] = data ?? []
   const [busy, setBusy] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
-  const [reloadKey, setReloadKey] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    // The "loading" / "error" reset for re-fetches happens via the
-    // surrounding action handlers (`handleRevoke`, `handleRevokeAllOthers`)
-    // before they bump `reloadKey`. The effect itself only resolves the next
-    // state; React 19's hook rules disallow synchronous setState inside the
-    // effect body.
-    listCmsSessions()
-      .then((next) => {
-        if (cancelled) return
-        setSessions(next)
-        setLoading(false)
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Could not load sessions')
-        setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [reloadKey])
-
-  function reload(): void {
-    setReloadKey((current) => current + 1)
-  }
+  // Errors from revoke actions live alongside the load error from the
+  // resource; the view shows whichever is present.
+  const [actionError, setActionError] = useState<string | null>(null)
+  const error = loadError ?? actionError
 
   async function handleRevoke(session: CmsSession): Promise<void> {
     if (busy) return
     setBusy(session.id)
-    setError(null)
+    setActionError(null)
     setStatus(null)
     try {
       await runStepUp(() => revokeCmsSession(session.id))
       setStatus(`Signed out ${session.deviceLabel || 'device'}.`)
-      reload()
+      refresh()
     } catch (err) {
       // The user cancelled the step-up dialog — silent dismiss, not a
       // failure we want to scream about.
       if (err instanceof Error && err.message === StepUpCancelledMessage) return
-      setError(err instanceof Error ? err.message : 'Could not sign out device')
+      setActionError(err instanceof Error ? err.message : 'Could not sign out device')
     } finally {
       setBusy(null)
     }
@@ -123,7 +97,7 @@ export function SessionsTab() {
   async function handleRevokeAllOthers(): Promise<void> {
     if (busy) return
     setBusy('all')
-    setError(null)
+    setActionError(null)
     setStatus(null)
     try {
       const revokedCount = await runStepUp(() => logoutAllOtherCmsSessions())
@@ -132,10 +106,10 @@ export function SessionsTab() {
           ? 'No other devices were signed in.'
           : `Signed out ${revokedCount} other ${revokedCount === 1 ? 'device' : 'devices'}.`,
       )
-      reload()
+      refresh()
     } catch (err) {
       if (err instanceof Error && err.message === StepUpCancelledMessage) return
-      setError(err instanceof Error ? err.message : 'Could not sign out other devices')
+      setActionError(err instanceof Error ? err.message : 'Could not sign out other devices')
     } finally {
       setBusy(null)
     }

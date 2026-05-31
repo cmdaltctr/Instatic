@@ -12,7 +12,8 @@
  * All), so the data feels coherent across the admin.
  */
 
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { RangeTabs } from '@ui/components/RangeTabs'
 import {
   listAiAudit,
@@ -65,31 +66,11 @@ function formatCost(usd: number): string {
 
 export function AuditTab() {
   const [range, setRange] = useState<Range>('30d')
-  const [data, setData] = useState<AiAuditResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      // React Compiler — setState must happen inside the async function,
-      // not synchronously in the effect body.
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await listAiAudit(rangeToSinceIso(range))
-        if (cancelled) return
-        setData(res)
-      } catch (err) {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Failed to load audit data.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => { cancelled = true }
-  }, [range])
+  const { data, loading, error } = useAsyncResource(
+    () => listAiAudit(rangeToSinceIso(range)),
+    [range],
+    { fallbackError: 'Failed to load audit data.' },
+  )
 
   return (
     <section className={styles.section}>

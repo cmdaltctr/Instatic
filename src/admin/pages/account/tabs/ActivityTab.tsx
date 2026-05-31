@@ -17,7 +17,8 @@
  * `rate_limited` event in the last 24 h — a low-cost nudge for the user to
  * change their password (when that flow ships in C.4).
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import {
   DataTable,
   DataTableBody,
@@ -79,32 +80,15 @@ function formatDateTime(value: string): string {
 }
 
 export function ActivityTab() {
-  const [events, setEvents] = useState<CmsLoginActivityEvent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data, loading, error } = useAsyncResource(() => listCmsLoginActivity(), [], {
+    fallbackError: 'Could not load activity',
+  })
+  const events: CmsLoginActivityEvent[] = data ?? []
   // `now` is captured once at mount so the suspicious-banner threshold is
   // stable across renders. Calling `Date.now()` during render trips the
   // React 19 impure-call rule; the user-visible timestamps inside individual
   // rows are computed at format time, not against this anchor.
   const [mountedAt] = useState<number>(() => Date.now())
-
-  useEffect(() => {
-    let cancelled = false
-    listCmsLoginActivity()
-      .then((next) => {
-        if (cancelled) return
-        setEvents(next)
-        setLoading(false)
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Could not load activity')
-        setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const showSuspiciousBanner = events.some((event) => isRecentSuspicious(event, mountedAt))
 

@@ -15,7 +15,8 @@
  * Built on the shared `<Dialog/>` primitive; uses `pluginAdminUi.*`
  * primitives for visual consistency with the other plugin dialogs.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import {
@@ -25,7 +26,6 @@ import {
   runCmsPluginScheduleNow,
   type CmsPluginScheduleRunSummary,
   type CmsPluginScheduleSummary,
-  type CmsPluginSchedulesResponse,
 } from '@core/persistence'
 import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
 import { pluginAdminUi } from '../PluginAdminUi'
@@ -39,49 +39,29 @@ interface PluginSchedulesDialogProps {
 
 export function PluginSchedulesDialog({ pluginId, pluginName, onClose }: PluginSchedulesDialogProps) {
   const { runStepUp } = useStepUp()
-  const [loadedFor, setLoadedFor] = useState<string | null>(null)
-  const [data, setData] = useState<CmsPluginSchedulesResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    data,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAsyncResource(() => listCmsPluginSchedules(pluginId), [pluginId], {
+    fallbackError: 'Failed to load schedules',
+  })
   const [busyScheduleId, setBusyScheduleId] = useState<string | null>(null)
-  // `loading` is derived from the load-key — matches the settings dialog's
-  // pattern and avoids the synchronous-setState-in-effect lint warning.
-  const loading = loadedFor !== pluginId
-
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const next = await listCmsPluginSchedules(pluginId)
-        if (cancelled) return
-        setData(next)
-        setError(null)
-        setLoadedFor(pluginId)
-      } catch (err) {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Failed to load schedules')
-        setLoadedFor(pluginId)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [pluginId])
-
-  async function reload(): Promise<void> {
-    try {
-      setData(await listCmsPluginSchedules(pluginId))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load schedules')
-    }
-  }
+  // Errors from Run-now / Pause / Resume actions live alongside the load
+  // error from the resource; the view shows whichever is present.
+  const [actionError, setActionError] = useState<string | null>(null)
+  const error = loadError ?? actionError
 
   async function withStepUp<T>(scheduleId: string, action: () => Promise<T>): Promise<void> {
     setBusyScheduleId(scheduleId)
-    setError(null)
+    setActionError(null)
     try {
       await runStepUp(action)
-      await reload()
+      refresh()
     } catch (err) {
       if (err instanceof Error && err.message === StepUpCancelledMessage) return
-      setError(err instanceof Error ? err.message : 'Action failed')
+      setActionError(err instanceof Error ? err.message : 'Action failed')
     } finally {
       setBusyScheduleId(null)
     }
