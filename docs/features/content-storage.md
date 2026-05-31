@@ -117,7 +117,7 @@ Users can add their own custom fields to system tables.
 | `pageTree`     | `NodeTree<PageNode>` JSON                 | The visual tree (pages, VC trees)           |
 | `fieldSchema`  | JSON describing fields                    | Used by VCs to declare `params`             |
 
-The `DataField` discriminated union (`DataFieldSchema`) carries type-specific fields (e.g. `options` on `select`, `relatedTableId` on `relation`).
+The `DataField` discriminated union (`DataFieldSchema`) carries type-specific fields (e.g. `options` on `select`, `targetTableId` on `relation`).
 
 ### Reading cells safely
 

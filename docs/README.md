@@ -27,6 +27,7 @@ docs/
 │   ├── auth-and-access.md          ← sessions, MFA, capabilities, roles
 │   ├── site-shell.md               ← site config (breakpoints, classes, files, deps)
 │   ├── modules.md                  ← module engine + first-party blocks
+│   ├── data-workspace.md           ← Data workspace: table schema + field management UI
 │   ├── dashboard.md                ← Dashboard workspace + widget registry
 │   ├── spotlight.md                ← Cmd+K command palette
 │   ├── agent.md                    ← AI agent integration
@@ -136,6 +137,7 @@ Plans (`docs/plans/`) describe in-flight work and are deleted when the work ship
 | [features/publisher.md](features/publisher.md)                   | The page-tree-to-HTML/CSS renderer + server-side publishing wrappers |
 | [features/visual-components.md](features/visual-components.md)   | VCs, slots, params, instantiation, recursion guard                   |
 | [features/content-storage.md](features/content-storage.md)       | `data_tables` + `data_rows` — the universal content store           |
+| [features/data-workspace.md](features/data-workspace.md)         | Data workspace UI: DataInspector, field management, DataGrid        |
 | [features/auth-and-access.md](features/auth-and-access.md)       | Sessions, MFA, step-up, lockout, CSRF, capabilities                  |
 | [features/site-shell.md](features/site-shell.md)                 | The persisted site config (breakpoints, classes, files, deps)        |
 | [features/modules.md](features/modules.md)                       | Module engine, defining first-party blocks                          |

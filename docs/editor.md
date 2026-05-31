@@ -193,7 +193,7 @@ src/admin/
     ├── dashboard/              ← stats, activity, publish lineup
     ├── site/                   ← THE VISUAL EDITOR (see below)
     ├── content/                ← post / page list and editor
-    ├── data/                   ← data_tables management
+    ├── data/                   ← data_tables management (see docs/features/data-workspace.md)
     ├── media/                  ← media manager
     ├── plugins/                ← plugin install / configure
     ├── users/                  ← user management
