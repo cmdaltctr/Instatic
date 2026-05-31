@@ -263,7 +263,7 @@ The store is composed of **11 slices**, each created by a factory in `store/slic
 | `selectionSlice`       | `selectedNodeId`, `hoveredNodeId`                                          |
 | `canvasSlice`          | Zoom, pan, `activeBreakpointId`, `canvasMode` ('select'|'pan'|'insert'), `canvasView` ('design'|'live'), `runScripts` |
 | `uiSlice`              | Panel visibility, unsaved-changes flag, insert picker                      |
-| `classSlice`           | CSS class CRUD + node ↔ class assignment                                   |
+| `classSlice`           | Style-rule CRUD, node ↔ class assignment, ambient selector creation         |
 | `filesSlice`           | `SiteFile` CRUD                                                            |
 | `visualComponentsSlice`| Visual Component CRUD                                                      |
 | `settingsSlice`        | Settings modal open/close + active section                                 |
@@ -428,6 +428,8 @@ Opens the rail-selected panel:
 ### Right sidebar
 
 Property controls bound to the selected node. Contents driven by the node's module schema (`src/core/module-engine/`).
+
+At the top of the Properties Panel, the selector picker is the single entry point for CSS rules that affect the selected element. Assigned class rules render as removable pills and are stored on `node.classIds`; matching ambient rules render as non-removable pills because they apply by selector matching, not assignment. The dropdown searches both class rules and ambient selectors. Ambient rows that do not match the selected canvas element stay visible but disabled with the mismatch reason, and selector-shaped input such as `.hero .title`, `h1`, or `a:hover` creates an ambient rule instead of a class.
 
 ---
 

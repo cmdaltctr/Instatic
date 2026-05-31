@@ -13,11 +13,17 @@
  */
 
 import type { StyleRule } from '@core/page-tree'
+import { styleRuleSelector } from '@core/page-tree/classNames'
 import {
   CLASS_USAGE_RECENT_LIMIT,
   readClassUsage,
   selectRecentAndFrequent,
 } from '@site/preferences/classUsage'
+import {
+  classifySelectorCreateInput,
+  type SelectorCreateInput,
+  type SelectorSuggestionItem,
+} from './selectorPickerModel'
 
 /** Installation-local class-usage table — return type of `readClassUsage`. */
 type ClassUsageMap = ReturnType<typeof readClassUsage>
@@ -35,6 +41,8 @@ export interface ClassPickerSuggestionsInput {
   allClasses: readonly StyleRule[]
   /** IDs already assigned to the active node (visible or hidden). */
   assignedIds: readonly string[]
+  /** Ambient selector rows and unassigned class rows derived for this element. */
+  selectorItems?: readonly SelectorSuggestionItem[]
   /** Trimmed but case-preserving query (used for exact-name matching). */
   query: string
   /** The Arrow-Up/Down highlight index; -1 means "no explicit selection". */
@@ -56,6 +64,8 @@ export interface ClassPickerSuggestionsResult {
 
   /** Ranked filtered list when typing; same as `candidates` when empty. */
   filteredSuggestions: StyleRule[]
+  /** Selector-kind suggestions (ambient selectors) filtered by the same query. */
+  selectorSuggestions: SelectorSuggestionItem[]
 
   recentIds: readonly string[]
   frequentIds: readonly string[]
@@ -71,6 +81,7 @@ export interface ClassPickerSuggestionsResult {
   hasArrowSelection: boolean
   /** Primitive — safe `useEffect` dep. */
   highlightedClassId: string | null
+  highlightedSelectorItem: SelectorSuggestionItem | null
   /** Highlighted class's display name, when any. */
   highlightedName: string | null
 
@@ -80,6 +91,8 @@ export interface ClassPickerSuggestionsResult {
    */
   exactMatchedClass: StyleRule | null
   exactMatchAlreadyAssigned: boolean
+  exactMatchedSelectorItem: SelectorSuggestionItem | null
+  createIntent: SelectorCreateInput
   canCreateNew: boolean
 
   /**
@@ -96,6 +109,7 @@ export function useClassPickerSuggestions(
   const {
     allClasses,
     assignedIds,
+    selectorItems = [],
     query,
     highlightedIndex,
     readUsage = readClassUsage,
@@ -104,6 +118,7 @@ export function useClassPickerSuggestions(
   const trimmedQueryRaw = query.trim()
   const trimmedQuery = trimmedQueryRaw.toLowerCase()
   const isEmptyQuery = trimmedQuery.length === 0
+  const createIntent = classifySelectorCreateInput(trimmedQueryRaw)
 
   const candidates = allClasses.filter((c) => !assignedIds.includes(c.id))
   const candidatesById = new Map(candidates.map((c) => [c.id, c]))
@@ -115,6 +130,9 @@ export function useClassPickerSuggestions(
   const filteredSuggestions = isEmptyQuery
     ? candidates
     : rankBySuggestionScore(candidates, trimmedQuery)
+  const selectorSuggestions = isEmptyQuery
+    ? selectorItems.slice()
+    : rankSelectorSuggestions(selectorItems, trimmedQuery)
 
   // Empty-query layout: surface Recent + Frequent first, then optionally an
   // "All classes" section so fresh sites with sparse history stay browsable.
@@ -135,8 +153,12 @@ export function useClassPickerSuggestions(
         ...recentIds,
         ...frequentIds,
         ...(shouldShowAllSection ? remainingCandidates.map((c) => c.id) : []),
+        ...selectorSuggestions.map((item) => item.rule.id),
       ]
-    : filteredSuggestions.map((c) => c.id)
+    : [
+        ...filteredSuggestions.map((c) => c.id),
+        ...selectorSuggestions.map((item) => item.rule.id),
+      ]
 
   // Clamp the stored highlight to the live suggestion list rather than
   // "fixing it up" through a setState-in-effect.
@@ -144,7 +166,11 @@ export function useClassPickerSuggestions(
     highlightedIndex >= 0 && highlightedIndex < flatNavIds.length ? highlightedIndex : -1
   const hasArrowSelection = effectiveHighlightedIndex >= 0
   const highlightedClassId = hasArrowSelection
-    ? flatNavIds[effectiveHighlightedIndex] ?? null
+    ? candidatesById.get(flatNavIds[effectiveHighlightedIndex] ?? '')?.id ?? null
+    : null
+  const selectorSuggestionsById = new Map(selectorSuggestions.map((item) => [item.rule.id, item]))
+  const highlightedSelectorItem = hasArrowSelection
+    ? selectorSuggestionsById.get(flatNavIds[effectiveHighlightedIndex] ?? '') ?? null
     : null
   const highlightedName = highlightedClassId
     ? candidatesById.get(highlightedClassId)?.name ?? null
@@ -153,25 +179,36 @@ export function useClassPickerSuggestions(
   // Exact-name match against ALL user-visible classes (including ones already
   // assigned). Drives the Enter-with-typed-input path: typing an existing
   // unassigned name adds that class; typing something new creates and adds it.
-  const exactMatchedClass = !isEmptyQuery
-    ? allClasses.find((c) => c.name === trimmedQueryRaw) ?? null
+  const exactMatchedClass = !isEmptyQuery && createIntent.kind === 'class'
+    ? allClasses.find((c) => c.name === createIntent.name) ?? null
     : null
   const exactMatchAlreadyAssigned =
     exactMatchedClass !== null && assignedIds.includes(exactMatchedClass.id)
-  const canCreateNew = !isEmptyQuery && exactMatchedClass === null
+  const exactMatchedSelectorItem = !isEmptyQuery && createIntent.kind === 'ambient'
+    ? selectorItems.find((item) => styleRuleSelector(item.rule) === createIntent.selector) ?? null
+    : null
+  const canCreateNew =
+    !isEmptyQuery
+    && createIntent.kind !== 'empty'
+    && exactMatchedClass === null
+    && exactMatchedSelectorItem === null
 
   // Enter has a meaningful effect when one of these is true; otherwise it's
   // a no-op (empty input, or query matches an already-assigned class with
   // no Arrow-nav highlight).
-  const hasSubmittableQuery =
-    hasArrowSelection ||
-    canCreateNew ||
-    (exactMatchedClass !== null && !exactMatchAlreadyAssigned)
+  const hasSubmittableQuery = hasArrowSelection
+    ? highlightedClassId !== null || (highlightedSelectorItem !== null && !highlightedSelectorItem.disabled)
+    : canCreateNew
+      || (exactMatchedClass !== null && !exactMatchAlreadyAssigned)
+      || (exactMatchedSelectorItem !== null && !exactMatchedSelectorItem.disabled)
 
   const submitTooltip = deriveSubmitTooltip({
     hasArrowSelection,
     highlightedName,
+    highlightedSelectorItem,
+    exactMatchedSelectorItem,
     canCreateNew,
+    createIntent,
     trimmedQueryRaw,
     exactMatchedClass,
     exactMatchAlreadyAssigned,
@@ -183,6 +220,7 @@ export function useClassPickerSuggestions(
     candidates,
     candidatesById,
     filteredSuggestions,
+    selectorSuggestions,
     recentIds,
     frequentIds,
     remainingCandidates,
@@ -192,13 +230,46 @@ export function useClassPickerSuggestions(
     effectiveHighlightedIndex,
     hasArrowSelection,
     highlightedClassId,
+    highlightedSelectorItem,
     highlightedName,
     exactMatchedClass,
     exactMatchAlreadyAssigned,
+    exactMatchedSelectorItem,
+    createIntent,
     canCreateNew,
     hasSubmittableQuery,
     submitTooltip,
   }
+}
+
+function rankSelectorSuggestions(
+  items: readonly SelectorSuggestionItem[],
+  query: string,
+): SelectorSuggestionItem[] {
+  if (!query) return items.slice()
+  const scored: Array<{ item: SelectorSuggestionItem; score: number; label: string }> = []
+  for (const item of items) {
+    const label = styleRuleSelector(item.rule)
+    const score = scoreSelectorLabel(label, query)
+    if (score > 0) scored.push({ item, score, label })
+  }
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    if (a.item.disabled !== b.item.disabled) return a.item.disabled ? 1 : -1
+    if (a.label.length !== b.label.length) return a.label.length - b.label.length
+    return a.label.localeCompare(b.label)
+  })
+  return scored.map((entry) => entry.item)
+}
+
+function scoreSelectorLabel(label: string, query: string): number {
+  const haystack = label.toLowerCase()
+  if (haystack === query) return 4
+  if (haystack.startsWith(query) || haystack.startsWith(`.${query}`)) return 3
+  if (haystack.includes(` ${query}`) || haystack.includes(`.${query}`) || haystack.includes(`-${query}`)) {
+    return 2
+  }
+  return haystack.includes(query) ? 1 : 0
 }
 
 /**
@@ -214,7 +285,10 @@ export function useClassPickerSuggestions(
 function deriveSubmitTooltip(args: {
   hasArrowSelection: boolean
   highlightedName: string | null
+  highlightedSelectorItem: SelectorSuggestionItem | null
+  exactMatchedSelectorItem: SelectorSuggestionItem | null
   canCreateNew: boolean
+  createIntent: SelectorCreateInput
   trimmedQueryRaw: string
   exactMatchedClass: StyleRule | null
   exactMatchAlreadyAssigned: boolean
@@ -222,16 +296,34 @@ function deriveSubmitTooltip(args: {
   const {
     hasArrowSelection,
     highlightedName,
+    highlightedSelectorItem,
+    exactMatchedSelectorItem,
     canCreateNew,
+    createIntent,
     trimmedQueryRaw,
     exactMatchedClass,
     exactMatchAlreadyAssigned,
   } = args
   if (hasArrowSelection && highlightedName) return `Add class “${highlightedName}”`
-  if (canCreateNew && trimmedQueryRaw) return `Create class “${trimmedQueryRaw}”`
+  if (hasArrowSelection && highlightedSelectorItem) {
+    if (highlightedSelectorItem.disabled) {
+      return highlightedSelectorItem.disabledReason ?? 'Selector does not match this element'
+    }
+    return `Edit selector “${styleRuleSelector(highlightedSelectorItem.rule)}”`
+  }
   if (exactMatchedClass && !exactMatchAlreadyAssigned) return `Add class “${exactMatchedClass.name}”`
   if (exactMatchedClass && exactMatchAlreadyAssigned) {
     return `“${exactMatchedClass.name}” is already on this element`
   }
-  return 'Type a class name to add or create'
+  if (exactMatchedSelectorItem) {
+    if (exactMatchedSelectorItem.disabled) {
+      return exactMatchedSelectorItem.disabledReason ?? 'Selector does not match this element'
+    }
+    return `Edit selector “${styleRuleSelector(exactMatchedSelectorItem.rule)}”`
+  }
+  if (canCreateNew && trimmedQueryRaw) {
+    const label = createIntent.kind === 'ambient' ? 'selector' : 'class'
+    return `Create ${label} “${trimmedQueryRaw}”`
+  }
+  return 'Type a class name or selector to add or create'
 }

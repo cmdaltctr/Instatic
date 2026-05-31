@@ -113,6 +113,24 @@
     font-weight: 620;
 }
 
+.pill button.pillMainButton {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 18px;
+    padding: 0 2px 0 0;
+    color: inherit;
+    font-size: inherit;
+    justify-content: flex-start;
+    background: transparent;
+}
+
+.pill button.pillMainButton:hover,
+.pill button.pillMainButton:active,
+.pill button.pillMainButton[aria-pressed="true"] {
+    color: inherit;
+    background: transparent;
+}
+
 /* × remove button — always-visible inline icon with stable width.
    Overrides Button's `.size-micro.iconOnly { width: 18px }` (specificity 0,2,0)
    with the compound `.pill button.pillRemoveBtn` selector (0,2,1). The chip
@@ -164,6 +182,27 @@
     font-weight: 700;
     line-height: 1;
     text-transform: uppercase;
+}
+
+.pseudoBadge,
+.suggestionMeta {
+    flex: 0 0 auto;
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-weight: 650;
+}
+
+.pseudoBadge {
+    padding: 1px 4px;
+    border-radius: var(--editor-radius-sm);
+    background: var(--editor-surface-4);
+}
+
+.errorText {
+    margin: -4px 0 0;
+    color: var(--editor-danger);
+    font-size: 11px;
+    line-height: 1.35;
 }
 
 /* Suggestions dropdown section headers (Recent / Frequent / All classes).

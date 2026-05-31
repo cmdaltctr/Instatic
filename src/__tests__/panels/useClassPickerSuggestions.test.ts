@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'bun:test'
 import { useClassPickerSuggestions } from '@site/panels/PropertiesPanel/useClassPickerSuggestions'
 import type { StyleRule } from '@core/page-tree'
+import type { SelectorSuggestionItem } from '@site/panels/PropertiesPanel/selectorPickerModel'
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -23,10 +24,39 @@ function makeClass(name: string, id = `cls-${name}`): StyleRule {
   return {
     id,
     name,
+    kind: 'class',
+    selector: `.${name}`,
+    order: 0,
     styles: {},
     contextStyles: {},
     createdAt: 0,
     updatedAt: 0,
+  }
+}
+
+function makeAmbient(selector: string, id = `ambient-${selector}`): StyleRule {
+  return {
+    id,
+    name: selector,
+    kind: 'ambient',
+    selector,
+    order: 0,
+    styles: {},
+    contextStyles: {},
+    createdAt: 0,
+    updatedAt: 0,
+  }
+}
+
+function selectorItem(
+  rule: StyleRule,
+  disabled = false,
+): SelectorSuggestionItem {
+  return {
+    rule,
+    disabled,
+    disabledReason: disabled ? "Doesn't match this element" : null,
+    match: disabled ? null : { kind: 'direct' },
   }
 }
 
@@ -164,6 +194,35 @@ describe('useClassPickerSuggestions — typed query', () => {
     expect(result.submitTooltip).toBe('Create class “brand-new”')
   })
 
+  it('reports selector creation for selector-shaped input', () => {
+    const result = useClassPickerSuggestions({
+      allClasses: [makeClass('hero')],
+      assignedIds: [],
+      query: '.hero .title',
+      highlightedIndex: -1,
+      readUsage: NO_USAGE,
+    })
+
+    expect(result.createIntent).toEqual({ kind: 'ambient', selector: '.hero .title' })
+    expect(result.canCreateNew).toBe(true)
+    expect(result.hasSubmittableQuery).toBe(true)
+    expect(result.submitTooltip).toBe('Create selector “.hero .title”')
+  })
+
+  it('matches dot-prefixed class input against existing classes', () => {
+    const result = useClassPickerSuggestions({
+      allClasses: [makeClass('header')],
+      assignedIds: [],
+      query: '.header',
+      highlightedIndex: -1,
+      readUsage: NO_USAGE,
+    })
+
+    expect(result.exactMatchedClass?.name).toBe('header')
+    expect(result.canCreateNew).toBe(false)
+    expect(result.submitTooltip).toBe('Add class “header”')
+  })
+
   it('returns an empty suggestion list when no class matches the query', () => {
     const result = useClassPickerSuggestions({
       allClasses: [makeClass('foo'), makeClass('bar')],
@@ -175,6 +234,72 @@ describe('useClassPickerSuggestions — typed query', () => {
 
     expect(result.filteredSuggestions).toEqual([])
     expect(result.canCreateNew).toBe(true)
+  })
+
+  it('includes matching ambient selector suggestions in typed results', () => {
+    const ambient = makeAmbient('.hero .title', 'ambient-match')
+    const result = useClassPickerSuggestions({
+      allClasses: [makeClass('hero-title')],
+      assignedIds: [],
+      selectorItems: [selectorItem(ambient)],
+      query: 'hero',
+      highlightedIndex: -1,
+      readUsage: NO_USAGE,
+    })
+
+    expect(result.selectorSuggestions.map((item) => item.rule.id)).toEqual(['ambient-match'])
+    expect(result.flatNavIds).toContain('ambient-match')
+  })
+
+  it('keeps non-matching ambient selector suggestions disabled', () => {
+    const ambient = makeAmbient('.card', 'ambient-off')
+    const result = useClassPickerSuggestions({
+      allClasses: [],
+      assignedIds: [],
+      selectorItems: [selectorItem(ambient, true)],
+      query: 'card',
+      highlightedIndex: 0,
+      readUsage: NO_USAGE,
+    })
+
+    expect(result.selectorSuggestions[0]).toMatchObject({
+      disabled: true,
+      disabledReason: "Doesn't match this element",
+    })
+    expect(result.hasSubmittableQuery).toBe(false)
+  })
+
+  it('lets an arrow-highlighted matching ambient selector become the submit target', () => {
+    const ambient = makeAmbient('.hero .title', 'ambient-match')
+    const result = useClassPickerSuggestions({
+      allClasses: [],
+      assignedIds: [],
+      selectorItems: [selectorItem(ambient)],
+      query: 'hero',
+      highlightedIndex: 0,
+      readUsage: NO_USAGE,
+    })
+
+    expect(result.highlightedSelectorItem?.rule.id).toBe('ambient-match')
+    expect(result.hasSubmittableQuery).toBe(true)
+    expect(result.submitTooltip).toBe('Edit selector “.hero .title”')
+  })
+
+  it('lets an exact ambient selector become the submit target without arrow navigation', () => {
+    const ambient = makeAmbient('.hero .title', 'ambient-match')
+    const result = useClassPickerSuggestions({
+      allClasses: [],
+      assignedIds: [],
+      selectorItems: [selectorItem(ambient)],
+      query: '.hero .title',
+      highlightedIndex: -1,
+      readUsage: NO_USAGE,
+    })
+
+    expect(result.exactMatchedSelectorItem?.rule.id).toBe('ambient-match')
+    expect(result.canCreateNew).toBe(false)
+    expect(result.hasSubmittableQuery).toBe(true)
+    expect(result.submitTooltip).toBe('Edit selector “.hero .title”')
   })
 })
 
@@ -245,7 +370,7 @@ describe('useClassPickerSuggestions — submit tooltip', () => {
       readUsage: NO_USAGE,
     })
 
-    expect(result.submitTooltip).toBe('Type a class name to add or create')
+    expect(result.submitTooltip).toBe('Type a class name or selector to add or create')
     expect(result.hasSubmittableQuery).toBe(false)
   })
 })

@@ -19,7 +19,7 @@ Two kinds of rules:
 - Rule **name** is the display label; for class-kind rules the CSS selector is `.<name>`; for ambient rules the `selector` field is a verbatim CSS selector.
 - Rule **id** is the stable internal identifier (`<nanoid>`).
 - Scoped rules (`scope: { type: 'node', nodeId, role: 'module-style' }`) are pinned to one node.
-- Generated rules (framework-emitted spacing utilities, etc.) are flagged on `generated` so the ClassPicker can filter them out by default.
+- Generated rules (framework-emitted spacing utilities, etc.) are flagged on `generated` so the Properties panel selector picker can filter them out by default.
 
 ---
 
@@ -82,7 +82,15 @@ interface PageNode {
 
 Only `kind: 'class'` rules are assigned via `classIds`. Ambient rules (`kind: 'ambient'`) attach by CSS matching and never appear in `classIds`.
 
-The editor's ClassPicker (right Properties Panel) adds / removes entries from `node.classIds`. Order matters — drag-reorder is supported.
+The right Properties Panel exposes this through a unified selector picker:
+
+- assigned class-kind rules appear as removable pills and add / remove entries from `node.classIds`;
+- matching ambient rules appear as non-removable selector pills because they affect the selected element through CSS matching;
+- non-matching ambient rules still appear in the dropdown, disabled with a "doesn't match this element" reason, so the user can see why the rule is not currently active.
+
+The picker decides ambient matches against the selected live canvas element as the selector subject (`element.matches(selector)`). A selector such as `.hero .title` appears when the selected element is `.title`, not when the selected element is the `.hero` ancestor. Supported trailing pseudo-state selectors (`:hover`, `:focus`, `:focus-visible`, `:active`) are surfaced as inactive matches by stripping the trailing pseudo and testing the base selector.
+
+Class order matters — drag-reorder is supported for assigned class pills.
 
 At render time, `classNamesForClassIds(classIds, registry)` returns the rendered class names that go onto the element's `class=` attribute. `injectNodeClassIds(html, node, site)` in the publisher splices them into the root tag.
 
@@ -166,13 +174,13 @@ A "generated" rule is one the codebase emits programmatically — typically the 
 `classUtils.ts`:
 
 ```ts
-isUserVisibleClass(cls)        // false for generated rules — hides them from the ClassPicker by default
+isUserVisibleClass(cls)        // false for generated rules — hides them from the selector picker by default
 isGeneratedClass(cls)          // true if `generated.origin === 'framework'`
 isGeneratedClassLocked(cls)    // true if the rule is locked from manual edit (the framework owns its styles)
-generatedClassKindLabel(cls)   // e.g. 'Spacing', 'Typography' — for grouping in the ClassPicker advanced view
+generatedClassKindLabel(cls)   // e.g. 'Spacing', 'Typography' — for grouping in selector-picker rows
 ```
 
-The framework regenerates these rules whenever the user changes the framework scale (Site → Framework → Scale panel). Users can opt to show them in the ClassPicker via Settings → Editor → Show framework-generated classes.
+The framework regenerates these rules whenever the user changes the framework scale (Site → Framework → Scale panel). Users can opt to show them in the selector picker via Settings → Editor → Show framework-generated classes.
 
 ---
 

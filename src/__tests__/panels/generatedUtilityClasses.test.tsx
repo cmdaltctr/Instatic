@@ -65,11 +65,11 @@ describe('generated utility classes in editor panels', () => {
   it('marks generated utility suggestions in the class picker', () => {
     render(<ClassPicker nodeId="hero" />)
 
-    fireEvent.change(screen.getByRole('textbox', { name: /add or create a css class/i }), {
+    fireEvent.change(screen.getByRole('textbox', { name: /add or create a css selector/i }), {
       target: { value: 'text' },
     })
 
-    expect(screen.getByRole('menu', { name: /class suggestions/i })).toBeDefined()
+    expect(screen.getByRole('menu', { name: /selector suggestions/i })).toBeDefined()
     expect(screen.getByText('text-primary')).toBeDefined()
     expect(screen.getByText('Utility')).toBeDefined()
   })

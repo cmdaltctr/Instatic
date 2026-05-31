@@ -28,6 +28,7 @@ afterEach(cleanup)
 
 function resetStore() {
   localStorage.clear()
+  document.body.innerHTML = ''
   useEditorStore.setState({
     site: null,
     activePageId: null,
@@ -78,6 +79,24 @@ function selectClass(nodeId: string, name: string) {
   return cls
 }
 
+function createAmbient(selector: string) {
+  return useEditorStore.getState().createAmbientRule({ selector })
+}
+
+function addRenderedCanvasElement(html: string) {
+  const host = document.createElement('div')
+  host.setAttribute('data-testid', 'canvas-host')
+  host.innerHTML = html
+  document.body.appendChild(host)
+}
+
+function addRenderedCanvasFrame(html: string) {
+  const frame = document.createElement('iframe')
+  document.body.appendChild(frame)
+  if (!frame.contentDocument) throw new Error('Test iframe did not create a contentDocument')
+  frame.contentDocument.body.innerHTML = html
+}
+
 // ---------------------------------------------------------------------------
 // Renders
 // ---------------------------------------------------------------------------
@@ -86,7 +105,7 @@ describe('ClassPicker — rendering', () => {
   it('renders the search input with the expected placeholder', () => {
     const { nodeId } = loadSiteWithNode()
     render(<ClassPicker nodeId={nodeId} />)
-    expect(screen.getByPlaceholderText('Add or create class…')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Add or create selector…')).toBeTruthy()
   })
 
   it('renders an assigned class as a pill with a remove button', () => {
@@ -117,13 +136,13 @@ describe('ClassPicker — search + create', () => {
     const { nodeId } = loadSiteWithNode()
     render(<ClassPicker nodeId={nodeId} />)
 
-    const input = screen.getByPlaceholderText('Add or create class…')
+    const input = screen.getByPlaceholderText('Add or create selector…')
     await user.click(input)
     await user.type(input, 'brand-new')
 
     // Submit button tooltip surfaces the create intent.
-    const submit = screen.getByRole('button', { name: 'Submit class' })
-    expect(submit.getAttribute('aria-label')).toBe('Submit class')
+    const submit = screen.getByRole('button', { name: 'Submit selector' })
+    expect(submit.getAttribute('aria-label')).toBe('Submit selector')
     expect(submit.hasAttribute('disabled')).toBe(false)
 
     await user.click(submit)
@@ -137,7 +156,7 @@ describe('ClassPicker — search + create', () => {
   it('disables the submit button when query is empty', () => {
     const { nodeId } = loadSiteWithNode()
     render(<ClassPicker nodeId={nodeId} />)
-    const submit = screen.getByRole('button', { name: 'Submit class' })
+    const submit = screen.getByRole('button', { name: 'Submit selector' })
     // Button + tooltip combo uses aria-disabled rather than the native
     // attribute so mouseenter still fires the tooltip.
     expect(submit.getAttribute('aria-disabled')).toBe('true')
@@ -150,7 +169,7 @@ describe('ClassPicker — search + create', () => {
     const cls = useEditorStore.getState().createClass('header')
     render(<ClassPicker nodeId={nodeId} />)
 
-    const input = screen.getByPlaceholderText('Add or create class…')
+    const input = screen.getByPlaceholderText('Add or create selector…')
     await user.click(input)
     await user.type(input, 'header')
     await user.keyboard('{Enter}')
@@ -165,7 +184,7 @@ describe('ClassPicker — search + create', () => {
     useEditorStore.getState().createClass('alpha')
     render(<ClassPicker nodeId={nodeId} />)
 
-    const input = screen.getByPlaceholderText('Add or create class…')
+    const input = screen.getByPlaceholderText('Add or create selector…')
     await user.click(input)
     await user.type(input, 'a')
 
@@ -173,7 +192,7 @@ describe('ClassPicker — search + create', () => {
     await user.keyboard('{Escape}')
     // Submit button should still exist; the dropdown contextmenu is gone
     // (Suggestions dropdown is portaled; checking it disappears via DOM presence.)
-    expect(screen.queryByRole('menu', { name: 'Class suggestions' })).toBeNull()
+    expect(screen.queryByRole('menu', { name: 'Selector suggestions' })).toBeNull()
   })
 })
 
@@ -217,10 +236,11 @@ describe('ClassPicker — assigned pill', () => {
     render(<ClassPicker nodeId={nodeId} />)
 
     const pill = screen.getByRole('button', { name: /edit class header|deselect class header/i })
+    const initiallyActive = useEditorStore.getState().activeClassId === cls.id
     pill.focus()
     fireEvent.keyDown(pill, { key: 'Enter' })
 
-    expect(useEditorStore.getState().activeClassId).toBe(cls.id)
+    expect(useEditorStore.getState().activeClassId).toBe(initiallyActive ? null : cls.id)
   })
 
   it('right-click on a pill opens a class context menu', () => {
@@ -237,6 +257,56 @@ describe('ClassPicker — assigned pill', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Ambient selector pills + suggestions
+// ---------------------------------------------------------------------------
+
+describe('ClassPicker — ambient selectors', () => {
+  it('renders a matching ambient selector as a non-removable pill that can be edited', async () => {
+    const user = userEvent.setup()
+    const { nodeId } = loadSiteWithNode()
+    addRenderedCanvasElement(`<section class="hero"><h1 data-node-id="${nodeId}" class="title"></h1></section>`)
+    const ambient = createAmbient('.hero .title')
+
+    render(<ClassPicker nodeId={nodeId} />)
+
+    const pill = screen.getByRole('button', { name: 'Edit selector .hero .title' })
+    expect(pill).toBeTruthy()
+    const remove = screen.getByRole('button', { name: 'Remove selector .hero .title' })
+    expect(remove.getAttribute('aria-disabled')).toBe('true')
+
+    await user.click(pill)
+    expect(useEditorStore.getState().activeClassId).toBe(ambient.id)
+  })
+
+  it('shows non-matching ambient selectors as disabled dropdown rows', async () => {
+    const user = userEvent.setup()
+    const { nodeId } = loadSiteWithNode()
+    addRenderedCanvasElement(`<h1 data-node-id="${nodeId}" class="title"></h1>`)
+    createAmbient('.card')
+
+    render(<ClassPicker nodeId={nodeId} />)
+
+    const input = screen.getByPlaceholderText('Add or create selector…')
+    await user.click(input)
+
+    expect(screen.getByText('Ambient selectors')).toBeTruthy()
+    expect(screen.getByText("Doesn't match this element")).toBeTruthy()
+    const row = screen.getByRole('menuitem', { name: /\.card doesn't match this element/i })
+    expect(row.getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('matches ambient selectors against elements inside the canvas iframe', () => {
+    const { nodeId } = loadSiteWithNode()
+    addRenderedCanvasFrame(`<h1 data-node-id="${nodeId}" class="title"></h1>`)
+    createAmbient('*')
+
+    render(<ClassPicker nodeId={nodeId} />)
+
+    expect(screen.getByRole('button', { name: 'Edit selector *' })).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Empty-query suggestions sections
 // ---------------------------------------------------------------------------
 
@@ -247,7 +317,7 @@ describe('ClassPicker — empty-query suggestions', () => {
     useEditorStore.getState().createClass('beta')
     render(<ClassPicker nodeId={nodeId} />)
 
-    const input = screen.getByPlaceholderText('Add or create class…')
+    const input = screen.getByPlaceholderText('Add or create selector…')
     act(() => input.focus())
 
     // Both classes should appear as menuitems.
@@ -261,7 +331,7 @@ describe('ClassPicker — empty-query suggestions', () => {
     const cls = useEditorStore.getState().createClass('alpha')
     render(<ClassPicker nodeId={nodeId} />)
 
-    const input = screen.getByPlaceholderText('Add or create class…')
+    const input = screen.getByPlaceholderText('Add or create selector…')
     await user.click(input)
 
     const item = await screen.findByRole('menuitem', { name: 'alpha' })

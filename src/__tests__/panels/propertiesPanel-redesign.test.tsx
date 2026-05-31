@@ -138,7 +138,7 @@ describe('PP-2 — ClassPicker visible immediately on element selection', () => 
     selectNode(nodeId)
     render(<PropertiesPanel />)
     const renameButton = screen.getByRole('button', { name: /rename text/i })
-    const classInput = screen.getByRole('textbox', { name: /add or create a css class/i })
+    const classInput = screen.getByRole('textbox', { name: /add or create a css selector/i })
 
     expect(classInput).toBeDefined()
     expect(renameButton.compareDocumentPosition(classInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -261,7 +261,7 @@ describe('ClassPicker — suggestion hover preview', () => {
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
-    fireEvent.focus(screen.getByRole('textbox', { name: /add or create a css class/i }))
+    fireEvent.focus(screen.getByRole('textbox', { name: /add or create a css selector/i }))
     const item = screen.getByRole('menuitem', { name: 'preview-target' })
 
     fireEvent.mouseEnter(item)
@@ -282,7 +282,7 @@ describe('ClassPicker — suggestion hover preview', () => {
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
-    fireEvent.focus(screen.getByRole('textbox', { name: /add or create a css class/i }))
+    fireEvent.focus(screen.getByRole('textbox', { name: /add or create a css selector/i }))
     fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'no-preview' }))
 
     expect(useEditorStore.getState().previewClassAssignment).toBeNull()
@@ -294,7 +294,7 @@ describe('ClassPicker — suggestion hover preview', () => {
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
-    fireEvent.focus(screen.getByRole('textbox', { name: /add or create a css class/i }))
+    fireEvent.focus(screen.getByRole('textbox', { name: /add or create a css selector/i }))
     const item = screen.getByRole('menuitem', { name: 'consume-preview' })
 
     fireEvent.mouseEnter(item)
@@ -1172,7 +1172,7 @@ describe('HF-1 — Class pill actions are keyboard-reachable (no tabIndex={-1})'
     render(<PropertiesPanel />)
 
     const pill = screen.getByRole('button', { name: /edit class class-1/i })
-    expect(pill.getAttribute('tabindex')).toBe('0')
+    expect(pill.tabIndex).toBe(0)
 
     fireEvent.keyDown(pill, { key: 'ContextMenu' })
     expect(screen.getByRole('menu', { name: /class actions/i })).toBeDefined()
@@ -1438,7 +1438,7 @@ describe('PP-22 — Module settings is the first visible accordion', () => {
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
-    const classInput = screen.getByRole('textbox', { name: /add or create a css class/i })
+    const classInput = screen.getByRole('textbox', { name: /add or create a css selector/i })
     const moduleSectionBtn = screen.getByRole('button', { name: /module settings/i })
 
     expect(classInput.compareDocumentPosition(moduleSectionBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

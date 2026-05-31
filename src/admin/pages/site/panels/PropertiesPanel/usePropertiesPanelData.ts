@@ -148,8 +148,7 @@ export function usePropertiesPanelData(): PropertiesPanelData {
     ? site?.styleRules[selectedSelectorClassId] ?? null
     : null
   const activeClass =
-    !selectedSelectorClass &&
-    activeClassId && selectedNode?.classIds?.includes(activeClassId)
+    !selectedSelectorClass && activeClassId && selectedNode
       ? site?.styleRules[activeClassId] ?? null
       : null
   const activePage = site?.pages.find((page) => page.id === activePageId) ?? null
