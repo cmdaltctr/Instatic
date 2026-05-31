@@ -57,7 +57,10 @@ docs/
 │
 ├── deployment/                 ← operator docs (running the thing)
 ├── e2e/                        ← agent-run browser test protocols
-└── plans/                      ← in-flight design plans (transient)
+├── plans/                      ← in-flight design plans (transient)
+└── superpowers/                ← Superpowers agent plans and specs (transient)
+    ├── plans/                      ← implementation plans authored by Superpowers agents
+    └── specs/                      ← pre-implementation design specs
 ```
 
 Three categories, three voices:
@@ -66,7 +69,7 @@ Three categories, three voices:
 - **Feature docs** describe one first-class capability — its architecture, lifecycle, file layout.
 - **Reference docs** are short, focused cookbooks for primitives and patterns reused across features.
 
-Plans (`docs/plans/`) describe in-flight work and are deleted when the work ships.
+Plans (`docs/plans/` and `docs/superpowers/`) describe in-flight work. Plans are deleted or converted to feature/reference docs when the work ships.
 
 ---
 
@@ -178,6 +181,7 @@ Plans (`docs/plans/`) describe in-flight work and are deleted when the work ship
 | [deployment/](deployment/)          | Production install, Docker compose matrix, TLS, backup, releases  |
 | [e2e/](e2e/)                        | Agent-run browser E2E protocols and run logs                      |
 | [plans/](plans/)                    | In-flight design plans (transient — delete when shipped)          |
+| [superpowers/](superpowers/)        | Superpowers agent plans (`plans/`) and pre-implementation specs (`specs/`) — transient |
 
 ---
 
