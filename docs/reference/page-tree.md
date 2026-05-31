@@ -250,6 +250,7 @@ The persistence layer (`src/core/persistence/validate.ts`) already does this for
 | Adding a parallel `interface NodeTree` type                     | `NodeTreeSchema` and `NodeTree<TNode>` in `treeSchema.ts` are the source of truth |
 | Using a non-flat tree representation (nested `children: PageNode[]`) | Flat map + `children: string[]` — gated by `task455-tree-primitive.test.ts` |
 | Writing a mutation that takes a `Page` specifically             | Take `NodeTree<TNode>` — pages and VCs both pass            |
+| Deep-importing a concrete file: `import X from '@core/page-tree/mutations'` | Import through the barrel: `import { X } from '@core/page-tree'` — gated by `no-core-barrel-deep-imports.test.ts` |
 
 ---
 
@@ -272,3 +273,4 @@ The persistence layer (`src/core/persistence/validate.ts`) already does this for
   - `src/__tests__/architecture/no-vc-mode-branches-in-mutations.test.ts`
   - `src/__tests__/architecture/centralized-site-mutation-history.test.ts`
   - `src/__tests__/architecture/visual-components-mutation-contract.test.ts`
+  - `src/__tests__/architecture/no-core-barrel-deep-imports.test.ts` — external code imports from `@core/page-tree`, never from `@core/page-tree/<file>`

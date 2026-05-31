@@ -247,7 +247,7 @@ Modules that publish a public API (an `index.ts` in a folder under `src/core/`, 
 - ✅ Inside `src/core/page-tree/`: `import type { Page } from './page'` (relative, NEVER `from '@core/page-tree'`)
 - ❌ Outside the module: `import { Page } from '@core/page-tree/page'` — bypasses the barrel
 
-This is currently a convention, not a gated rule. If you see direct deep imports (`@core/<module>/<file>`) from outside the module, treat them as drift and migrate them to the barrel as part of whatever change you're making.
+Deep imports into the four primary engine modules — `@core/page-tree`, `@core/module-engine`, `@core/visualComponents`, `@core/publisher` — are enforced by `src/__tests__/architecture/no-core-barrel-deep-imports.test.ts`. Any other module barrel is still a convention without a gate; treat deep imports in those as drift and migrate them to the barrel as part of whatever change you're making.
 
 ---
 

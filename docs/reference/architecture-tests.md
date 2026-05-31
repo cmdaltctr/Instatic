@@ -15,6 +15,14 @@ Catalog of every test in `src/__tests__/architecture/`. These are structural gat
 
 ## Catalog by domain
 
+### Barrel imports
+
+| Test                                          | What it enforces                                                                 |
+|-----------------------------------------------|----------------------------------------------------------------------------------|
+| `no-core-barrel-deep-imports.test.ts`         | External callers import through the barrel (`@core/page-tree`, `@core/module-engine`, `@core/visualComponents`, `@core/publisher`), never through a concrete internal path (`@core/<module>/<file>`). Files inside a module are exempt — they use relative paths. |
+
+See [CLAUDE.md → Barrel imports](../../CLAUDE.md) and [docs/reference/page-tree.md](page-tree.md).
+
 ### Database — schema and dialect
 
 | Test                                          | What it enforces                                                                 |
