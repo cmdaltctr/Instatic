@@ -9,7 +9,7 @@ There are **no other content tables**. There is no `pages` table, no `page_versi
 ## TL;DR
 
 - Two tables, four kinds. `data_tables.kind`: `postType | data | page | component`.
-- Three system tables seeded at boot — `posts` (kind `postType`), `pages` (kind `page`), `components` (kind `component`) — protected from rename / delete (but users can still add custom fields).
+- Three system tables seeded at boot — `pages` (kind `page`), `posts` (kind `postType`), `components` (kind `component`) — protected from rename / delete (but users can still add custom fields). `listDataTables` and `listDataTablesWithCounts` pin them at positions 0–2 in that order; custom tables follow sorted by `created_at`.
 - Every row's cells live in `cells_json` keyed by field id. `slug` and `status` are denormalized columns for index / route lookup.
 - Post-type rows have a workflow: `draft | published | unpublished | scheduled`, with a version history (`data_row_versions`) for the published copy.
 - "Data" tables are simple key-value grids — no workflow, no built-in fields.
@@ -147,7 +147,7 @@ These do the boundary validation — handlers and modules read through them rath
 
 | File                                             | Owns                                                                  |
 |--------------------------------------------------|-----------------------------------------------------------------------|
-| `server/repositories/data/tables.ts`             | CRUD on `data_tables`: list, get, create, update, delete (system-protected) |
+| `server/repositories/data/tables.ts`             | CRUD on `data_tables`: list (system tables first: pages → posts → components, then custom by `created_at`), get, create, update, delete (system-protected) |
 | `server/repositories/data/rows.ts`               | CRUD on `data_rows`: list, get, create, update, soft-delete, restore  |
 | `server/repositories/data/publish.ts`            | Publish / unpublish / schedule a row; write `data_row_versions`       |
 | `server/repositories/data/templateSeeding.ts`    | Seed default entry template for new postType tables                   |
