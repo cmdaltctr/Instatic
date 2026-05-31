@@ -220,6 +220,8 @@
     /* Skeleton loading shimmer (Phase 3 providers) */
     --spotlight-skeleton-base: rgba(255, 255, 255, 0.06);
     --spotlight-skeleton-shimmer: rgba(255, 255, 255, 0.12);
+    /* Travelling highlight on determinate progress bars (Super Import) */
+    --editor-progress-shimmer: rgba(255, 255, 255, 0.4);
 }
 
 /* Reduced motion support — Constraint from UX Guideline #189 */

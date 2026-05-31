@@ -42,7 +42,8 @@ export function ConflictsStep({
             Page slug conflicts ({pageConflicts.length})
           </h3>
           <p className={styles.hint}>
-            These pages share a slug with an existing page. Choose how to resolve each one.
+            These pages share a slug with an existing page — or with another
+            page in this import. Choose how to resolve each one.
           </p>
           <div className={styles.rows}>
             {pageConflicts.map((conflict) => (
@@ -52,6 +53,8 @@ export function ConflictsStep({
                 source={conflict.source}
                 desired={conflict.desiredSlug}
                 current={pageResolutions.get(conflict.source) ?? conflict.defaultResolution}
+                // No existing page id ⇒ intra-batch collision; nothing to overwrite.
+                canOverwrite={conflict.existingPageId !== ''}
                 onChange={(next) => onPageResolutionChange(conflict.source, next)}
               />
             ))}

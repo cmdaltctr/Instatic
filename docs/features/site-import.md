@@ -2,13 +2,13 @@
 
 `src/core/siteImport` converts a static-site bundle (HTML pages, CSS files, images, fonts, JS) into live CMS pages, style rules, and media-library assets in one undoable step.
 
-The pipeline has two parts: a pure analysis function (`buildImportPlan`) that produces an `ImportPlan` preview, and an async commit function (`commitImportPlan`) that uploads assets and writes to the store. The admin wizard (`src/admin/modals/SiteImport/`) drives both through a five-step modal.
+The pipeline has two parts: a pure analysis function (`buildImportPlan`) that produces an `ImportPlan` preview, and an async commit function (`commitImportPlan`) that uploads assets and writes to the store. The admin wizard (`src/admin/modals/SiteImport/`) drives both through a four-stage modal.
 
 ---
 
 ## TL;DR
 
-- Entry: drop files, a folder, or a `.zip` → five-step modal (Drop → Analyze → Conflicts → Run → Done).
+- Entry: drop files, a folder, or a `.zip` → four-stage modal (Drop → Review → Conflicts → Import, with completion shown inside the Import stage).
 - `buildImportPlan({ fileMap, currentSite })` — pure, synchronous — produces an `ImportPlan` with pages, style rules, media, color tokens, fonts, and scripts.
 - `commitImportPlan(plan, adapter)` — uploads assets, then wraps all store writes in a single `adapter.commit` call → one Cmd+Z reverts the whole import.
 - Conflict resolution: auto-rename (default), overwrite, skip, or custom-rename — per page slug and per class name.
@@ -39,17 +39,17 @@ src/core/siteImport/
 
 src/admin/modals/SiteImport/
 ├── index.ts
-├── SiteImportModal.tsx          — five-step wizard shell
+├── SiteImportModal.tsx          — four-stage wizard shell
 ├── SiteImportModal.module.css
 ├── steps/
 │   ├── DropStep.tsx             — full-modal drop zone (files, folder, .zip)
 │   ├── AnalyzeStep.tsx          — category navigator (left) + detail pane (right)
 │   ├── ConflictsStep.tsx        — page-slug + class-name conflict resolution rows
-│   ├── RunStep.tsx              — live upload progress + log
-│   └── DoneStep.tsx             — import summary + shortcuts
+│   └── ImportStep.tsx           — determinate progress surface + complete/failed states
 └── shared/
     ├── createSiteImportAdapter.ts  — wires adapter to editor store + media API
-    └── ImportProgress.ts           — RunProgress type used by RunStep
+    ├── ImportStepper.tsx           — shared four-stage progress rail (Review + Import)
+    └── importProgress.ts           — RunProgress model used by ImportStep
 ```
 
 ---
@@ -103,7 +103,7 @@ User drops files / folder / .zip
                 tx.addPage / tx.overwritePage
             │
             ▼
-    ImportResult → DoneStep summary
+    ImportResult → ImportStep complete state (summary + per-category counts)
 ```
 
 ---
@@ -201,7 +201,7 @@ Each conflict has a `defaultResolution`:
 
 ## The wizard
 
-Five steps in `SiteImportModal.tsx`:
+`SiteImportModal.tsx` drives four user-visible stages — **Drop → Review → Conflicts → Import** — shown in the shared `ImportStepper` rail. Completion lives inside the Import stage (the stepper has no separate "Done" stage). Internally the `run` step renders `ImportStep`, whose `RunProgress.phase` switches it between the running, complete, and failed surfaces.
 
 **Drop** — full-modal drop zone. Accepts loose files, a folder, or a `.zip`. `ingestInput` normalizes all input shapes to `FileMap`. Size guards: 1 GB aggregate, 10 k files, 5 GB uncompressed (zip-bomb guard).
 
@@ -216,9 +216,9 @@ Five steps in `SiteImportModal.tsx`:
 
 **Conflicts** — shown only when conflicts exist. Page-slug rows and class-name rows, each with a dropdown: `Auto-rename | Overwrite | Skip | Custom…`.
 
-**Run** — live upload progress (count + log). The commit phase is uncancellable; the upload phase is cancellable (orphaned uploads are harmless).
+**Import** (`ImportStep`) — a calm, determinate progress surface (no terminal log). A headline activity (phase verb + N of M), a determinate bar with a travelling shimmer, a one-line current-item ticker, and a per-category breakdown mirroring the Review navigator (pending ring → spinner → mint check, with a tint-washed progress fill). Everything is driven by real pipeline state: media (asset uploads) is the only incremental phase, so it dominates the bar; the other categories land together at the atomic commit. The commit phase is uncancellable; the upload phase is cancellable (orphaned uploads are harmless).
 
-**Done** — import summary: N pages, M style rules, K assets. Action buttons: **View first imported page**, **Open Selectors panel**. Warnings list for anything that needs attention.
+On success the same step switches to its **complete** state — a success mark, an "Imported into &lt;site&gt;" summary, and every category shown as done. Footer actions: **View import log** (reveals per-category counts + warnings) and **Open site →** (jumps to the first imported page). On failure it shows an inline error surface, and the failure is also surfaced via toast.
 
 ---
 

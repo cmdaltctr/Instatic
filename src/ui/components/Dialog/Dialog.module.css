@@ -36,6 +36,10 @@
     width: min(640px, 100%);
 }
 
+.dialog[data-size="2xl"] {
+    width: min(820px, 100%);
+}
+
 .header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 26px;

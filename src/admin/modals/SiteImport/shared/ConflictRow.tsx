@@ -17,15 +17,26 @@ const ACTION_OPTIONS = [
   { value: 'custom-rename', label: 'Custom…' },
 ]
 
+// Options minus "Overwrite" — used when there is no existing target to
+// overwrite (an intra-batch collision between two imported items).
+const ACTION_OPTIONS_NO_OVERWRITE = ACTION_OPTIONS.filter((o) => o.value !== 'overwrite')
+
 export interface ConflictRowProps {
   kind: 'page' | 'rule'
   source: string
   desired: string
   current: ConflictResolution
+  /**
+   * Whether an "Overwrite" target actually exists. False for intra-batch
+   * collisions (two imported items resolving to the same slug/name with no
+   * pre-existing page/rule) — overwriting nothing is meaningless and would
+   * abort the commit, so the option is hidden.
+   */
+  canOverwrite?: boolean
   onChange: (next: ConflictResolution) => void
 }
 
-export function ConflictRow({ kind, source, desired, current, onChange }: ConflictRowProps) {
+export function ConflictRow({ kind, source, desired, current, canOverwrite = true, onChange }: ConflictRowProps) {
   const isCustom = current.action === 'custom-rename'
   const customValue =
     kind === 'page'
@@ -60,7 +71,7 @@ export function ConflictRow({ kind, source, desired, current, onChange }: Confli
         <Select
           value={current.action}
           fieldSize="sm"
-          options={ACTION_OPTIONS}
+          options={canOverwrite ? ACTION_OPTIONS : ACTION_OPTIONS_NO_OVERWRITE}
           onChange={(e) => handleActionChange(e.target.value)}
           aria-label="Conflict resolution"
         />

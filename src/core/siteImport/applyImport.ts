@@ -295,8 +295,13 @@ export async function commitImportPlan(
     const conflict = pageConflictsBySource.get(page.source)
     const resolution = conflict?.defaultResolution
     if (resolution?.action === 'skip') continue
+    // Only reuse the existing id when there is a real page to overwrite.
+    // Intra-batch slug collisions carry an empty `existingPageId` (no existing
+    // page yet) — "overwrite" there has no target, so we add a fresh page.
     const id =
-      resolution?.action === 'overwrite' && conflict ? conflict.existingPageId : nanoid()
+      resolution?.action === 'overwrite' && conflict?.existingPageId
+        ? conflict.existingPageId
+        : nanoid()
     pageIdBySource.set(page.source, id)
   }
   const linkedPages = rewriteInternalLinks(rewrittenPlan.pages, pageIdBySource)
@@ -341,7 +346,7 @@ export async function commitImportPlan(
       if (resolution?.action === 'skip') continue
 
       let id: string
-      if (resolution?.action === 'overwrite' && conflict) {
+      if (resolution?.action === 'overwrite' && conflict?.existingRuleId) {
         tx.overwriteStyleRule(conflict.existingRuleId, rule)
         id = conflict.existingRuleId
       } else {
@@ -362,7 +367,7 @@ export async function commitImportPlan(
       const mintedId = pageIdBySource.get(page.source)
 
       let id: string
-      if (resolution?.action === 'overwrite' && conflict) {
+      if (resolution?.action === 'overwrite' && conflict?.existingPageId) {
         tx.overwritePage(conflict.existingPageId, {
           title: page.title,
           slug: page.slug,

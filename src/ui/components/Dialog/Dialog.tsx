@@ -22,7 +22,7 @@
  *   </Dialog>
  *
  * Variants:
- *   `size`  — sm (360px) | md (440px, default) | lg (520px) | xl (640px)
+ *   `size`  — sm (360px) | md (440px, default) | lg (520px) | xl (640px) | 2xl (820px)
  *   `tone`  — neutral (default) | danger — colours the eyebrow / header
  *
  * Accessibility:
@@ -48,7 +48,7 @@ import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { cn } from '@ui/cn'
 import styles from './Dialog.module.css'
 
-type DialogSize = 'sm' | 'md' | 'lg' | 'xl'
+type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl'
 type DialogTone = 'neutral' | 'danger'
 
 interface DialogProps {

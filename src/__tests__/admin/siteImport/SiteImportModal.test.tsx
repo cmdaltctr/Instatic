@@ -6,7 +6,7 @@
  *   2.  Render gating   — dialog visible only when store flag is true
  *   3.  DropStep errors — role="alert" rendered from errorMessage prop
  *   4.  Helper logic    — filterPlanBySelection, makeDefaultSelection, describeIngestError
- *   5.  DoneStep render — summary counts match ImportResult
+ *   5.  ImportStep      — running / complete / failed states from RunProgress
  *   6.  ConflictsStep   — shows/hides sections based on conflict lists
  *   7.  Auto-skip       — analyze→run when plan has no conflicts
  *   8.  Source-scan     — architecture rules on new files
@@ -22,7 +22,11 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
 import { join } from 'path'
 import { useEditorStore } from '@site/store/store'
 import { DropStep } from '@admin/modals/SiteImport/steps/DropStep'
-import { DoneStep } from '@admin/modals/SiteImport/steps/DoneStep'
+import { ImportStep } from '@admin/modals/SiteImport/steps/ImportStep'
+import {
+  makeInitialRunProgress,
+  type RunProgress,
+} from '@admin/modals/SiteImport/shared/importProgress'
 import { ConflictsStep } from '@admin/modals/SiteImport/steps/ConflictsStep'
 import { AnalyzeStep } from '@admin/modals/SiteImport/steps/AnalyzeStep'
 import { SiteImportModal } from '@admin/modals/SiteImport'
@@ -44,7 +48,6 @@ import { makeSite } from '../../fixtures'
 
 const SRC_ROOT = join(import.meta.dir, '../../../')
 const MODAL_DIR = join(SRC_ROOT, 'admin/modals/SiteImport')
-const PROGRESS_DIR = join(SRC_ROOT, 'ui/components/ProgressBar')
 
 function collectFiles(dir: string, ext: RegExp): string[] {
   const results: string[] = []
@@ -491,100 +494,116 @@ describe('describeIngestError — human-readable error messages', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 5 — DoneStep render — summary counts match ImportResult
+// 5 — ImportStep — running / complete / failed states from RunProgress
 // ---------------------------------------------------------------------------
 
-describe('DoneStep — summary counts', () => {
+describe('ImportStep — progress + completion states', () => {
   afterEach(cleanup)
 
-  it('renders correct page count', () => {
+  /** A RunProgress in the complete state, reconciled to an ImportResult. */
+  function makeDoneProgress(result: ImportResult): RunProgress {
+    return {
+      phase: 'done',
+      currentItem: '',
+      categories: {
+        pages: { done: result.pages.length, total: result.pages.length },
+        styles: { done: result.styleRules.length, total: result.styleRules.length },
+        media: { done: result.assets.length, total: result.assets.length },
+        colors: { done: result.colors.length, total: result.colors.length },
+        fonts: { done: result.fonts.length, total: result.fonts.length },
+        scripts: { done: result.scripts.length, total: result.scripts.length },
+      },
+    }
+  }
+
+  function renderImportStep(progress: RunProgress, result: ImportResult | null, logOpen = false) {
+    return render(
+      <ImportStep
+        progress={progress}
+        siteName="My Site"
+        result={result}
+        droppedAtRules={0}
+        logOpen={logOpen}
+      />,
+    )
+  }
+
+  it('complete state shows "Imported into <siteName>"', () => {
+    const result = makeMinimalResult({
+      pages: [{ id: 'p1', title: 'Home', slug: 'index', source: 'index.html' }],
+    })
+    renderImportStep(makeDoneProgress(result), result)
+    expect(screen.getByText('Imported into My Site')).toBeDefined()
+  })
+
+  it('complete summary line reflects the result counts', () => {
     const result = makeMinimalResult({
       pages: [
         { id: 'p1', title: 'Home', slug: 'index', source: 'index.html' },
         { id: 'p2', title: 'About', slug: 'about', source: 'about.html' },
       ],
-    })
-    render(<DoneStep result={result} droppedAtRules={0} onClose={() => {}} />)
-    expect(screen.getByText('2')).toBeDefined()
-    expect(screen.getByText(/pages imported/)).toBeDefined()
-  })
-
-  it('renders correct style rule count', () => {
-    const result = makeMinimalResult({
       styleRules: [
         { id: 'r1', selector: '.hero', kind: 'class' },
         { id: 'r2', selector: '.footer', kind: 'class' },
         { id: 'r3', selector: 'h1', kind: 'ambient' },
       ],
+      assets: [{ sourcePath: 'images/hero.png', mediaUrl: '/uploads/hero.png' }],
     })
-    render(<DoneStep result={result} droppedAtRules={0} onClose={() => {}} />)
-    expect(screen.getByText('3')).toBeDefined()
-    expect(screen.getByText(/style rules? imported/)).toBeDefined()
+    renderImportStep(makeDoneProgress(result), result)
+    const normalize = (s: string) => s.replace(/\s+/g, ' ').trim()
+    const sub = Array.from(document.querySelectorAll('p')).find((p) =>
+      normalize(p.textContent ?? '').includes('2 pages'),
+    )
+    expect(sub).not.toBeUndefined()
+    expect(normalize(sub!.textContent ?? '')).toContain('3 rules')
+    expect(normalize(sub!.textContent ?? '')).toContain('1 media')
   })
 
-  it('renders correct asset count', () => {
-    const result = makeMinimalResult({
-      assets: [
-        { sourcePath: 'images/hero.png', mediaUrl: '/uploads/hero.png' },
-      ],
-    })
-    render(<DoneStep result={result} droppedAtRules={0} onClose={() => {}} />)
-    expect(screen.getByText('1')).toBeDefined()
-    expect(screen.getByText(/assets? uploaded/)).toBeDefined()
-  })
-
-  it('shows "View first imported page" button when pages exist', () => {
+  it('import log (when open) lists per-category counts', () => {
     const result = makeMinimalResult({
       pages: [{ id: 'p1', title: 'Home', slug: 'index', source: 'index.html' }],
+      assets: [{ sourcePath: 'images/hero.png', mediaUrl: '/uploads/hero.png' }],
     })
-    render(<DoneStep result={result} droppedAtRules={0} onClose={() => {}} />)
-    expect(screen.getByText('View first imported page')).toBeDefined()
+    renderImportStep(makeDoneProgress(result), result, true)
+    expect(screen.getByText('1 page imported')).toBeDefined()
+    expect(screen.getByText('1 asset uploaded')).toBeDefined()
   })
 
-  it('hides "View first imported page" when no pages', () => {
-    const result = makeMinimalResult()
-    render(<DoneStep result={result} droppedAtRules={0} onClose={() => {}} />)
-    expect(screen.queryByText('View first imported page')).toBeNull()
-  })
-
-  it('shows "Open Selectors panel" button when style rules exist', () => {
+  it('import log (when open) renders warnings', () => {
     const result = makeMinimalResult({
-      styleRules: [{ id: 'r1', selector: '.hero', kind: 'class' }],
+      warnings: [{ kind: 'dropped-at-rule', message: 'Dropped @keyframes slideIn' }],
     })
-    render(<DoneStep result={result} droppedAtRules={0} onClose={() => {}} />)
-    expect(screen.getByText('Open Selectors panel')).toBeDefined()
-  })
-
-  it('hides "Open Selectors panel" when no style rules', () => {
-    const result = makeMinimalResult()
-    render(<DoneStep result={result} droppedAtRules={0} onClose={() => {}} />)
-    expect(screen.queryByText('Open Selectors panel')).toBeNull()
-  })
-
-  it('renders warnings section when warnings exist', () => {
-    const result = makeMinimalResult({
-      warnings: [
-        { kind: 'dropped-at-rule', message: 'Dropped @keyframes slideIn' },
-      ],
-    })
-    render(<DoneStep result={result} droppedAtRules={0} onClose={() => {}} />)
+    renderImportStep(makeDoneProgress(result), result, true)
     expect(screen.getByText('Dropped @keyframes slideIn')).toBeDefined()
   })
 
-  it('singular "page" label for exactly 1 page', () => {
-    const result = makeMinimalResult({
-      pages: [{ id: 'p1', title: 'Home', slug: 'index', source: 'index.html' }],
-    })
-    render(<DoneStep result={result} droppedAtRules={0} onClose={() => {}} />)
-    // DoneStep renders <p><strong>1</strong> page imported</p> — text is split
-    // across child elements, so use textContent on the paragraph to match.
-    const paras = Array.from(document.querySelectorAll('p'))
-    const normalize = (s: string) => s.replace(/\s+/g, ' ').trim()
-    const pageCountLine = paras.find((p) => normalize(p.textContent ?? '').includes('page imported'))
-    expect(pageCountLine).not.toBeUndefined()
-    // Must use singular "page" not plural "pages"
-    expect(normalize(pageCountLine!.textContent ?? '')).not.toContain('pages imported')
-    expect(normalize(pageCountLine!.textContent ?? '')).toContain('1 page imported')
+  it('running state shows a determinate percentage from media uploads', () => {
+    const progress = makeInitialRunProgress()
+    progress.phase = 'uploading'
+    progress.categories.media = { done: 1, total: 2 }
+    renderImportStep(progress, null)
+    // 1/2 uploaded → 46% (½ of the 92% upload slice), rounded.
+    expect(screen.getByText('46%')).toBeDefined()
+  })
+
+  it('running state renders every category row label', () => {
+    const progress = makeInitialRunProgress()
+    progress.phase = 'uploading'
+    progress.categories.media = { done: 0, total: 3 }
+    renderImportStep(progress, null)
+    for (const label of ['Pages', 'Style rules', 'Media', 'Color tokens', 'Fonts', 'Scripts']) {
+      expect(screen.getByText(label)).toBeDefined()
+    }
+  })
+
+  it('failed state surfaces the error message via role="alert"', () => {
+    const progress = makeInitialRunProgress()
+    progress.phase = 'failed'
+    progress.errorMessage = 'Commit failed: editor store rejected the mutation'
+    renderImportStep(progress, null)
+    const alert = document.querySelector('[role="alert"]')
+    expect(alert).not.toBeNull()
+    expect(alert!.textContent).toContain('Commit failed: editor store rejected the mutation')
   })
 })
 
@@ -697,6 +716,62 @@ describe('ConflictsStep — conflict rendering', () => {
     )
     expect(screen.getByText(/Page slug conflicts/i)).toBeDefined()
     expect(screen.getByText(/Class name conflicts/i)).toBeDefined()
+  })
+
+  it('hides the "Overwrite" option for intra-batch page conflicts (empty existingPageId)', () => {
+    const plan = makeMinimalPlan({
+      conflicts: {
+        pages: [
+          {
+            source: 'home.html',
+            desiredSlug: 'home',
+            existingPageId: '', // intra-batch collision — nothing to overwrite
+            defaultResolution: { action: 'auto-rename', resolvedSlug: 'home-2' },
+          },
+        ],
+        rules: [],
+      },
+    })
+    render(
+      <ConflictsStep
+        plan={plan}
+        pageResolutions={emptyPageRes}
+        ruleResolutions={emptyRuleRes}
+        onPageResolutionChange={noopResChange}
+        onRuleResolutionChange={noopResChange}
+      />,
+    )
+    const optionValues = Array.from(document.querySelectorAll('option')).map((o) => o.value)
+    expect(optionValues).toContain('auto-rename')
+    expect(optionValues).toContain('skip')
+    expect(optionValues).not.toContain('overwrite')
+  })
+
+  it('offers the "Overwrite" option when a real existing page id is present', () => {
+    const plan = makeMinimalPlan({
+      conflicts: {
+        pages: [
+          {
+            source: 'about.html',
+            desiredSlug: 'about',
+            existingPageId: 'p-1',
+            defaultResolution: { action: 'auto-rename', resolvedSlug: 'about-2' },
+          },
+        ],
+        rules: [],
+      },
+    })
+    render(
+      <ConflictsStep
+        plan={plan}
+        pageResolutions={emptyPageRes}
+        ruleResolutions={emptyRuleRes}
+        onPageResolutionChange={noopResChange}
+        onRuleResolutionChange={noopResChange}
+      />,
+    )
+    const optionValues = Array.from(document.querySelectorAll('option')).map((o) => o.value)
+    expect(optionValues).toContain('overwrite')
   })
 
   it('calls onPageResolutionChange when a row resolution changes', () => {
@@ -856,15 +931,6 @@ describe('SiteImportModal — source architecture', () => {
     })
     // createSiteImportAdapter.ts uses TypeBox (Type.Object etc.)
     expect(hasTypebox).toBe(true)
-  })
-
-  it('imports ProgressBar from @ui/components/ProgressBar barrel', () => {
-    const progressFiles = collectFiles(MODAL_DIR, /\.(tsx|ts)$/)
-    const importsProgressBar = progressFiles.some((f) => {
-      const src = readFileSync(f, 'utf-8')
-      return src.includes("'@ui/components/ProgressBar'") || src.includes('"@ui/components/ProgressBar"')
-    })
-    expect(importsProgressBar).toBe(true)
   })
 
   it('uses no clsx / tailwind-merge / class-variance-authority imports', () => {
@@ -1101,5 +1167,113 @@ describe('commitImportPlan — uploadAsset called only for entries in plan.asset
     expect(uploadedPaths.includes('pricing.html')).toBe(false)
     expect(uploadedPaths.includes('styles/main.css')).toBe(false)
     expect(uploadedPaths.includes('styles/theme.css')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 11 — commitImportPlan: "overwrite" with no existing target falls back to add
+//
+// Regression guard for the "overwritePage: page not found" crash. An
+// intra-batch slug collision carries an empty `existingPageId`; if the user
+// picks "Overwrite" for it, commit must add a fresh page instead of calling
+// overwritePage('') (which throws and aborts the whole import).
+// ---------------------------------------------------------------------------
+
+describe('commitImportPlan — overwrite with no existing target falls back to add', () => {
+  function recordingAdapter() {
+    const overwrotePageIds: string[] = []
+    const addedPageIds: (string | undefined)[] = []
+    const overwroteRuleIds: string[] = []
+    const adapter: SiteImportAdapter = {
+      uploadAsset: async ({ path }) => `/uploads/${path}`,
+      commit: async (recipe) => {
+        recipe({
+          addPage: (input) => {
+            addedPageIds.push(input.id)
+            return input.id ?? 'fresh-id'
+          },
+          addStyleRule: () => 'rule-id',
+          overwritePage: (pageId) => {
+            if (!pageId) throw new Error('overwritePage: page not found')
+            overwrotePageIds.push(pageId)
+          },
+          overwriteStyleRule: (ruleId) => {
+            if (!ruleId) throw new Error('overwriteStyleRule: style rule not found')
+            overwroteRuleIds.push(ruleId)
+          },
+          addConditions: () => {},
+          addFonts: () => [],
+          addColorTokens: () => [],
+          addScripts: () => [],
+        })
+      },
+    }
+    return { adapter, overwrotePageIds, addedPageIds, overwroteRuleIds }
+  }
+
+  it('does not throw and adds the page when overwrite target id is empty', async () => {
+    const plan = makeMinimalPlan({
+      pages: [
+        {
+          source: 'home.html',
+          title: 'Home',
+          slug: 'home',
+          linkedCssPaths: [],
+          nodeFragment: { nodes: {}, rootIds: [] },
+        },
+      ],
+      conflicts: {
+        // Intra-batch collision → empty existingPageId, but user chose overwrite.
+        pages: [
+          {
+            source: 'home.html',
+            desiredSlug: 'home',
+            existingPageId: '',
+            defaultResolution: { action: 'overwrite' },
+          },
+        ],
+        rules: [],
+      },
+    })
+
+    const { adapter, overwrotePageIds, addedPageIds } = recordingAdapter()
+    const result = await commitImportPlan(plan, adapter)
+
+    // overwritePage('') was never called; the page was added instead.
+    expect(overwrotePageIds).toHaveLength(0)
+    expect(addedPageIds).toHaveLength(1)
+    expect(result.pages).toHaveLength(1)
+    expect(result.pages[0].slug).toBe('home')
+  })
+
+  it('still overwrites when a real existing page id is present', async () => {
+    const plan = makeMinimalPlan({
+      pages: [
+        {
+          source: 'home.html',
+          title: 'Home',
+          slug: 'home',
+          linkedCssPaths: [],
+          nodeFragment: { nodes: {}, rootIds: [] },
+        },
+      ],
+      conflicts: {
+        pages: [
+          {
+            source: 'home.html',
+            desiredSlug: 'home',
+            existingPageId: 'existing-page-1',
+            defaultResolution: { action: 'overwrite' },
+          },
+        ],
+        rules: [],
+      },
+    })
+
+    const { adapter, overwrotePageIds, addedPageIds } = recordingAdapter()
+    await commitImportPlan(plan, adapter)
+
+    expect(overwrotePageIds).toEqual(['existing-page-1'])
+    expect(addedPageIds).toHaveLength(0)
   })
 })

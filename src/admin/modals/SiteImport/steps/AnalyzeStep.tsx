@@ -24,10 +24,10 @@ import { HeadingIcon } from 'pixel-art-icons/icons/heading'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { WarningDiamondSolidIcon } from 'pixel-art-icons/icons/warning-diamond-solid'
 import { ChevronRightIcon } from 'pixel-art-icons/icons/chevron-right'
-import { CheckIcon } from 'pixel-art-icons/icons/check'
 import { DragAndDropSolidIcon } from 'pixel-art-icons/icons/drag-and-drop-solid'
 import type { ImportPlan } from '@core/siteImport'
 import type { ImportSelection } from '../SiteImportModal'
+import { ImportStepper } from '../shared/ImportStepper'
 import styles from './AnalyzeStep.module.css'
 
 // ---------------------------------------------------------------------------
@@ -49,13 +49,6 @@ const CATEGORIES: CategoryDef[] = [
   { id: 'colors', label: 'Color tokens', tint: 'var(--rail-tint-sky)' },
   { id: 'fonts', label: 'Fonts', tint: 'var(--rail-tint-mint)' },
   { id: 'scripts', label: 'Scripts', tint: 'var(--rail-tint-mint)' },
-]
-
-const STEPPER = [
-  { label: 'Drop', state: 'done' as const },
-  { label: 'Review', state: 'current' as const },
-  { label: 'Conflicts', state: 'upcoming' as const },
-  { label: 'Import', state: 'upcoming' as const },
 ]
 
 /** How many selector rows to render per expanded group before collapsing into a "+N more" line. */
@@ -192,16 +185,7 @@ export function AnalyzeStep({
 
   return (
     <div className={styles.step} {...dragHandlers}>
-      <ol className={styles.stepper} aria-label="Import progress">
-        {STEPPER.map((s, i) => (
-          <li key={s.label} className={styles.stepperItem} data-state={s.state}>
-            <span className={styles.stepperDot}>
-              {s.state === 'done' ? <CheckIcon size={9} /> : i + 1}
-            </span>
-            <span className={styles.stepperLabel}>{s.label}</span>
-          </li>
-        ))}
-      </ol>
+      <ImportStepper current="review" />
 
       <div className={styles.layout}>
         {/* Left navigator */}

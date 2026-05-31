@@ -44,17 +44,16 @@ import { useEditorStore } from '@site/store/store'
 import { DropStep } from './steps/DropStep'
 import { AnalyzeStep } from './steps/AnalyzeStep'
 import { ConflictsStep } from './steps/ConflictsStep'
-import { RunStep } from './steps/RunStep'
-import { DoneStep } from './steps/DoneStep'
+import { ImportStep } from './steps/ImportStep'
+import { makeInitialRunProgress, type RunProgress } from './shared/importProgress'
 import { createSiteImportAdapter } from './shared/createSiteImportAdapter'
-import type { RunProgress } from './shared/ImportProgress'
 import styles from './SiteImportModal.module.css'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type Step = 'drop' | 'analyze' | 'conflicts' | 'run' | 'done'
+export type Step = 'drop' | 'analyze' | 'conflicts' | 'run'
 
 export interface ImportSelection {
   pagesIncluded: Set<string>       // by source path
@@ -154,18 +153,13 @@ export function SiteImportModal() {
   const [pageResolutions, setPageResolutions] = useState<Map<string, ConflictResolution>>(new Map())
   const [ruleResolutions, setRuleResolutions] = useState<Map<string, ConflictResolution>>(new Map())
   const [pageSlugOverrides, setPageSlugOverrides] = useState<Map<string, string>>(new Map())
-  const [runProgress, setRunProgress] = useState<RunProgress>({
-    phase: 'idle', completed: 0, total: 0, log: [],
-  })
+  const [runProgress, setRunProgress] = useState<RunProgress>(makeInitialRunProgress)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [logOpen, setLogOpen] = useState(false)
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  function appendRunLog(line: string) {
-    setRunProgress((prev) => ({ ...prev, log: [...prev.log, line] }))
-  }
+  const siteName = useEditorStore((s) => s.site?.name) ?? 'this site'
 
   // ── Ingest + plan-build (triggered from DropStep callbacks) ───────────────
 
@@ -290,44 +284,70 @@ export function SiteImportModal() {
     ruleResMap: Map<string, ConflictResolution>,
   ) {
     const resolvedPlan = buildResolvedPlan(planToRun, pageResMap, ruleResMap)
-    const total = resolvedPlan.assets.length
 
-    setRunProgress({ phase: 'uploading', completed: 0, total, log: [] })
+    // Totals come from the plan being committed. Media is the only genuinely
+    // incremental phase (per-asset uploads); everything else lands in one atomic
+    // commit, so those rows flip pending → done together once it completes.
+    const initial = makeInitialRunProgress()
+    initial.phase = 'uploading'
+    initial.categories = {
+      pages: { done: 0, total: resolvedPlan.pages.length },
+      styles: { done: 0, total: resolvedPlan.styleRules.length },
+      media: { done: 0, total: resolvedPlan.assets.length },
+      colors: { done: 0, total: resolvedPlan.colors.length },
+      fonts: { done: 0, total: resolvedPlan.fonts.length },
+      scripts: { done: 0, total: resolvedPlan.scripts.length },
+    }
+    setLogOpen(false)
+    setResult(null)
+    setRunProgress(initial)
     setStep('run')
-
-    let uploadedCount = 0
 
     const adapter = createSiteImportAdapter({
       sessionId: nanoid(),
       onUploadStart: ({ path }) => {
-        appendRunLog(`Uploading ${path}…`)
-        setRunProgress((prev) => ({ ...prev, phase: 'uploading' }))
+        setRunProgress((prev) => ({ ...prev, phase: 'uploading', currentItem: path }))
       },
       onUploadComplete: ({ path }) => {
-        uploadedCount++
         setRunProgress((prev) => ({
           ...prev,
-          completed: uploadedCount,
+          currentItem: path,
+          categories: {
+            ...prev.categories,
+            media: { ...prev.categories.media, done: prev.categories.media.done + 1 },
+          },
         }))
-        appendRunLog(`✓ ${path}`)
       },
       onCommitStart: () => {
-        setRunProgress((prev) => ({ ...prev, phase: 'applying' }))
-        appendRunLog('Applying changes to site…')
+        setRunProgress((prev) => ({
+          ...prev,
+          phase: 'applying',
+          currentItem: 'Applying changes to your site…',
+        }))
       },
       onCommitComplete: () => {
-        setRunProgress((prev) => ({ ...prev, phase: 'done' }))
+        setRunProgress((prev) => ({ ...prev, phase: 'applying' }))
       },
     })
 
     try {
       const importResult = await commitImportPlan(resolvedPlan, adapter)
-      appendRunLog(
-        `Done — ${importResult.pages.length} pages, ${importResult.styleRules.length} style rules, ${importResult.assets.length} assets.`,
-      )
-      setRunProgress((prev) => ({ ...prev, phase: 'done' }))
+      // Reconcile every category to what was actually committed — skipped pages
+      // or rules (conflict resolutions) leave fewer than the planned totals.
+      setRunProgress((prev) => ({
+        ...prev,
+        phase: 'done',
+        currentItem: '',
+        categories: {
+          pages: { done: importResult.pages.length, total: importResult.pages.length },
+          styles: { done: importResult.styleRules.length, total: importResult.styleRules.length },
+          media: { done: importResult.assets.length, total: importResult.assets.length },
+          colors: { done: importResult.colors.length, total: importResult.colors.length },
+          fonts: { done: importResult.fonts.length, total: importResult.fonts.length },
+          scripts: { done: importResult.scripts.length, total: importResult.scripts.length },
+        },
+      }))
       setResult(importResult)
-      setStep('done')
       pushToast({
         kind: 'success',
         title: 'Site imported',
@@ -337,8 +357,7 @@ export function SiteImportModal() {
     } catch (err) {
       console.error('[SiteImportModal] commit failed:', err)
       const msg = err instanceof Error ? err.message : 'Unknown import error'
-      appendRunLog(`Error: ${msg}`)
-      setRunProgress((prev) => ({ ...prev, phase: 'failed' }))
+      setRunProgress((prev) => ({ ...prev, phase: 'failed', currentItem: '', errorMessage: msg }))
       pushToast({ kind: 'error', title: 'Import failed', body: msg })
     }
   }
@@ -352,6 +371,15 @@ export function SiteImportModal() {
 
   function handleRunCancel() {
     // During upload phase we can close (orphaned assets are harmless per spec).
+    closeModal()
+  }
+
+  // Open the freshly-imported site: jump to the first imported page in the
+  // canvas, then close the wizard. Falls back to a plain close when nothing
+  // imported (e.g. a styles-only import).
+  function handleOpenSite() {
+    const firstPage = result?.pages[0]
+    if (firstPage) useEditorStore.getState().openPageInCanvas(firstPage.id)
     closeModal()
   }
 
@@ -397,13 +425,50 @@ export function SiteImportModal() {
       )
     }
 
-    if (step === 'run') return null // RunStep manages its own Cancel
+    if (step === 'run') {
+      const phase = runProgress.phase
 
-    if (step === 'done') {
+      if (phase === 'done') {
+        return (
+          <>
+            <span className={styles.footNote}>
+              <strong>{siteName}</strong> is ready
+            </span>
+            <Button variant="ghost" type="button" onClick={() => setLogOpen((o) => !o)}>
+              {logOpen ? 'Hide import log' : 'View import log'}
+            </Button>
+            <Button variant="primary" type="button" onClick={handleOpenSite}>
+              Open site →
+            </Button>
+          </>
+        )
+      }
+
+      if (phase === 'failed') {
+        return (
+          <>
+            <span className={styles.footNote}>Import didn’t finish</span>
+            <Button variant="secondary" type="button" onClick={handleClose}>
+              Close
+            </Button>
+          </>
+        )
+      }
+
+      // Running (idle / uploading / applying).
+      const canCancel = phase === 'uploading' || phase === 'idle'
       return (
-        <Button variant="secondary" type="button" onClick={handleClose}>
-          Close
-        </Button>
+        <>
+          <span className={styles.footNote}>Keep this window open while importing…</span>
+          <Button
+            variant="secondary"
+            type="button"
+            disabled={!canCancel}
+            onClick={handleRunCancel}
+          >
+            Cancel
+          </Button>
+        </>
       )
     }
 
@@ -416,8 +481,9 @@ export function SiteImportModal() {
     drop: 'Import site',
     analyze: 'Review import',
     conflicts: 'Resolve conflicts',
-    run: 'Importing…',
-    done: 'Import complete',
+    // The Import step title tracks its phase: "Importing" while running,
+    // "Import complete" once committed.
+    run: runProgress.phase === 'done' ? 'Import complete' : 'Importing',
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -431,7 +497,9 @@ export function SiteImportModal() {
       size={step === 'analyze' ? '2xl' : 'xl'}
       tone="neutral"
       footer={renderFooter() ?? undefined}
-      bodyClassName={step === 'analyze' ? styles.analyzeBody : undefined}
+      bodyClassName={
+        step === 'analyze' ? styles.analyzeBody : step === 'run' ? styles.importBody : undefined
+      }
       closeOnEscape={runProgress.phase !== 'applying'}
       closeOnBackdrop={runProgress.phase !== 'applying'}
     >
@@ -448,7 +516,7 @@ export function SiteImportModal() {
         {step === 'analyze' && plan && fileMap && selection && (
           <AnalyzeStep
             plan={plan}
-            siteName={useEditorStore.getState().site?.name ?? 'this site'}
+            siteName={siteName}
             selection={selection}
             pageSlugOverrides={pageSlugOverrides}
             busy={busy}
@@ -487,17 +555,12 @@ export function SiteImportModal() {
         )}
 
         {step === 'run' && (
-          <RunStep
+          <ImportStep
             progress={runProgress}
-            onCancel={handleRunCancel}
-          />
-        )}
-
-        {step === 'done' && result && plan && (
-          <DoneStep
+            siteName={siteName}
             result={result}
-            droppedAtRules={plan.droppedAtRules.length}
-            onClose={handleClose}
+            droppedAtRules={plan?.droppedAtRules.length ?? 0}
+            logOpen={logOpen}
           />
         )}
       </div>
