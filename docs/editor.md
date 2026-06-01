@@ -10,7 +10,7 @@ The frontend is a single React 19 + Vite SPA mounted at `/admin`. Inside it, two
 
 - **Entry:** `src/admin/main.tsx` mounts `<Router><AdminRoutes /></Router>` with React 19 root-level error callbacks. `flushSync` forces the initial render synchronous to cut LCP.
 - **Router:** `src/admin/lib/routing/` — in-house router replacing `react-router-dom`. 10 routes, all wrapped in a per-route `<ErrorBoundary>` and `<Suspense>`.
-- **Cold path:** entry chunk is tiny (~96 KB gz). `AuthenticatedAdmin` is `React.lazy` and only loads post-login; it pre-warms all 9 workspace chunks at module evaluation.
+- **Cold path:** entry chunk is tiny. `AuthenticatedAdmin` is `React.lazy` and only loads post-login. Each workspace page is wrapped in `prewarmedLazy(...)`: the active page fires its import at module evaluation; the remaining pages pre-warm via `requestIdleCallback` after first paint so subsequent nav is synchronous (no Suspense flicker).
 - **Workspaces:** `dashboard`, `site` (the editor), `content`, `data`, `media`, `plugins`, `users`, `ai`, `account`, `pluginPage`. Capability-gated by `canAccessWorkspace`.
 - **Editor store** lives at `src/admin/pages/site/store/`. Zustand + Immer + `subscribeWithSelector`. 11 slices, one source of truth for the page tree.
 - **Active tree routing:** `mutateActiveTree(fn)` in `siteSlice` is the **only** place that branches on page-mode vs. VC-mode. The 11 named mutation actions are one-liners that delegate to it.
@@ -43,8 +43,8 @@ src/admin/main.tsx
     │             │
     │             └─→ <AuthenticatedAdmin>  (post-login chunk, ~heavy)
     │                     │
-    │                     ├─→ installPluginRuntime()       ← populate globalThis.__pagebuilder
-    │                     ├─→ pre-warm imports for all 9 workspace pages
+    │                     │  Module evaluation: fires preload() for the active
+    │                     │  page only (the one matching window.location.pathname).
     │                     │
     │                     └─→ <AdminSessionProvider>
     │                            └─→ <StepUpProvider>
@@ -61,9 +61,8 @@ Why the split:
 - **`main.tsx`** is the only module pre-login can compile. Keep it minimal.
 - **`AdminEntry`** is eager-imported but small (~10 KB gz). Owns the boot probe and gate.
 - **`AuthenticatedAdmin`** is `React.lazy` so the login screen doesn't pay for SpotlightRoot, the editor store, or any workspace page chunk.
-- **Workspace pages** are individually `React.lazy` — pre-warmed in parallel once `AuthenticatedAdmin` loads, so navigation between workspaces never flashes a Suspense fallback.
-
-`installPluginRuntime()` lives inside `AuthenticatedAdmin`'s chunk so plugin code never runs before login.
+- **Workspace pages** are wrapped in `prewarmedLazy(...)` — the active page pre-warms at module evaluation (alone, so no 8 sibling imports stealing CPU); after first paint a `requestIdleCallback` pre-warms the remaining pages. The result: subsequent workspace navigation renders synchronously with no Suspense fallback.
+- **Plugin runtime** (`globalThis.__pagebuilder`) is installed lazily by `ensurePluginRuntime()` in `pluginRuntimeBootstrap.ts`. It's triggered on first admin-layout mount via `useInstalledEditorPlugins`, so plugin code never runs before login and the runtime download stays off the dashboard critical path.
 
 ---
 
@@ -164,27 +163,49 @@ Sensitive actions (delete user, revoke another device, sign out all devices) req
 
 ## Admin shell layout
 
+### The three layouts
+
+Every admin page picks one of three root layouts from `src/admin/layouts/`. Import directly from the per-layout path (not the barrel `src/admin/layouts/index.ts`) so rolldown can split them into separate chunks.
+
+| Layout | Used by | Bundle contract |
+|---|---|---|
+| `AdminCanvasLayout` | Site editor (`SitePage`) | Heavy — includes canvas, floating panels, DnD, the full editor store. |
+| `AdminWorkspaceCanvasLayout` | Content, Data, Media | Canvas chrome (toolbar, sidebar, full-height canvas) WITHOUT site-only modules (no PropertiesPanel, no DnD, no CodeMirror). |
+| `AdminPageLayout` | Plugins, Users, Account, plugin admin pages | Lightweight — toolbar + centered scrollable page body. **Must not import the editor store.** Site name and favicon come from `useSiteSummary` + the `adminUi` Zustand store. |
+
+The `adminUi` store (`src/admin/state/adminUi.ts`) is the small cross-shell state store: settings-modal open flag, site name/favicon for the toolbar, and the active live-page path. It lives outside `@site/` so `AdminPageLayout` can subscribe without pulling in the 165 KB editor graph. The editor's `settingsSlice` mirrors its state into `adminUi` via a registered bridge so both are always in sync.
+
+`AdminWorkspaceCanvasLayout` and `AdminPageLayout` both call `useSiteSummary()` — a lightweight hook that fires a single `cmsAdapter.loadSite()` per session and writes the name + favicon into `adminUi`. The Site editor's `usePersistence` writes the same fields when it hydrates the full site, so after navigating to `/admin/site` the toolbar updates without a second fetch.
+
 ```text
 src/admin/
 ├── main.tsx                    ← React root mount
 ├── AdminEntry.tsx              ← boot probe + auth gate
-├── AuthenticatedAdmin.tsx      ← post-login chunk
+├── AuthenticatedAdmin.tsx      ← post-login chunk (prewarmedLazy scheduler)
 ├── AppLoadingScreen.tsx        ← shared loading screen
 ├── router.tsx                  ← admin route table
 ├── access.ts                   ← workspace gating
 ├── workspace.ts                ← AdminWorkspace union
 ├── session.tsx, sessionContext.ts ← AdminSession context
-├── pluginRuntimeBootstrap.ts   ← installs globalThis.__pagebuilder
+├── pluginRuntimeBootstrap.ts   ← installs globalThis.__pagebuilder (lazy)
+│
+├── layouts/
+│   ├── AdminCanvasLayout/      ← site editor shell (heavy)
+│   ├── AdminWorkspaceCanvasLayout/ ← canvas shell for Content/Data/Media
+│   └── AdminPageLayout/        ← lightweight page shell (no editor store)
+│
+├── state/
+│   └── adminUi.ts              ← cross-shell Zustand store (settings, site name)
 │
 ├── lib/
 │   ├── routing/                ← in-house router
 │   ├── urlState/               ← workspace-agnostic URL query-string sync
+│   ├── prewarmedLazy.ts        ← React.lazy alternative with explicit preload + sync fast-path
 │   ├── useAsyncResource.ts     ← canonical single-resource async load hook
 │   └── useAdminNavigate.ts
 │
 ├── preauth/                    ← login / setup flows
 ├── shared/                     ← StepUp, dialogs, AdminSectionNavigation, ...
-├── state/                      ← cross-page small contexts (adminUi)
 ├── modals/                     ← workspace-level modals
 ├── plugin-host-hooks/          ← React hooks plugins call via the SDK
 ├── plugin-host-ui/             ← Host UI primitives plugins call via the SDK
@@ -494,7 +515,7 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
 1. Add the section name to the `AdminWorkspace` union in `src/admin/workspace.ts`.
 2. Add `canAccessWorkspace` and `workspacePath` arms in `src/admin/access.ts`.
 3. Add a `<Route>` in `src/admin/router.tsx` and a `<AdminEntry section="X">`.
-4. Add a `lazy(...)` import + pre-warm `void import(...)` in `src/admin/AuthenticatedAdmin.tsx`.
+4. Add a `prewarmedLazy(...)` import in `src/admin/AuthenticatedAdmin.tsx` and append the new page to the `ALL_WORKSPACE_PAGES` array so the idle-callback scheduler pre-warms it after first paint.
 5. Create `src/admin/pages/<workspace>/<Workspace>Page.tsx` with a named export.
 6. Add the workspace to `AdminSectionNavigation`.
 
@@ -528,7 +549,12 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
 - [docs/reference/ui-primitives.md](reference/ui-primitives.md) — UI primitive usage
 - Source-of-truth files:
   - `src/admin/main.tsx` — React root mount
-  - `src/admin/AuthenticatedAdmin.tsx` — post-login shell
+  - `src/admin/AuthenticatedAdmin.tsx` — post-login shell + prewarmedLazy scheduler
+  - `src/admin/lib/prewarmedLazy.ts` — React.lazy alternative with explicit preload + sync fast-path
+  - `src/admin/state/adminUi.ts` — cross-shell Zustand store (settings modal, site name/favicon)
+  - `src/admin/state/useSiteSummary.ts` — lightweight site name/favicon fetch for non-editor layouts
+  - `src/admin/layouts/AdminPageLayout/AdminPageLayout.tsx` — lightweight non-editor shell
+  - `src/admin/layouts/AdminWorkspaceCanvasLayout/AdminWorkspaceCanvasLayout.tsx` — canvas shell for Content/Data/Media
   - `src/admin/router.tsx` — route table
   - `src/admin/lib/routing/` — in-house router
   - `src/admin/pages/site/SitePage.tsx` — visual editor mount
@@ -540,6 +566,8 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
   - `src/admin/pages/site/panels/PropertiesPanel/selectorPickerModel.ts` — selector picker derivation model (`deriveSelectorPickerModel`, `classifySelectorCreateInput`)
 - Gate tests:
   - `src/__tests__/architecture/admin-router-usage.test.ts`
+  - `src/__tests__/architecture/admin-startup-imports.test.ts` — pre-auth code must not import the full `@core/persistence` barrel
+  - `src/__tests__/architecture/bundle-size-budgets.test.ts` — per-chunk byte budgets (AdminPageLayout, AdminWorkspaceCanvasLayout, SitePage, ContentPage, …)
   - `src/__tests__/architecture/no-vc-mode-branches-in-mutations.test.ts`
   - `src/__tests__/architecture/admin-feature-folders.test.ts`
   - `src/__tests__/architecture/centralized-site-mutation-history.test.ts`

@@ -191,7 +191,8 @@ See [docs/features/site-transfer.md](../features/site-transfer.md).
 
 | Test                                          | What it enforces                                                                 |
 |-----------------------------------------------|----------------------------------------------------------------------------------|
-| `bundle-size-budgets.test.ts`                 | Per-chunk size budgets after `bun run build`. Fails CI if a chunk grows past its budget. |
+| `admin-startup-imports.test.ts`               | Pre-auth code (`src/admin/preauth/`) does not import `@core/persistence` barrel — only narrow auth/boot entrypoints. Keeps the login-screen chunk free of data/media/plugin clients. |
+| `bundle-size-budgets.test.ts`                 | Per-chunk byte budgets after `bun run build`. Enforces that key chunks (AdminPageLayout, AdminWorkspaceCanvasLayout, SitePage, ContentPage, CodeMirrorEditor, …) stay within their measured caps. |
 | `module-size-budgets.test.ts`                 | Per-module line-count cap. No new source module over 700 lines; a grandfathered ledger of existing god-files is frozen and ratchets down only. Source-side sibling of `bundle-size-budgets`. |
 | `codemirror-lazy-only.test.ts`                | CodeMirror is loaded only via `lazy()` — it's heavy and shouldn't be in the entry bundle. |
 | `singleInstallManagedHosting.test.ts`         | Single-install assumptions hold across the codebase (no multi-tenant leakage).   |
