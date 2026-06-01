@@ -20,7 +20,7 @@ import { PaintBucketSolidIcon } from 'pixel-art-icons/icons/paint-bucket-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { Panel } from '@admin/shared/Panel'
 import { cn } from '@ui/cn'
-import { DeleteSelectorDialog, SelectorNameDialog } from './SelectorDialogs'
+import { DeleteSelectorDialog, SelectorNameDialog } from '../SelectorDialogs'
 import { SelectorContextMenu } from './SelectorContextMenu'
 import {
   buildSelectorUsageMap,
@@ -29,7 +29,7 @@ import {
   getSelectorStyleSummary,
   normalizeSelectorQuery,
   selectorMatchesQuery,
-} from './selectorUsage'
+} from '../selectorUsage'
 import styles from './SelectorsPanel.module.css'
 
 interface SelectorsPanelProps {

@@ -179,6 +179,34 @@ describe('PP-3 — Pill click toggles CSS editor; locked preview shown with no a
   })
 })
 
+describe('SelectorHeader delete action', () => {
+  it('confirms before deleting the selector opened in the Properties panel', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const classId = classIds[0]
+    useEditorStore.setState({
+      selectedNodeId: null,
+      selectedNodeIds: [],
+      activeClassId: null,
+      selectedSelectorClassId: classId,
+      propertiesPanel: { collapsed: false, x: 0, y: 0, width: 360 },
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    render(<PropertiesPanel variant="docked" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /delete selector \.class-1/i }))
+
+    expect(screen.getByRole('alertdialog', { name: /delete selector/i })).toBeDefined()
+    expect(screen.getByText(/this selector is used 1 time/i)).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: /^delete selector$/i }))
+
+    const state = useEditorStore.getState()
+    expect(state.site?.styleRules[classId]).toBeUndefined()
+    expect(state.selectedSelectorClassId).toBeNull()
+    expect(state.site?.pages[0].nodes[nodeId].classIds).not.toContain(classId)
+  })
+})
+
 describe('ClassComposer inline style filtering', () => {
   it('filters the inline style catalog without opening an autocomplete menu', () => {
     const { nodeId } = loadSiteWithClasses(1)

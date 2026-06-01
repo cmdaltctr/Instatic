@@ -338,7 +338,7 @@ Nodes that reference the rule by id keep working — only the rendered CSS outpu
   - `src/core/page-tree/styleRule.ts` — `classifySelectorCreateInput`; the shared classifier for selector creation surfaces
   - `src/admin/pages/site/store/styleRuleRename.ts` — `renameStyleRule`, `isValidCssSelector`; rename logic for both class-kind and ambient rules
   - `src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx` — picker UI: pill strip, input, creation, context menus
-  - `src/admin/pages/site/panels/SelectorsPanel/SelectorDialogs.tsx` — `SelectorNameDialog`, `DeleteSelectorDialog`; shared dialog components for the Selectors panel
+  - `src/admin/pages/site/panels/SelectorDialogs.tsx` — `SelectorNameDialog`, `DeleteSelectorDialog`; shared dialog components for selector editing surfaces
   - `src/admin/pages/site/panels/SelectorsPanel/SelectorContextMenu.tsx` — right-click context menu for selector rows
 - Gate tests:
   - `src/__tests__/architecture/framework-typography-spacing.test.ts`

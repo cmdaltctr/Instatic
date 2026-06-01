@@ -3,8 +3,8 @@ import { styleRuleSelector, type StyleRule } from '@core/page-tree'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { Input } from '@ui/components/Input'
-import dialogStyles from '../../../../shared/dialogs/SiteCreateDialog/SiteCreateDialog.module.css'
-import styles from './SelectorsPanel.module.css'
+import dialogStyles from '../../../shared/dialogs/SiteCreateDialog/SiteCreateDialog.module.css'
+import styles from './SelectorDialogs.module.css'
 
 export type SelectorDialogMode = 'auto' | 'class' | 'ambient'
 

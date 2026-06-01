@@ -121,7 +121,7 @@ describe('generated utility classes in editor panels', () => {
     expect(within(panel).queryByRole('searchbox', { name: /search class style properties to add/i })).toBeNull()
   })
 
-  it('hides the rename pencil in the selector header for generated utilities', () => {
+  it('hides selector edit actions in the selector header for generated utilities', () => {
     useEditorStore.setState({
       selectedNodeId: null,
       selectedNodeIds: [],
@@ -133,6 +133,7 @@ describe('generated utility classes in editor panels', () => {
 
     const panel = screen.getByTestId('properties-panel')
     expect(within(panel).queryByRole('button', { name: /rename selector \.text-primary/i })).toBeNull()
+    expect(within(panel).queryByRole('button', { name: /delete selector \.text-primary/i })).toBeNull()
   })
 
   it('marks generated utilities in the selectors panel and disables editing actions', () => {

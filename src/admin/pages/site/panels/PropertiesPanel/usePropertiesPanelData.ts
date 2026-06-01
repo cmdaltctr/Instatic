@@ -18,6 +18,7 @@ import { useEditorStore, selectSelectedNode } from '@site/store/store'
 import { registry } from '@core/module-engine'
 import { getAncestors, resolveProps } from '@core/page-tree'
 import { loopSourceRegistry } from '@core/loops/registry'
+import { buildSelectorUsageMap, formatSelectorUsage } from '../selectorUsage'
 import type {
   AnyModuleDefinition,
 } from '@core/module-engine'
@@ -64,6 +65,7 @@ export interface PropertiesPanelData {
   selectedSelectorClassId: string | null
   selectedSelectorClassIds: string[]
   isSelectorMultiSelect: boolean
+  selectedSelectorUsage: string
 
   // ─── Loop / dynamic-binding context ────────────────────────────────────
   enclosingLoopSource: LoopEntitySource | undefined
@@ -83,6 +85,7 @@ export interface PropertiesPanelData {
   setPropertiesPanelMode: (mode: PropertiesPanelMode) => void
   setFocusedPanel: (panel: FocusedPanel) => void
   renameClass: (classId: string, name: string) => void
+  deleteClass: (classId: string) => void
   renameNode: (nodeId: string, label: string) => void
 
   // ─── Prop change handlers ──────────────────────────────────────────────
@@ -102,6 +105,7 @@ export function usePropertiesPanelData(): PropertiesPanelData {
   const clearNodeDynamicBinding = useEditorStore((s) => s.clearNodeDynamicBinding)
   const setBreakpointOverride = useEditorStore((s) => s.setBreakpointOverride)
   const renameClass = useEditorStore((s) => s.renameClass)
+  const deleteClass = useEditorStore((s) => s.deleteClass)
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
   const renameNode = useEditorStore((s) => s.renameNode)
   const site = useEditorStore((s) => s.site)
@@ -148,6 +152,9 @@ export function usePropertiesPanelData(): PropertiesPanelData {
   const selectedSelectorClass = selectedSelectorClassId
     ? site?.styleRules[selectedSelectorClassId] ?? null
     : null
+  const selectedSelectorUsage = selectedSelectorClassId
+    ? formatSelectorUsage(buildSelectorUsageMap(site).get(selectedSelectorClassId) ?? 0)
+    : formatSelectorUsage(0)
   const activeClass =
     !selectedSelectorClass && activeClassId && selectedNode
       ? site?.styleRules[activeClassId] ?? null
@@ -240,6 +247,7 @@ export function usePropertiesPanelData(): PropertiesPanelData {
     selectedSelectorClassId,
     selectedSelectorClassIds,
     isSelectorMultiSelect,
+    selectedSelectorUsage,
 
     enclosingLoopSource,
     enclosingLoopTableId,
@@ -256,6 +264,7 @@ export function usePropertiesPanelData(): PropertiesPanelData {
     setPropertiesPanelMode,
     setFocusedPanel,
     renameClass,
+    deleteClass,
     renameNode,
 
     handleChange,

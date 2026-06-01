@@ -58,6 +58,13 @@ interface PropertiesPanelProps {
   variant?: PanelVariant
 }
 
+function handlePropertiesPanelKeyDown(e: React.KeyboardEvent) {
+  if (e.key === 'F6') {
+    e.preventDefault()
+    useEditorStore.getState().cycleFocusedPanel()
+  }
+}
+
 // ---------------------------------------------------------------------------
 // PropertiesPanel
 // ---------------------------------------------------------------------------
@@ -91,14 +98,6 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
     if (panel.contains(document.activeElement)) return
     panel.focus()
   }, [data.focusedPanel, dragPanelElementRef])
-
-  // ─── Panel keyboard shortcuts ──────────────────────────────────────────────
-  const handlePanelKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'F6') {
-      e.preventDefault()
-      useEditorStore.getState().cycleFocusedPanel()
-    }
-  }
 
   if (
     data.collapsed ||
@@ -136,7 +135,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
       aria-label="Properties"
       tabIndex={-1}
       data-variant={variant}
-      onKeyDown={handlePanelKeyDown}
+      onKeyDown={handlePropertiesPanelKeyDown}
       onFocus={() => data.setFocusedPanel('properties')}
       onClick={(e) => e.stopPropagation()}
       style={
@@ -155,18 +154,22 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
       <PanelHeader
         panelId="properties"
         title="Properties"
-        titleContent={renderHeaderTitleContent({
-          selectedSelectorClass: data.selectedSelectorClass,
-          isSelectorMultiSelect: data.isSelectorMultiSelect,
-          selectedSelectorClassIdsCount: data.selectedSelectorClassIds.length,
-          isMultiSelect: data.isMultiSelect,
-          selectedNodeIdsCount: data.selectedNodeIds.length,
-          selectedNode: data.selectedNode,
-          selectedNodeId: data.selectedNodeId,
-          definition: data.definition,
-          renameClass: data.renameClass,
-          renameNode: data.renameNode,
-        })}
+        titleContent={(
+          <HeaderTitleContent
+            selectedSelectorClass={data.selectedSelectorClass}
+            isSelectorMultiSelect={data.isSelectorMultiSelect}
+            selectedSelectorClassIdsCount={data.selectedSelectorClassIds.length}
+            isMultiSelect={data.isMultiSelect}
+            selectedNodeIdsCount={data.selectedNodeIds.length}
+            selectedNode={data.selectedNode}
+            selectedNodeId={data.selectedNodeId}
+            definition={data.definition}
+            renameClass={data.renameClass}
+            deleteClass={data.deleteClass}
+            selectedSelectorUsage={data.selectedSelectorUsage}
+            renameNode={data.renameNode}
+          />
+        )}
         onClose={data.togglePropertiesPanel}
         dragHandleProps={variant === 'floating' ? headerDragProps : undefined}
       >
@@ -212,7 +215,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
 // Lifted out of the main body so the JSX above stays scannable.
 // ---------------------------------------------------------------------------
 
-interface HeaderTitleArgs {
+interface HeaderTitleProps {
   selectedSelectorClass: ReturnType<typeof usePropertiesPanelData>['selectedSelectorClass']
   isSelectorMultiSelect: boolean
   selectedSelectorClassIdsCount: number
@@ -222,23 +225,25 @@ interface HeaderTitleArgs {
   selectedNodeId: string | null
   definition: ReturnType<typeof usePropertiesPanelData>['definition']
   renameClass: (classId: string, name: string) => void
+  deleteClass: (classId: string) => void
+  selectedSelectorUsage: string
   renameNode: (nodeId: string, label: string) => void
 }
 
-function renderHeaderTitleContent(args: HeaderTitleArgs): React.ReactNode {
-  const {
-    selectedSelectorClass,
-    isSelectorMultiSelect,
-    selectedSelectorClassIdsCount,
-    isMultiSelect,
-    selectedNodeIdsCount,
-    selectedNode,
-    selectedNodeId,
-    definition,
-    renameClass,
-    renameNode,
-  } = args
-
+function HeaderTitleContent({
+  selectedSelectorClass,
+  isSelectorMultiSelect,
+  selectedSelectorClassIdsCount,
+  isMultiSelect,
+  selectedNodeIdsCount,
+  selectedNode,
+  selectedNodeId,
+  definition,
+  renameClass,
+  deleteClass,
+  selectedSelectorUsage,
+  renameNode,
+}: HeaderTitleProps): React.ReactNode {
   if (isSelectorMultiSelect) {
     return <MultiSelectorHeader count={selectedSelectorClassIdsCount} />
   }
@@ -246,7 +251,9 @@ function renderHeaderTitleContent(args: HeaderTitleArgs): React.ReactNode {
     return (
       <SelectorHeader
         cls={selectedSelectorClass}
+        usage={selectedSelectorUsage}
         onRename={(name) => renameClass(selectedSelectorClass.id, name)}
+        onDelete={() => deleteClass(selectedSelectorClass.id)}
       />
     )
   }

@@ -110,8 +110,10 @@
 
 .headerNodeLabel {
     min-width: 0;
+    margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    font: inherit;
     white-space: nowrap;
 }
 

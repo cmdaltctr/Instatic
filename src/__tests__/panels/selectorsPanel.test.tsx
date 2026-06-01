@@ -10,7 +10,7 @@ import {
   formatSelectorUsage,
   getReusableClasses,
   getSelectorStyleSummary,
-} from '@site/panels/SelectorsPanel/selectorUsage'
+} from '@site/panels/selectorUsage'
 import { selectRightSidebarExpanded, useEditorStore } from '@site/store/store'
 import type { StyleRule } from '@core/page-tree'
 import { makeNode, makePage, makeSite } from '../fixtures'
