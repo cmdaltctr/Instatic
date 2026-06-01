@@ -8,7 +8,7 @@
  * without downloading the page-builder graph on first paint.
  */
 
-import { lazy, Suspense, useRef, type CSSProperties, type ReactNode } from 'react'
+import { lazy, Suspense, useRef, type CSSProperties, type ReactNode, type SyntheticEvent } from 'react'
 import { Toolbar } from '@site/toolbar/Toolbar'
 import { AdminSectionNavigation } from '@admin/shared/AdminSectionNavigation'
 import { ConfirmDeleteProvider } from '@admin/shared/dialogs/ConfirmDeleteDialog'
@@ -21,9 +21,12 @@ import { usePluginEventBridge } from '@admin/pages/plugins/hooks/usePluginEventB
 import { useCurrentAdminUser } from '@admin/sessionContext'
 import { useAdminUi } from '@admin/state/adminUi'
 import { useSiteSummary } from '@admin/state/useSiteSummary'
+import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
+import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
 import type { AdminWorkspace } from '@admin/workspace'
 import styles from '../AdminCanvasLayout/AdminCanvasLayout.module.css'
+import workspaceStyles from './AdminWorkspaceCanvasLayout.module.css'
 import rightSidebarStyles from '@site/sidebars/RightSidebar/RightSidebar.module.css'
 
 const SettingsModal = lazy(() =>
@@ -62,7 +65,9 @@ export function AdminWorkspaceCanvasLayout({
   const faviconUrl = editorSiteName !== null ? editorFaviconUrl : adminUiFaviconUrl
   const settingsOpen = useAdminUi((s) => s.settingsOpen)
   const propertiesPanelCollapsed = useEditorStore((s) => s.propertiesPanel.collapsed)
+  const setPropertiesPanel = useEditorStore((s) => s.setPropertiesPanel)
   const hasRightSidebar = workspace !== 'media' && !propertiesPanelCollapsed
+  const hasReopenableRightPanel = workspace !== 'media' && Boolean(contentRightPanel) && !hasRightSidebar
 
   return (
     <div className={styles.shell} data-editor-density={density}>
@@ -89,6 +94,12 @@ export function AdminWorkspaceCanvasLayout({
             <div className={styles.canvasContent} key={workspace}>
               {contentCanvas}
             </div>
+            {hasReopenableRightPanel && (
+              <WorkspaceRightPanelNotch
+                workspace={workspace}
+                onOpen={() => setPropertiesPanel({ collapsed: false })}
+              />
+            )}
           </div>
           <WorkspaceRightSidebar
             hidden={workspace === 'media'}
@@ -102,6 +113,43 @@ export function AdminWorkspaceCanvasLayout({
           <SettingsModal />
         </Suspense>
       )}
+    </div>
+  )
+}
+
+interface WorkspaceRightPanelNotchProps {
+  workspace: WorkspaceCanvasSection
+  onOpen: () => void
+}
+
+function WorkspaceRightPanelNotch({ workspace, onOpen }: WorkspaceRightPanelNotchProps) {
+  const label = workspace === 'content' ? 'settings' : 'inspector'
+  const testId = workspace === 'content' ? 'content-settings-notch' : `${workspace}-inspector-notch`
+  const stopCanvasInteraction = (event: SyntheticEvent) => {
+    event.stopPropagation()
+  }
+
+  return (
+    <div
+      className={workspaceStyles.rightPanelNotchShell}
+      data-testid={testId}
+      onClick={stopCanvasInteraction}
+      onMouseDown={stopCanvasInteraction}
+      aria-label={`${label} panel`}
+    >
+      <div className={workspaceStyles.rightPanelNotch}>
+        <Button
+          variant="ghost"
+          size="micro"
+          iconOnly
+          className={workspaceStyles.rightPanelNotchButton}
+          aria-label={`Open ${label} panel`}
+          tooltip={`Open ${label} panel`}
+          onClick={onOpen}
+        >
+          <Settings2SolidIcon size={13} aria-hidden="true" />
+        </Button>
+      </div>
     </div>
   )
 }

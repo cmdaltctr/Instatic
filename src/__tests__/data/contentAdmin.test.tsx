@@ -559,6 +559,32 @@ describe('ContentPage', () => {
     expect(await screen.findByTestId('content-settings-panel')).toBeDefined()
   })
 
+  it('reopens the selected entry settings panel from the canvas corner after closing it', async () => {
+    render(
+      <AdminTestProviders>
+        <ContentPage />
+      </AdminTestProviders>,
+    )
+
+    expect(await screen.findByRole('region', { name: 'Posts' })).toBeDefined()
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Posts' }))
+        .getByRole('button', { name: /new post/i }),
+    )
+
+    expect(await screen.findByTestId('content-settings-panel')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: /close settings panel/i }))
+
+    expect(screen.queryByTestId('content-settings-panel')).toBeNull()
+    const openSettingsButton = screen.getByRole('button', { name: /open settings panel/i })
+    expect(openSettingsButton.closest('[data-testid="content-settings-notch"]')).toBeDefined()
+
+    fireEvent.click(openSettingsButton)
+
+    expect(await screen.findByTestId('content-settings-panel')).toBeDefined()
+    expect(screen.queryByRole('button', { name: /open settings panel/i })).toBeNull()
+  })
+
   it('shows entry authors in the content list and reassigns the selected entry author', async () => {
     const user = userEvent.setup()
     const calls: FetchCall[] = []

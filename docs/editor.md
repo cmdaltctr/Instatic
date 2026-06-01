@@ -177,6 +177,8 @@ The `adminUi` store (`src/admin/state/adminUi.ts`) is the small cross-shell stat
 
 `AdminWorkspaceCanvasLayout` and `AdminPageLayout` both call `useSiteSummary()` — a lightweight hook that fires a single `cmsAdapter.loadSite()` per session and writes the name + favicon into `adminUi`. The Site editor's `usePersistence` writes the same fields when it hydrates the full site, so after navigating to `/admin/site` the toolbar updates without a second fetch.
 
+When a Content or Data workspace has a right-side panel available but the user closes it, `AdminWorkspaceCanvasLayout` renders a compact top-right canvas notch to reopen that panel without changing the selected row or entry.
+
 ```text
 src/admin/
 ├── main.tsx                    ← React root mount
