@@ -387,7 +387,11 @@ const snap = await api.cms.content.getPublishedSnapshot(entryId)
 const { count } = await api.cms.content.republishAll()
 ```
 
+`tables.create(input)` accepts the plugin-facing field projection, then maps it to the host's canonical `DataField` schema before storage. `richText` fields default to Markdown format, `select` / `multiSelect` option `value`s become stable option IDs, and `relation.targetTableSlug` must resolve to an existing table slug.
+
 `republishAll` fires the full publish pipeline (`publish.before` → `publish.html` → `publish.after`), so other plugins' filters and listeners participate.
+
+Tree mutation and replacement payloads are validated against the canonical `@core/page-tree` TypeBox schemas before host dispatch. `insertNode.node` must be a complete `PageNode`, and `replace(tree)` must receive a complete `NodeTree` with a valid `rootNodeId`, matching node-map keys, resolvable child IDs, and no reachable cycles.
 
 #### Content events
 

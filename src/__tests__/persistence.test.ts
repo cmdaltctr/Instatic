@@ -188,6 +188,27 @@ describe('validateSite — rejects invalid data', () => {
     }
   })
 
+  it('throws when a page node-map key does not match the node id', () => {
+    const p = validSite()
+    p.pages[0].nodes['heading-1'].id = 'different-id'
+    const shell = validateSite(p)
+    expect(() => validatePages(shell, p.pages)).toThrow(SiteValidationError)
+  })
+
+  it('throws when page children reference a missing node', () => {
+    const p = validSite()
+    p.pages[0].nodes.root.children = ['missing-child']
+    const shell = validateSite(p)
+    expect(() => validatePages(shell, p.pages)).toThrow(SiteValidationError)
+  })
+
+  it('throws when page children form a reachable cycle', () => {
+    const p = validSite()
+    p.pages[0].nodes['heading-1'].children = ['root']
+    const shell = validateSite(p)
+    expect(() => validatePages(shell, p.pages)).toThrow(SiteValidationError)
+  })
+
   it('throws for invalid public page slugs', () => {
     const p = validSite()
     p.pages[0].slug = 'About Us'

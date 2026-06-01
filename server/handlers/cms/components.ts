@@ -37,8 +37,8 @@ import {
   visualComponentToCells,
   vcSlugFromName,
 } from '../../../src/core/data/componentFromRow'
-import { parseVisualComponent } from '@core/visualComponents'
-import type { VisualComponent } from '@core/visualComponents'
+import { SiteValidationError, validateVisualComponentsForWrite } from '@core/persistence/validate'
+import { VisualComponentSchema, type VisualComponent } from '@core/visualComponents'
 import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'
 import { CMS_API_PREFIX } from './shared'
@@ -60,17 +60,22 @@ export async function handleComponentsRoutes(req: Request, db: DbClient): Promis
     const user = await requireCapability(req, db, 'site.structure.edit')
     if (user instanceof Response) return user
 
-    const ComponentsBodySchema = Type.Object({ components: Type.Array(Type.Unknown()) })
+    const ComponentsBodySchema = Type.Object({
+      components: Type.Array(VisualComponentSchema),
+    }, { additionalProperties: false })
     const body = await readValidatedBody(req, ComponentsBodySchema)
     if (!body) return badRequest('Invalid request body')
     const rawComponents = body.components
 
-    // Parse each VC from the raw array. Invalid entries are silently dropped —
-    // the client sends the in-memory VisualComponent shape.
-    const components: VisualComponent[] = rawComponents.flatMap((raw: unknown) => {
-      const vc = parseVisualComponent(raw)
-      return vc ? [vc] : []
-    })
+    let components: VisualComponent[]
+    try {
+      components = validateVisualComponentsForWrite(rawComponents)
+    } catch (err) {
+      if (err instanceof SiteValidationError) {
+        return badRequest(err.message)
+      }
+      throw err
+    }
 
     // Batch reconcile: create / update / soft-delete in a transaction
     await db.transaction(async (tx) => {

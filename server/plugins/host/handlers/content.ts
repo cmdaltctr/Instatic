@@ -47,8 +47,7 @@ import type {
   PublishedSnapshot,
 } from '@core/plugin-sdk/contentSchemas'
 import type { DataField, DataRow, DataTable } from '@core/data/schemas'
-import type { NodeTree, PageNode } from '@core/page-tree'
-import { applyTreeOperation } from '@core/page-tree'
+import { applyTreeOperation, parsePageNodeTree } from '@core/page-tree'
 import { hookBus } from '@core/plugins/hookBus'
 import {
   listDataTables,
@@ -75,6 +74,7 @@ import {
   assertContentTableAccess,
   assertHostPluginPermission,
 } from '../registry'
+import { buildContentTableIdLookup, pluginContentFieldsToDataFields } from '../contentFieldMapping'
 import { replyApiOk } from '../workerPool'
 import type { HostPluginRecord } from '../types'
 
@@ -334,6 +334,10 @@ export async function handleContentTablesCreate(
   if (input.slug === 'pages' || input.slug === 'posts' || input.slug === 'components') {
     throw new Error(`Cannot create a table with the reserved system slug "${input.slug}"`)
   }
+  const tableIdBySlug = input.fields?.some((field) => field.type === 'relation')
+    ? await buildContentTableIdLookup(db)
+    : new Map<string, string>()
+  const fields = pluginContentFieldsToDataFields(input.fields ?? [], tableIdBySlug)
   const created = await createDataTable(db, {
     name: input.name,
     slug: input.slug,
@@ -342,7 +346,7 @@ export async function handleContentTablesCreate(
     singularLabel: input.singularLabel,
     pluralLabel: input.pluralLabel,
     primaryFieldId: input.primaryFieldId ?? 'title',
-    fields: (input.fields ?? []) as DataField[],
+    fields,
   })
   const slugLookup = await buildTableSlugLookup(db)
   replyApiOk(msg.pluginId, msg.correlationId, tableSchema(created, 0, slugLookup))
@@ -687,14 +691,18 @@ export async function handleContentTreeMutate(
   if (!initial || typeof initial !== 'object') {
     throw new Error(`Field "${fieldId}" on entry "${entryId}" is empty — cannot mutate a missing tree`)
   }
-  let tree = structuredClone(initial) as NodeTree<PageNode>
+  let tree = parsePageNodeTree(
+    structuredClone(initial),
+    `entry "${entryId}" field "${fieldId}"`,
+  )
 
   const affectedNodeIds: string[] = []
   for (const op of operations) {
-    const result = applyTreeOperation(tree, op as Parameters<typeof applyTreeOperation>[1])
+    const result = applyTreeOperation(tree, op)
     tree = result.tree
     affectedNodeIds.push(...result.affectedNodeIds)
   }
+  parsePageNodeTree(tree, `entry "${entryId}" field "${fieldId}" after mutation`)
 
   const actor: PluginActor = { kind: 'plugin', pluginId: msg.pluginId }
   const nextCells = await applyCellsFilter(
@@ -723,24 +731,14 @@ export async function handleContentTreeReplace(
   const { row, table } = await resolvePageTreeField(db, entryId, fieldId)
   assertContentTableAccess(entry, table.slug, 'write')
 
-  if (!replacement || typeof replacement !== 'object') {
-    throw new Error(`Replacement for field "${fieldId}" must be an object`)
-  }
-  // Light structural validation — `nodes` map + `rootNodeId`. Deeper
-  // module-level validation happens at render time via the module
-  // registry; this guards against the most common shape errors.
-  const candidate = replacement as { nodes?: unknown; rootNodeId?: unknown }
-  if (
-    !candidate.nodes ||
-    typeof candidate.nodes !== 'object' ||
-    typeof candidate.rootNodeId !== 'string'
-  ) {
-    throw new Error(`Replacement tree must have { nodes: object, rootNodeId: string }`)
-  }
+  const replacementTree = parsePageNodeTree(
+    replacement,
+    `entry "${entryId}" field "${fieldId}" replacement`,
+  )
 
   const actor: PluginActor = { kind: 'plugin', pluginId: msg.pluginId }
   const nextCells = await applyCellsFilter(
-    { ...row.cells, [fieldId]: replacement },
+    { ...row.cells, [fieldId]: replacementTree },
     { tableSlug: table.slug, entryId, actor },
   )
   const updated = await saveDataRowDraft(

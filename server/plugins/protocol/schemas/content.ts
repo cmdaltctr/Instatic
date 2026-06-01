@@ -6,13 +6,13 @@
  * `server/plugins/protocol/parser.ts`; per-call shapes are composed via
  * `apiCallSchema` in `server/plugins/protocol/apiCallSchema.ts`.
  *
- * Shapes are intentionally loose at the JSON layer (`Type.Unknown()` for
- * cells / tree nodes) — the host handler does deeper validation against the
- * canonical CMS schemas (`@core/data/schemas`, `@core/page-tree`) so a
- * malformed payload surfaces with a useful host-side error message.
+ * Shapes are intentionally loose only for entry `cells`; page-tree operations
+ * and replacements use the canonical `@core/page-tree` TypeBox schemas so
+ * malformed cross-VM tree payloads fail before host dispatch.
  */
 
 import { Type } from '@sinclair/typebox'
+import { NodeTreeSchema } from '@core/page-tree'
 import {
   ContentListOptionsSchema,
   CreateContentEntryInputSchema,
@@ -84,7 +84,7 @@ export const ContentTreeMutateArgsSchema = Type.Tuple([
 export const ContentTreeReplaceArgsSchema = Type.Tuple([
   EntryIdSchema,
   FieldIdSchema,
-  Type.Unknown(),
+  NodeTreeSchema,
 ])
 
 // ── Cross-table ────────────────────────────────────────────────────────────

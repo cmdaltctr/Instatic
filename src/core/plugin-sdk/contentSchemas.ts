@@ -27,6 +27,12 @@
 
 import { Type, type Static } from '@core/utils/typeboxHelpers'
 import { DataTableKindSchema, DataRowStatusSchema } from '@core/data/schemas'
+import {
+  TreeMutateResultSchema,
+  TreeOperationSchema,
+  type TreeMutateResult,
+  type TreeOperation,
+} from '@core/page-tree'
 import { StorageFilterValueSchema } from './storageSchemas'
 import { PluginContentFieldSchema } from './types/content'
 
@@ -130,77 +136,11 @@ export type ContentListResult = Static<typeof ContentListResultSchema>
 // Tree operations — the 11 named tree-mutation store actions
 // ---------------------------------------------------------------------------
 //
-// Mirrors the TreeOperation union exported by `@core/page-tree`. The handler delegates
-// each op through `applyTreeOperation` (same dispatcher the editor's store
-// reaches via `mutateActiveTree`). `node` and `wrapper` cells are unknown at
-// the schema layer — the underlying mutations validate per-node shape.
-
-export const TreeOperationSchema = Type.Union([
-  Type.Object({
-    kind: Type.Literal('insertNode'),
-    parentId: Type.String(),
-    index: Type.Integer({ minimum: 0 }),
-    node: Type.Unknown(),
-  }),
-  Type.Object({
-    kind: Type.Literal('updateNodeProps'),
-    nodeId: Type.String(),
-    props: Type.Record(Type.String(), Type.Unknown()),
-  }),
-  Type.Object({
-    kind: Type.Literal('setBreakpointOverride'),
-    nodeId: Type.String(),
-    breakpoint: Type.String(),
-    props: Type.Record(Type.String(), Type.Unknown()),
-  }),
-  Type.Object({
-    kind: Type.Literal('clearBreakpointOverride'),
-    nodeId: Type.String(),
-    breakpoint: Type.String(),
-  }),
-  Type.Object({
-    kind: Type.Literal('renameNode'),
-    nodeId: Type.String(),
-    name: Type.String(),
-  }),
-  Type.Object({
-    kind: Type.Literal('toggleNodeLocked'),
-    nodeId: Type.String(),
-  }),
-  Type.Object({
-    kind: Type.Literal('toggleNodeHidden'),
-    nodeId: Type.String(),
-  }),
-  Type.Object({
-    kind: Type.Literal('moveNode'),
-    nodeId: Type.String(),
-    parentId: Type.String(),
-    index: Type.Integer({ minimum: 0 }),
-  }),
-  Type.Object({
-    kind: Type.Literal('duplicateNode'),
-    nodeId: Type.String(),
-  }),
-  Type.Object({
-    kind: Type.Literal('wrapNode'),
-    nodeId: Type.String(),
-    wrapper: Type.Object({
-      moduleId: Type.String(),
-      defaults: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    }),
-  }),
-  Type.Object({
-    kind: Type.Literal('deleteNode'),
-    nodeId: Type.String(),
-  }),
-])
-export type ContentTreeOperation = Static<typeof TreeOperationSchema>
-
-export const TreeMutateResultSchema = Type.Object({
-  tree: Type.Unknown(),
-  affectedNodeIds: Type.Array(Type.String()),
-})
-export type TreeMutateResult = Static<typeof TreeMutateResultSchema>
+// The canonical runtime schemas live with the mutation engine in
+// `@core/page-tree` so the TypeScript union and TypeBox validation cannot drift.
+export { TreeOperationSchema, TreeMutateResultSchema }
+export type ContentTreeOperation = TreeOperation
+export type { TreeMutateResult }
 
 // ---------------------------------------------------------------------------
 // Search / published snapshot

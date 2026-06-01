@@ -22,13 +22,14 @@
  *   Parses each raw page via `parsePage`, then runs page-specific rules:
  *     1. Page slug syntax
  *     2. Page slug uniqueness
- *     3. rootNodeId must exist in each page's nodes map
+ *     3. Tree invariants: root exists, node-map keys match node ids,
+ *        child ids resolve, and reachable children are acyclic
  *     4. VC slot sync (uses visualComponents for context)
  *     5. Strip dangling VC refs in page trees
  *     6. Richtext prop sanitization in page node trees
  */
 
-import { parseSiteDocument, parsePage, type SiteShell } from '@core/page-tree'
+import { assertValidNodeTree, parseSiteDocument, parsePage, type SiteShell } from '@core/page-tree'
 import type { SiteDocument, Page } from '@core/page-tree'
 import type { VisualComponent } from '@core/visualComponents'
 import { isSafePath, normalizePath } from '@core/files/pathValidation'
@@ -133,7 +134,7 @@ export function validatePages(
     }
   }
   validatePageSlugList(pages)
-  validatePageRootNodesList(pages)
+  validatePageNodeTreesList(pages)
   syncVCSlotInstancesInPages(pages, visualComponents)
   stripDanglingVCRefsInPages(pages, visualComponents)
   sanitizePageNodeRichtextProps(pages)
@@ -158,7 +159,13 @@ export function validateVisualComponents(rawVCs: unknown[]): VisualComponent[] {
   // Step 1: parse
   const parsed: VisualComponent[] = rawVCs.flatMap((item) => {
     const vc = parseVisualComponent(item)
-    return vc ? [vc] : []
+    if (!vc) return []
+    try {
+      assertValidNodeTree(vc.tree, 'site.visualComponents[].tree')
+    } catch {
+      return []
+    }
+    return [vc]
   })
 
   // Steps 2–5: run the same post-checks that were in runShellPostChecks
@@ -167,6 +174,44 @@ export function validateVisualComponents(rawVCs: unknown[]): VisualComponent[] {
   stripDanglingVCRefsInVCs(acyclic)
   sanitizeVCNodeRichtextProps(acyclic)
   return acyclic
+}
+
+/**
+ * Strict write-boundary validation for full Visual Component roster saves.
+ *
+ * Unlike `validateVisualComponents`, this function never repairs by dropping a
+ * malformed component, duplicate name, cyclic dependency, or dangling VC ref.
+ * The caller is about to reconcile the complete roster in storage, so a dropped
+ * item would be interpreted as an intentional delete.
+ */
+export function validateVisualComponentsForWrite(rawVCs: unknown[]): VisualComponent[] {
+  const parsed: VisualComponent[] = []
+
+  for (let i = 0; i < rawVCs.length; i++) {
+    const vc = parseVisualComponent(rawVCs[i])
+    if (!vc) {
+      throw new SiteValidationError('invalid Visual Component', `site.visualComponents[${i}]`)
+    }
+    try {
+      assertValidNodeTree(vc.tree, `site.visualComponents[${i}].tree`)
+    } catch (err) {
+      throw siteValidationErrorFromTreeInvariant(err, `site.visualComponents[${i}].tree`)
+    }
+    parsed.push({ ...vc, name: vc.name.trim() })
+  }
+
+  validateStrictVCIdentity(parsed)
+  validateStrictVCRefs(parsed)
+  validateStrictVCDependencyGraph(parsed)
+  sanitizeVCNodeRichtextProps(parsed)
+  return parsed
+}
+
+function siteValidationErrorFromTreeInvariant(err: unknown, fallbackPath: string): SiteValidationError {
+  const message = err instanceof Error ? err.message : 'invalid node tree'
+  const colonIndex = message.indexOf(': ')
+  const path = colonIndex > 0 ? message.slice(0, colonIndex) : fallbackPath
+  return new SiteValidationError(message, path)
 }
 
 /**
@@ -363,6 +408,78 @@ function dedupeVCsByName(vcs: VisualComponent[]): VisualComponent[] {
   })
 }
 
+function validateStrictVCIdentity(vcs: VisualComponent[]): void {
+  const seenIds = new Map<string, number>()
+  const seenNames = new Map<string, number>()
+
+  for (let i = 0; i < vcs.length; i++) {
+    const vc = vcs[i]
+    if (seenIds.has(vc.id)) {
+      throw new SiteValidationError(
+        `duplicate Visual Component id "${vc.id}"`,
+        `site.visualComponents[${i}].id`,
+      )
+    }
+    seenIds.set(vc.id, i)
+
+    const nameValidation = validateComponentName(vc.name, [])
+    if (!nameValidation.ok) {
+      throw new SiteValidationError(nameValidation.reason, `site.visualComponents[${i}].name`)
+    }
+
+    if (seenNames.has(vc.name)) {
+      throw new SiteValidationError(
+        `duplicate Visual Component name "${vc.name}"`,
+        `site.visualComponents[${i}].name`,
+      )
+    }
+    seenNames.set(vc.name, i)
+  }
+}
+
+function validateStrictVCRefs(vcs: VisualComponent[]): void {
+  const knownIds = new Set(vcs.map((vc) => vc.id))
+
+  for (let i = 0; i < vcs.length; i++) {
+    for (const refId of getReferencedComponentIds(vcs[i])) {
+      if (!knownIds.has(refId)) {
+        throw new SiteValidationError(
+          `references missing Visual Component "${refId}"`,
+          `site.visualComponents[${i}].tree`,
+        )
+      }
+    }
+  }
+}
+
+function validateStrictVCDependencyGraph(vcs: VisualComponent[]): void {
+  const vcById = new Map(vcs.map((vc) => [vc.id, vc]))
+  const visited = new Set<string>()
+  const visiting = new Set<string>()
+
+  function visit(id: string, stack: string[]): void {
+    if (visiting.has(id)) {
+      throw new SiteValidationError(
+        `Visual Component dependency cycle: ${[...stack, id].join(' -> ')}`,
+        `site.visualComponents`,
+      )
+    }
+    if (visited.has(id)) return
+
+    const vc = vcById.get(id)
+    if (!vc) return
+
+    visiting.add(id)
+    for (const refId of getReferencedComponentIds(vc)) {
+      visit(refId, [...stack, id])
+    }
+    visiting.delete(id)
+    visited.add(id)
+  }
+
+  for (const vc of vcs) visit(vc.id, [])
+}
+
 /** Sanitize richtext-keyed props on every VC tree node. */
 function sanitizeVCNodeRichtextProps(vcs: VisualComponent[]): void {
   for (const vc of vcs) {
@@ -385,15 +502,13 @@ function validatePageSlugList(pages: Page[]): void {
   }
 }
 
-/** Rule 3: every page.rootNodeId must resolve in its nodes map. */
-function validatePageRootNodesList(pages: Page[]): void {
+/** Rule 3: every page tree must be internally coherent before save/hydration. */
+function validatePageNodeTreesList(pages: Page[]): void {
   for (let i = 0; i < pages.length; i++) {
-    const page = pages[i]
-    if (!page.nodes[page.rootNodeId]) {
-      throw new SiteValidationError(
-        `rootNodeId "${page.rootNodeId}" not found in nodes`,
-        `site.pages[${i}].rootNodeId`,
-      )
+    try {
+      assertValidNodeTree(pages[i], `site.pages[${i}]`)
+    } catch (err) {
+      throw siteValidationErrorFromTreeInvariant(err, `site.pages[${i}]`)
     }
   }
 }

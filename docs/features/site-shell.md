@@ -254,6 +254,8 @@ The shell is saved independently of pages / VCs. Three save paths:
 
 The editor's auto-save scheduler (`usePersistence.ts`) batches dirty changes and fires the matching save endpoint. Granular write gates (`SITE_WRITE_CAPABILITIES`) enforce what each role can actually change inside the diff.
 
+The page and component roster endpoints are fail-closed: because each reconcile soft-deletes stored rows missing from the incoming roster, malformed entries reject the whole save instead of being repaired by dropping entries. Page and VC trees must have a valid root, matching node-map keys, resolvable child IDs, and no reachable child cycles. Component saves also reject duplicate IDs/names, missing VC refs, and dependency cycles. Tolerant repair remains limited to reads of persisted data where dropping bad entries cannot be misread as an intentional delete request.
+
 ### Atomic diff validation
 
 The shell save handler validates the diff before applying — e.g. a user with only `site.content.edit` can't change a class definition (style-edit) or rename a breakpoint (structure-edit). The diff validator is in `src/core/persistence/validate.ts` → `validateSite`.

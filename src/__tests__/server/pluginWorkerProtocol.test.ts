@@ -68,6 +68,48 @@ describe('plugin worker IPC protocol', () => {
     expect(parsed.args[0]).toEqual({ enabled: true, label: 'Workflow' })
   })
 
+  it('rejects malformed tree mutation nodes before host dispatch', () => {
+    expect(() =>
+      parseApiCall({
+        kind: 'api-call',
+        correlationId: 'req_5',
+        pluginId: 'acme.workflow',
+        target: 'cms.content.tree.mutate',
+        args: [
+          'entry-1',
+          'body',
+          [{
+            kind: 'insertNode',
+            parentId: 'root',
+            index: 0,
+            node: { id: 'broken-node' },
+          }],
+        ],
+      }),
+    ).toThrow(ApiCallValidationError)
+  })
+
+  it('rejects malformed tree replacements before host dispatch', () => {
+    expect(() =>
+      parseApiCall({
+        kind: 'api-call',
+        correlationId: 'req_6',
+        pluginId: 'acme.workflow',
+        target: 'cms.content.tree.replace',
+        args: [
+          'entry-1',
+          'body',
+          {
+            rootNodeId: 'root',
+            nodes: {
+              root: { id: 'root' },
+            },
+          },
+        ],
+      }),
+    ).toThrow(ApiCallValidationError)
+  })
+
   it('keeps host dispatch behind the protocol parser', async () => {
     const source = await readFile(
       new URL('../../../server/plugins/host/workerPool.ts', import.meta.url),

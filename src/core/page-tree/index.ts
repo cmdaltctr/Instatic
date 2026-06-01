@@ -13,6 +13,12 @@
 export { BaseNodeSchema, parsePropBindings } from './baseNode'
 export { NodeTreeSchema } from './treeSchema'
 export { PageNodeSchema } from './pageNode'
+export {
+  TreeOperationSchema,
+  TreeMutateResultSchema,
+  assertValidNodeTree,
+  parsePageNodeTree,
+} from './operationSchema'
 export { PageSchema } from './page'
 export { StyleRuleSchema, StyleRuleKindSchema, classKindSelector, parseStyleRule } from './styleRule'
 export { ConditionSchema, ConditionDefSchema } from './condition'
@@ -23,6 +29,7 @@ export type { Breakpoint } from './breakpoint'
 export type { DynamicPropBinding } from './dynamicBinding'
 export type { PageTemplateConfig } from './pageTemplate'
 export type { PageNode } from './pageNode'
+export type { TreeOperation, TreeMutateResult } from './operationSchema'
 export type { Page } from './page'
 export type { CSSPropertyBag } from './cssPropertyBag'
 export type { StyleRule, StyleRuleKind } from './styleRule'
@@ -104,7 +111,7 @@ export {
   applyTreeOperation,
 } from './mutations'
 
-export type { TreeOperation, ApplyTreeOperationResult } from './mutations'
+export type { ApplyTreeOperationResult } from './mutations'
 
 export { cloneScopedClassesForNodeMap } from './scopedClassClone'
 

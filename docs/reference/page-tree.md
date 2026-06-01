@@ -76,6 +76,18 @@ There is no separate `pages` table, no `page_versions` table. Everything content
 
 ---
 
+## Runtime Validation
+
+The canonical TypeBox schemas for tree mutation RPCs live with the tree engine:
+
+- `TreeOperationSchema` validates the 11 `applyTreeOperation` variants. Insert operations require a complete `PageNode`.
+- `TreeMutateResultSchema` validates the `{ tree, affectedNodeIds }` response shape.
+- `parsePageNodeTree(value)` validates a `NodeTree` payload and then checks tree invariants that JSON Schema cannot express: `rootNodeId` must exist, node-map keys must match each node's `id`, child IDs must resolve, and the reachable tree must be acyclic.
+
+Page and Visual Component persistence runs the same invariant check before accepting trees. Plugin `cms.content.tree.mutate` and `cms.content.tree.replace` use these schemas before storing page-tree cells, so cross-VM payloads ride the same tree contract as the editor.
+
+---
+
 ## The mutation API
 
 All mutations live in `src/core/page-tree/mutations.ts`. They take a `NodeTree<PageNode>` (or sometimes a `SiteDocument` for cross-page operations) and mutate it in place — they're written for use inside Immer drafts.

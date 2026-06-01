@@ -9,7 +9,7 @@
  * module import each other via relative paths, never through this barrel.
  */
 
-export { parseVisualComponent } from './schemas'
+export { VisualComponentSchema, parseVisualComponent } from './schemas'
 export type { VisualComponent, VCNode, VCParam, VCParamType } from './schemas'
 
 export { instantiateVCAtRef } from './instantiate'

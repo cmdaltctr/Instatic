@@ -3,6 +3,7 @@ import type { Page } from './page'
 import type { PageNode } from './pageNode'
 import type { SiteDocument } from './siteDocument'
 import type { NodeTree } from './treeSchema'
+import type { TreeOperation } from './operationSchema'
 import { getParent, isAncestor } from './selectors'
 import { normalizePageSlug } from './slugs'
 import { cloneScopedClassesForNodeMap } from './scopedClassClone'
@@ -688,24 +689,6 @@ function ancestorChildOf(
 // The dispatcher does NOT clone the tree on its own — it mutates the input.
 // Callers that need a pure read-only path must clone (`structuredClone`) the
 // tree before passing it in.
-
-export type TreeOperation =
-  | { kind: 'insertNode'; parentId: string; index: number; node: PageNode }
-  | { kind: 'updateNodeProps'; nodeId: string; props: Record<string, unknown> }
-  | {
-      kind: 'setBreakpointOverride'
-      nodeId: string
-      breakpoint: string
-      props: Record<string, unknown>
-    }
-  | { kind: 'clearBreakpointOverride'; nodeId: string; breakpoint: string }
-  | { kind: 'renameNode'; nodeId: string; name: string }
-  | { kind: 'toggleNodeLocked'; nodeId: string }
-  | { kind: 'toggleNodeHidden'; nodeId: string }
-  | { kind: 'moveNode'; nodeId: string; parentId: string; index: number }
-  | { kind: 'duplicateNode'; nodeId: string }
-  | { kind: 'wrapNode'; nodeId: string; wrapper: { moduleId: string; defaults?: Record<string, unknown> } }
-  | { kind: 'deleteNode'; nodeId: string }
 
 export interface ApplyTreeOperationResult {
   tree: NodeTree<PageNode>
