@@ -145,7 +145,7 @@ describe('dynamic binding controls', () => {
     fireEvent.click(authorNameBtn!)
 
     // The prop's text value now contains a token appended to the
-    // original static text. No legacy single-binding is written.
+    // original static text. No structured binding is written.
     const node = useEditorStore.getState().site?.pages[0].nodes['text-1']
     expect(node?.props.text).toBe('Static fallback {currentEntry.authorName}')
     expect(node?.dynamicBindings?.text).toBeUndefined()

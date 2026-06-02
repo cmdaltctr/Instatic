@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { classifySelectorCreateInput, type PageNode, type StyleRule } from '@core/page-tree'
+import { classKindSelector, classifySelectorCreateInput, type PageNode, type StyleRule } from '@core/page-tree'
 import { deriveSelectorPickerModel } from '@site/panels/PropertiesPanel/selectorPickerModel'
 
 function rule(overrides: Partial<StyleRule> & { id: string; name: string }): StyleRule {
@@ -7,7 +7,7 @@ function rule(overrides: Partial<StyleRule> & { id: string; name: string }): Sty
     id: overrides.id,
     name: overrides.name,
     kind: 'class',
-    selector: `.${overrides.name}`,
+    selector: classKindSelector(overrides.name),
     order: 0,
     styles: {},
     contextStyles: {},

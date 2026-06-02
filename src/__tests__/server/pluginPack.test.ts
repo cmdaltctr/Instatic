@@ -45,7 +45,17 @@ describe('parsePluginPack', () => {
   it('rejects classes that are not namespaced under the plugin id', () => {
     expect(() =>
       parsePluginPack('acme.canvas', {
-        classes: [{ id: 'foreign-class', name: 'Foreign', styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 }],
+        classes: [{
+          id: 'foreign-class',
+          name: 'Foreign',
+          kind: 'class',
+          selector: '.Foreign',
+          order: 0,
+          styles: {},
+          contextStyles: {},
+          createdAt: 0,
+          updatedAt: 0,
+        }],
       }),
     ).toThrow(PluginPackError)
   })
@@ -55,8 +65,11 @@ describe('parsePluginPack', () => {
       classes: [{
         id: 'acme.canvas/hero',
         name: 'Hero',
+        kind: 'class',
+        selector: '.Hero',
+        order: 0,
         styles: { color: 'red' },
-        breakpointStyles: {},
+        contextStyles: {},
         createdAt: 0,
         updatedAt: 0,
       }],
@@ -70,8 +83,11 @@ describe('parsePluginPack', () => {
         classes: [{
           id: 'acme.canvas/hero',
           name: 'My Hero Class',
+          kind: 'class',
+          selector: '.hero',
+          order: 0,
           styles: {},
-          breakpointStyles: {},
+          contextStyles: {},
           createdAt: 0,
           updatedAt: 0,
         }],
@@ -83,8 +99,11 @@ describe('parsePluginPack', () => {
         classes: [{
           id: 'acme.canvas/hero',
           name: 'hero/with-slash',
+          kind: 'class',
+          selector: '.hero',
+          order: 0,
           styles: {},
-          breakpointStyles: {},
+          contextStyles: {},
           createdAt: 0,
           updatedAt: 0,
         }],
@@ -109,8 +128,11 @@ describe('applyPluginPackToSite', () => {
       classes: [{
         id: 'acme.canvas/hero',
         name: 'Hero',
+        kind: 'class' as const,
+        selector: '.Hero',
+        order: 0,
         styles: { color: 'red' },
-        breakpointStyles: {},
+        contextStyles: {},
         createdAt: 0,
         updatedAt: 0,
       }],
@@ -128,8 +150,11 @@ describe('applyPluginPackToSite', () => {
       classes: [{
         id: 'acme.canvas/hero',
         name: 'Hero v2',
+        kind: 'class' as const,
+        selector: '.Hero',
+        order: 0,
         styles: { color: 'blue' },
-        breakpointStyles: {},
+        contextStyles: {},
         createdAt: 0,
         updatedAt: 0,
       }],
@@ -140,8 +165,11 @@ describe('applyPluginPackToSite', () => {
         'acme.canvas/hero': {
           id: 'acme.canvas/hero',
           name: 'Hero',
+          kind: 'class',
+          selector: '.Hero',
+          order: 0,
           styles: { color: 'red' },
-          breakpointStyles: {},
+          contextStyles: {},
           createdAt: 0,
           updatedAt: 0,
         },

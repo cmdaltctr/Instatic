@@ -327,12 +327,12 @@ describe('resolveDynamicProps — token interpolation', () => {
     expect(props).toBe(input)
   })
 
-  it('combines legacy single-binding and token paths', () => {
+  it('combines structured binding and token paths', () => {
     const props = resolveDynamicProps(
       {
         text: 'static fallback',
-        // This prop value contains tokens AND has a single-binding —
-        // the single-binding wins, then tokens apply to the result.
+        // This prop value contains tokens AND has a structured binding —
+        // the binding wins, then tokens apply to the result.
         heading: 'Welcome to {site.name}',
       },
       { text: { source: 'page', field: 'title' } },

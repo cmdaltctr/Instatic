@@ -145,7 +145,7 @@ When the walker hits a `base.loop` node, it calls `renderLoop`:
 
 1. Resolves the loop's entity source (a built-in source like `content.entries`, `site.pages`, `site.media`, or a plugin-registered source).
 2. Pulls items from the loop fetch result (pre-warmed by `loopPrefetch.ts` during publish).
-3. Walks the loop's child variants in round-robin, pushing each item onto the entry stack so child nodes' `dynamicBindings` resolve `currentEntry.fieldId` against that item.
+3. Walks the loop's child variants in round-robin, pushing each item onto the entry stack so child nodes' `dynamicBindings` resolve `currentEntry.<field>` against that item.
 4. Concatenates the rendered variant HTML and returns it.
 
 See [docs/features/loops.md](loops.md) for sources, filters, and registration.

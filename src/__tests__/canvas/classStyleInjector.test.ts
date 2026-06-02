@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { generateCanvasClassCSS } from '@site/canvas/canvasClassCss'
 import { generateFrameworkColorUtilityClasses } from '@core/framework/colors'
-import type { StyleRule } from '@core/page-tree'
+import { classKindSelector, type StyleRule } from '@core/page-tree'
 
 function makeClass(
   id: string,
@@ -11,6 +11,9 @@ function makeClass(
   return {
     id,
     name: id,
+    kind: 'class',
+    selector: classKindSelector(id),
+    order: 0,
     styles,
     contextStyles,
     createdAt: 0,

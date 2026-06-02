@@ -183,15 +183,15 @@ export function parseTokenString(input: string): TokenSegmentNode[] {
 }
 
 // ---------------------------------------------------------------------------
-// Frame access — shared by the token interpolator and the legacy
-// single-binding resolver in `dynamicBindings.ts`. Exported so both
+// Frame access — shared by the token interpolator and the structured
+// binding resolver in `dynamicBindings.ts`. Exported so both
 // paths use one implementation; there is no second copy anywhere.
 // ---------------------------------------------------------------------------
 
 /**
  * Read a frame off the render context by source name. Returns the
  * frame's raw fields map, or `null` when the requested frame is empty
- * or absent (e.g. anonymous viewer, or `currentEntry` outside a loop).
+ * or absent (e.g. `currentEntry` outside a loop).
  */
 export function readFrame(
   source: DynamicPropBinding['source'],
@@ -258,7 +258,7 @@ export function interpolateTokens(input: string, context: TemplateRenderDataCont
     const frame = readFrame(seg.source, context)
     const rawValue = frame ? walkFieldPath(frame, seg.field) : undefined
     // A token resolves to its fallback (if any) when:
-    //   - the frame is absent (e.g. anonymous viewer)
+    //   - the frame is absent
     //   - the field path is undefined / null
     //   - the value is an empty string (treat "" as "missing" for the
     //     fallback decision so authors get meaningful copy)

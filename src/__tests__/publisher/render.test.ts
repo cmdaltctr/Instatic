@@ -312,8 +312,28 @@ describe('renderNode', () => {
     it('two-level: parent class lands on parent root, not on its classed child', () => {
       const siteDoc = makeSite({
         styleRules: {
-          'row-id':    { id: 'row-id',    name: 'row',          styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 },
-          'tprim-id':  { id: 'tprim-id',  name: 'text-primary', styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 },
+          'row-id': {
+            id: 'row-id',
+            name: 'row',
+            kind: 'class',
+            selector: '.row',
+            order: 0,
+            styles: {},
+            contextStyles: {},
+            createdAt: 0,
+            updatedAt: 0,
+          },
+          'tprim-id': {
+            id: 'tprim-id',
+            name: 'text-primary',
+            kind: 'class',
+            selector: '.text-primary',
+            order: 1,
+            styles: {},
+            contextStyles: {},
+            createdAt: 0,
+            updatedAt: 0,
+          },
         },
       })
       const page = makePage({
@@ -337,9 +357,39 @@ describe('renderNode', () => {
     it('three-level: each class lands on its own element (Vamos a la playa repro)', () => {
       const siteDoc = makeSite({
         styleRules: {
-          'bg-id':    { id: 'bg-id',    name: 'bg',           styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 },
-          'row-id':   { id: 'row-id',   name: 'row',          styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 },
-          'tprim-id': { id: 'tprim-id', name: 'text-primary', styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 },
+          'bg-id': {
+            id: 'bg-id',
+            name: 'bg',
+            kind: 'class',
+            selector: '.bg',
+            order: 0,
+            styles: {},
+            contextStyles: {},
+            createdAt: 0,
+            updatedAt: 0,
+          },
+          'row-id': {
+            id: 'row-id',
+            name: 'row',
+            kind: 'class',
+            selector: '.row',
+            order: 1,
+            styles: {},
+            contextStyles: {},
+            createdAt: 0,
+            updatedAt: 0,
+          },
+          'tprim-id': {
+            id: 'tprim-id',
+            name: 'text-primary',
+            kind: 'class',
+            selector: '.text-primary',
+            order: 2,
+            styles: {},
+            contextStyles: {},
+            createdAt: 0,
+            updatedAt: 0,
+          },
         },
       })
       const page = makePage({
@@ -378,7 +428,17 @@ describe('renderNode', () => {
       const reg = makeRegistry({ 'base.classed': classedDef })
       const siteDoc = makeSite({
         styleRules: {
-          'cta-id': { id: 'cta-id', name: 'cta', styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 },
+          'cta-id': {
+            id: 'cta-id',
+            name: 'cta',
+            kind: 'class',
+            selector: '.cta',
+            order: 0,
+            styles: {},
+            contextStyles: {},
+            createdAt: 0,
+            updatedAt: 0,
+          },
         },
       })
       const page = makePage({
@@ -399,7 +459,17 @@ describe('renderNode', () => {
       const reg = makeRegistry({ 'base.wrapped': wrappedDef })
       const siteDoc = makeSite({
         styleRules: {
-          'h-id': { id: 'h-id', name: 'hero', styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 },
+          'h-id': {
+            id: 'h-id',
+            name: 'hero',
+            kind: 'class',
+            selector: '.hero',
+            order: 0,
+            styles: {},
+            contextStyles: {},
+            createdAt: 0,
+            updatedAt: 0,
+          },
         },
       })
       const page = makePage({
@@ -458,7 +528,17 @@ describe('renderNode', () => {
     it('coexists with classIds — both class and style land on the root', () => {
       const siteDoc = makeSite({
         styleRules: {
-          'c-id': { id: 'c-id', name: 'card', styles: {}, breakpointStyles: {}, createdAt: 0, updatedAt: 0 },
+          'c-id': {
+            id: 'c-id',
+            name: 'card',
+            kind: 'class',
+            selector: '.card',
+            order: 0,
+            styles: {},
+            contextStyles: {},
+            createdAt: 0,
+            updatedAt: 0,
+          },
         },
       })
       const page = makePage({

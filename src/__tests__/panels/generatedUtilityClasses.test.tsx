@@ -5,7 +5,7 @@ import { ClassPicker } from '@site/panels/PropertiesPanel/ClassPicker'
 import { PropertiesPanel } from '@site/panels/PropertiesPanel/PropertiesPanel'
 import { SelectorsPanel } from '@site/panels/SelectorsPanel'
 import { useEditorStore } from '@site/store/store'
-import type { StyleRule } from '@core/page-tree'
+import { classKindSelector, type StyleRule } from '@core/page-tree'
 import { makeNode, makePage, makeSite } from '../fixtures'
 import '@modules/base/index'
 
@@ -15,6 +15,9 @@ function generatedTextClass(): StyleRule {
   return {
     id: GENERATED_CLASS_ID,
     name: 'text-primary',
+    kind: 'class',
+    selector: classKindSelector('text-primary'),
+    order: 0,
     styles: { color: 'var(--primary)' },
     contextStyles: {},
     generated: {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import type { StyleRule, SiteShell } from '@core/page-tree'
+import { classKindSelector, type StyleRule, type SiteShell } from '@core/page-tree'
 import { selectToolsForScope } from '../../../server/ai/tools'
 import {
   createCapabilityTestHarness,
@@ -23,8 +23,11 @@ function userClass(id: string): StyleRule {
   return {
     id,
     name: id,
+    kind: 'class',
+    selector: classKindSelector(id),
+    order: 0,
     styles: { color: 'var(--editor-text)' },
-    breakpointStyles: {},
+    contextStyles: {},
     createdAt: 1,
     updatedAt: 1,
   }

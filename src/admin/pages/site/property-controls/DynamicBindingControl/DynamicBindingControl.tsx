@@ -47,12 +47,12 @@ interface DynamicBindingControlProps {
    * Insertion mode — used for string-typed property controls. When set,
    * the picker INSERTS a `{source.field}` token into the prop value at
    * the input's caret (via `onInsertToken`) instead of writing a
-   * single-binding to `dynamicBindings`. The bound-state striped chip
+   * structured entry to `dynamicBindings`. The bound-state striped chip
    * is suppressed in this mode; the actual token shows up in the
    * underlying text input as ordinary characters.
    *
-   * Non-string controls (number, toggle) keep the legacy "replace whole
-   * prop" path because tokens can't carry non-string values.
+   * Non-string controls (number, toggle) keep the structured whole-prop
+   * path because tokens can't carry non-string values.
    */
   insertMode?: boolean
   /**
@@ -116,7 +116,7 @@ export function DynamicBindingControl({
       .catch(() => { /* ignore — label falls back to field id */ })
   }, [])
 
-  // ── Bound state (legacy single-binding only) ────────────────────────────
+  // ── Bound state (structured whole-prop binding) ─────────────────────────
   // In insert mode the binding lives inline in the prop value as a token,
   // so we never enter this branch — the children render normally and
   // tokens appear in the text input as ordinary characters.

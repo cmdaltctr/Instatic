@@ -272,7 +272,7 @@ describe('Gate CNC-4 — node-scoped classes hoisted and scope rewritten', () =>
           id: classId,
           name: '.module-ctr-4',
           styles: {},
-          breakpointStyles: {},
+          contextStyles: {},
           scope: { type: 'node', nodeId: containerId, role: 'module-style' },
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -331,7 +331,7 @@ describe('Gate CNC-5 — generic classes stay shared, not duplicated', () => {
           id: genericClassId,
           name: 'text-bold',
           styles: { fontWeight: 'bold' },
-          breakpointStyles: {},
+          contextStyles: {},
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }

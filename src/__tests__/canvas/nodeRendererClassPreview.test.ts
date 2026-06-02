@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'bun:test'
 import { getCanvasNodeClassName } from '@site/canvas/canvasNodeClassName'
-import type { StyleRule } from '@core/page-tree'
+import { classKindSelector, type StyleRule } from '@core/page-tree'
 
 function makeClass(id: string, name: string): StyleRule {
   return {
     id,
     name,
+    kind: 'class',
+    selector: classKindSelector(name),
+    order: 0,
     styles: {},
-    breakpointStyles: {},
+    contextStyles: {},
     createdAt: 0,
     updatedAt: 0,
   }

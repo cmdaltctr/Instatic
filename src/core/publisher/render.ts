@@ -7,7 +7,7 @@
  * `renderVisualComponentRef.ts`, `renderLoop.ts`). This file's job is the
  * page-level concerns the walker doesn't care about:
  *
- *   - template-context defaulting (page / site / route / viewer frames)
+ *   - template-context defaulting (page / site / route frames)
  *   - `<body>`-tag class injection from the root node's classIds
  *   - `<head>` meta tags (title, description, favicon, font import, lang)
  *   - runtime asset `<script>` tags + the importmap

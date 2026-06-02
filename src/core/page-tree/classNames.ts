@@ -1,5 +1,4 @@
 import type { StyleRule } from './styleRule'
-import { classKindSelector } from './styleRule'
 import { escapeCssIdentifier } from './cssIdentifier'
 
 export type StyleRuleRegistry = Record<string, StyleRule> | null | undefined
@@ -29,12 +28,10 @@ export function assertValidCssClassName(name: string): void {
  * Return the CSS selector to emit for a style rule.
  *
  *   - kind:'class':   `rule.selector` (always pre-built as `.<escaped-name>`).
- *                     Backfilled from the name if a legacy entry has no selector.
  *   - kind:'ambient': `rule.selector` verbatim (`h1 > span`, `.hero .title`, ...).
  */
-export function styleRuleSelector(cls: Pick<StyleRule, 'name' | 'selector'>): string {
-  if (cls.selector && cls.selector.length > 0) return cls.selector
-  return classKindSelector(cls.name)
+export function styleRuleSelector(cls: Pick<StyleRule, 'selector'>): string {
+  return cls.selector
 }
 
 function classNameForClassId(
@@ -45,7 +42,7 @@ function classNameForClassId(
   if (!cls) return null
   // Only class-kind rules contribute a token to the node's `class=` attribute.
   // Ambient rules attach by selector matching, not by a class-attribute token.
-  if (cls.kind && cls.kind !== 'class') return null
+  if (cls.kind !== 'class') return null
   return cls.name
 }
 

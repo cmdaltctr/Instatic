@@ -3,14 +3,14 @@
 Templates — the mechanism that lets one page layout render many rows. Two flavors:
 
 1. **Entry templates** — a special page in the `pages` table that renders an individual row from a postType (e.g. one blog post per template). Selected automatically by the public route `/<routeBase>/<rowSlug>`.
-2. **Dynamic bindings** — per-node prop bindings that resolve against context frames (`currentEntry`, `parentEntry`, `site`, `viewer`, `route`) at render time. Used inside loops and entry templates.
+2. **Dynamic bindings** — per-node prop bindings that resolve against context frames (`currentEntry`, `parentEntry`, `page`, `site`, `route`) at render time. Used inside loops and entry templates.
 
 ---
 
 ## TL;DR
 
 - Entry template lookup: `selectEntryTemplate(site, tableSlug)` in `src/core/templates/templateMatching.ts`. Picks the page that has `entryTemplateForTableId` set to the postType's data table id.
-- Dynamic bindings: `PageNode.dynamicBindings: Record<propKey, { source, fieldId }>`. Source is one of `currentEntry | parentEntry | page | site | route`. Resolved by `resolveDynamicProps(...)` in `src/core/templates/dynamicBindings.ts`.
+- Dynamic bindings: `PageNode.dynamicBindings: Record<propKey, { source, field }>`. Source is one of `currentEntry | parentEntry | page | site | route`. Resolved by `resolveDynamicProps(...)` in `src/core/templates/dynamicBindings.ts`.
 - Context frames built by `buildPageFrame`, `buildSiteFrame`, `buildRouteFrame` in `contextFrames.ts`.
 - Token interpolation: text props can mix literal text + tokens (`Hello {currentEntry.title}`). Parsed by `parseTokenString(...)` in `tokenInterpolation.ts`.
 - Preview data: `buildPreviewCells(table)` produces fake `currentEntry` values for the editor canvas so templates render meaningfully at edit time.
@@ -91,7 +91,7 @@ A page node can bind a prop to a dynamic source instead of carrying a static val
   "moduleId": "base.heading",
   "props": { "text": "Default title", "level": 2 },
   "dynamicBindings": {
-    "text": { "source": "currentEntry", "fieldId": "title" }
+    "text": { "source": "currentEntry", "field": "title" }
   }
 }
 ```
@@ -99,7 +99,7 @@ A page node can bind a prop to a dynamic source instead of carrying a static val
 At render time, `resolveDynamicProps(node.props, node.dynamicBindings, ctx)`:
 
 1. Reads the frame matching `source` (e.g. `ctx.entryStack[top]` for `currentEntry`).
-2. Walks `fieldId` (a JSON path) into the frame.
+2. Walks `field` (a dotted path) into the frame.
 3. Substitutes the resolved value for `props.text`.
 
 If the source frame is missing (e.g. `currentEntry` outside a loop / template), the binding falls back to the static `props.text`. This is what lets a template render meaningfully even when previewed standalone.
@@ -111,7 +111,6 @@ If the source frame is missing (e.g. `currentEntry` outside a loop / template), 
 | `currentEntry` | Top of `entryStack`       | Inside loops, inside entry templates                    |
 | `parentEntry`  | Second-from-top           | Nested loop (outer + inner)                             |
 | `site`         | `ctx.site`                | Anywhere — "site name", "primary color"                 |
-| `viewer`       | `ctx.viewer`              | Personalization (logged-in user, role)                  |
 | `route`        | `ctx.route`               | URL-driven (e.g. `route.segments[1]`)                   |
 | `page`         | `ctx.page`                | The current page's metadata                             |
 
@@ -133,10 +132,10 @@ In addition to whole-prop bindings, **text props** can mix literal text + tokens
 
 ```ts
 [
-  { kind: 'literal', value: 'Hello ' },
-  { kind: 'token',   source: 'currentEntry', fieldPath: 'title' },
-  { kind: 'literal', value: ' — read more at ' },
-  { kind: 'token',   source: 'site',         fieldPath: 'name' },
+  { kind: 'text',  value: 'Hello ' },
+  { kind: 'token', source: 'currentEntry', field: 'title' },
+  { kind: 'text',  value: ' — read more at ' },
+  { kind: 'token', source: 'site', field: 'name' },
 ]
 ```
 
@@ -179,7 +178,7 @@ In the editor's Properties panel for a `base.heading` node, choose "Bind text �
 {
   "moduleId": "base.heading",
   "props": { "text": "Heading", "level": 2 },
-  "dynamicBindings": { "text": { "source": "currentEntry", "fieldId": "title" } }
+  "dynamicBindings": { "text": { "source": "currentEntry", "field": "title" } }
 }
 ```
 
@@ -190,7 +189,7 @@ The canvas immediately shows the preview cell's title (`'Sample title'`). At pub
 1. Create a `data_table` of kind `postType` (e.g. "Products").
 2. The system seeds a default entry template in the `pages` table automatically.
 3. Open the template (it's listed in the pages roster under the postType).
-4. Edit it like any other page. Bind heading / body / image to `currentEntry.<fieldId>`.
+4. Edit it like any other page. Bind heading / body / image to `currentEntry.<field>`.
 5. Set `routeBase` on the data table (e.g. `/products`).
 6. Add a product row, publish. URL: `/products/<slug>`.
 
@@ -200,7 +199,7 @@ Set `entryTemplateForTableId` to point at one table; for the other, point its ro
 
 To **share** a template across postTypes, two options:
 
-- Make one template that uses `currentEntry.fieldId` paths that exist in both tables.
+- Make one template that uses `currentEntry.<field>` paths that exist in both tables.
 - Use a Visual Component as the template body, instantiated by two different entry-template pages.
 
 ### Custom token in text

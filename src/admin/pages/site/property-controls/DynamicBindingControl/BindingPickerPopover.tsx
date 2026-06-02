@@ -9,8 +9,8 @@
  *     input's caret and the popover STAYS OPEN, so multiple tokens can be
  *     inserted in one session. Close by clicking the {} affordance again,
  *     pressing Escape, or clicking outside.
- *   - Bind mode (image / media replacement): clicking a field commits the
- *     single binding and the parent closes the popover.
+ *   - Bind mode (image / media replacement): clicking a field commits a
+ *     structured binding and the parent closes the popover.
  *
  * Groups, top to bottom:
  *   1. Auto-scoped table fields (template page or loop-bound table)
@@ -97,7 +97,7 @@ interface PickerPopoverProps {
   /**
    * Insert mode — clicks insert a `{source.field}` token and the popover
    * stays open so multiple tokens can be inserted in one session.
-   * The parent handles single-binding mode by calling its `onClose` from
+   * The parent handles bind mode by calling its `onClose` from
    * within `onPick`.
    */
   insertMode?: boolean

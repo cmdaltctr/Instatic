@@ -238,7 +238,7 @@ describe('buildImportPlan — conflict detection', () => {
           selector: '.hero-title',
           order: 2,
           styles: {},
-          breakpointStyles: {},
+          contextStyles: {},
           createdAt: now,
           updatedAt: now,
         },

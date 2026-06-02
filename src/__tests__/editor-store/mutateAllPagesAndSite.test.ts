@@ -122,7 +122,7 @@ describe('mutateAllPagesAndSite — basic happy path', () => {
         selector: '.hero',
         order: 0,
         styles: { color: 'red' },
-        breakpointStyles: {},
+        contextStyles: {},
       })
       return true
     })
@@ -170,7 +170,7 @@ describe('mutateAllPagesAndSite — atomicity', () => {
         selector: '.old-rule',
         order: 0,
         styles: {},
-        breakpointStyles: {},
+        contextStyles: {},
       })
       return true
     })
@@ -180,9 +180,9 @@ describe('mutateAllPagesAndSite — atomicity', () => {
     // Now run the four-helper recipe.
     useEditorStore.getState().mutateAllPagesAndSite((_site, helpers) => {
       helpers.addPage({ title: 'Added', slug: 'added', nodeFragment: makeFragment() })
-      helpers.addStyleRule({ name: 'new-rule', kind: 'class', selector: '.new-rule', order: 0, styles: {}, breakpointStyles: {} })
+      helpers.addStyleRule({ name: 'new-rule', kind: 'class', selector: '.new-rule', order: 0, styles: {}, contextStyles: {} })
       helpers.overwritePage(existingPageId, { title: 'Updated', slug: 'updated', nodeFragment: makeFragment() })
-      helpers.overwriteStyleRule(existingRuleId, { name: 'old-rule', kind: 'class', selector: '.old-rule', order: 0, styles: { color: 'blue' }, breakpointStyles: {} })
+      helpers.overwriteStyleRule(existingRuleId, { name: 'old-rule', kind: 'class', selector: '.old-rule', order: 0, styles: { color: 'blue' }, contextStyles: {} })
       return true
     })
 
@@ -197,7 +197,7 @@ describe('mutateAllPagesAndSite — atomicity', () => {
     let existingRuleId = ''
     useEditorStore.getState().mutateAllPagesAndSite((_site, helpers) => {
       existingPageId = helpers.addPage({ title: 'Seed Page', slug: 'seed', nodeFragment: makeFragment() })
-      existingRuleId = helpers.addStyleRule({ name: 'seed-rule', kind: 'class', selector: '.seed-rule', order: 0, styles: {}, breakpointStyles: {} })
+      existingRuleId = helpers.addStyleRule({ name: 'seed-rule', kind: 'class', selector: '.seed-rule', order: 0, styles: {}, contextStyles: {} })
       return true
     })
 
@@ -207,9 +207,9 @@ describe('mutateAllPagesAndSite — atomicity', () => {
 
     useEditorStore.getState().mutateAllPagesAndSite((_site, helpers) => {
       helpers.addPage({ title: 'Extra', slug: 'extra', nodeFragment: makeFragment() })
-      helpers.addStyleRule({ name: 'extra-rule', kind: 'class', selector: '.extra-rule', order: 0, styles: {}, breakpointStyles: {} })
+      helpers.addStyleRule({ name: 'extra-rule', kind: 'class', selector: '.extra-rule', order: 0, styles: {}, contextStyles: {} })
       helpers.overwritePage(existingPageId, { title: 'Overwritten', slug: 'overwritten', nodeFragment: makeFragment() })
-      helpers.overwriteStyleRule(existingRuleId, { name: 'seed-rule', kind: 'class', selector: '.seed-rule', order: 0, styles: { opacity: '0.5' }, breakpointStyles: {} })
+      helpers.overwriteStyleRule(existingRuleId, { name: 'seed-rule', kind: 'class', selector: '.seed-rule', order: 0, styles: { opacity: '0.5' }, contextStyles: {} })
       return true
     })
 
@@ -288,7 +288,7 @@ describe('mutateAllPagesAndSite — name→id linking', () => {
         selector: '.existing-cls',
         order: 0,
         styles: { color: 'green' },
-        breakpointStyles: {},
+        contextStyles: {},
       })
       return true
     })
@@ -369,7 +369,7 @@ describe('mutateAllPagesAndSite — cross-helper dedup', () => {
         selector: '.btn',
         order: 0,
         styles: { padding: '8px' },
-        breakpointStyles: {},
+        contextStyles: {},
       })
       // Step 2: add a page whose fragment node references 'btn' by name
       newPageId = helpers.addPage({
@@ -461,7 +461,7 @@ describe('mutateAllPagesAndSite — missing-id errors', () => {
           selector: '.x',
           order: 0,
           styles: {},
-          breakpointStyles: {},
+          contextStyles: {},
         })
         return true
       })

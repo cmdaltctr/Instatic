@@ -14,12 +14,15 @@
 import { describe, it, expect } from 'bun:test'
 import { resolveAutoSizes } from '@core/publisher'
 import { makePage, makeSite } from './helpers'
-import type { StyleRule } from '@core/page-tree'
+import { classKindSelector, type StyleRule } from '@core/page-tree'
 
 function makeClass(id: string, partial: Partial<StyleRule> = {}): StyleRule {
   return {
     id,
     name: id,
+    kind: 'class',
+    selector: classKindSelector(id),
+    order: 0,
     styles: {},
     contextStyles: {},
     createdAt: 0,

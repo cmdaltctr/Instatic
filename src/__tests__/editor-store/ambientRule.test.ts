@@ -154,7 +154,7 @@ describe('publisher emits ambient rules', () => {
       selector: `.${name}`,
       order,
       styles: { color },
-      breakpointStyles: {},
+      contextStyles: {},
       createdAt: now,
       updatedAt: now,
     })
@@ -182,7 +182,7 @@ describe('publisher emits ambient rules', () => {
       selector: 'a:hover',
       order: 0,
       styles: { color: '#abc' },
-      breakpointStyles: {},
+      contextStyles: {},
       createdAt: now,
       updatedAt: now,
     }
@@ -193,20 +193,15 @@ describe('publisher emits ambient rules', () => {
   })
 })
 
-describe('legacy backfill — old classes without kind/selector/order still render', () => {
-  it('parseStyleRule backfills sensible defaults for legacy data', async () => {
+describe('parseStyleRule persisted shape', () => {
+  it('drops rules missing current selector metadata', async () => {
     const { parseStyleRule } = await import('@core/page-tree')
-    const cls = parseStyleRule({
+    expect(parseStyleRule({
       id: 'x',
       name: 'legacy-name',
       styles: { color: 'red' },
-      breakpointStyles: {},
       createdAt: 0,
       updatedAt: 0,
-    })
-    expect(cls).not.toBeNull()
-    expect(cls!.kind).toBe('class')
-    expect(cls!.selector).toBe('.legacy-name')
-    expect(cls!.order).toBe(0)
+    })).toBeNull()
   })
 })

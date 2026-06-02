@@ -32,7 +32,7 @@ function makeClassRule(name: string): NewStyleRule {
     selector: `.${name}`,
     order: 0,
     styles: {},
-    breakpointStyles: {},
+    contextStyles: {},
   }
 }
 
@@ -43,7 +43,7 @@ function makeAmbientRule(selector: string): NewStyleRule {
     selector,
     order: 0,
     styles: {},
-    breakpointStyles: {},
+    contextStyles: {},
   }
 }
 

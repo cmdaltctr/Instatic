@@ -12,7 +12,7 @@ Loop sources are pluggable: built-in sources (`content.entries`, `site.pages`, `
 - `LoopEntitySource` shape: `{ id, label, fields, filterSchema?, orderByOptions?, fetch, preview? }` in `src/core/loops/types.ts`.
 - The `base.loop` module's children are **variants** — different per-item layouts (e.g. "Card", "Featured"). The walker round-robins across them as it iterates.
 - At publish time, `loopPrefetch.ts` calls each loop's `fetch()` and stores results on the render context. The walker is then purely synchronous.
-- Each iteration pushes a `LoopItem` onto the `entryStack`; nodes inside the loop resolve `currentEntry.fieldId` against that item via dynamic bindings.
+- Each iteration pushes a `LoopItem` onto the `entryStack`; nodes inside the loop resolve `currentEntry.<field>` against that item via dynamic bindings.
 
 ---
 
@@ -211,7 +211,7 @@ renderLoop(loopNode, ctx, renderNode):
 
 The `renderNode` callback is the publisher's normal walker — so a variant's subtree renders exactly like any other tree, including:
 
-- `currentEntry.<fieldId>` bindings resolve against the pushed item.
+- `currentEntry.<field>` bindings resolve against the pushed item.
 - Nested loops can push a deeper item; the outer loop's item becomes `parentEntry`.
 - VC refs inside variants render with their own slot fills, with `currentEntry` still pointing at the loop item.
 

@@ -232,8 +232,11 @@ describe('CMS route authorization', () => {
       styleEdit.styleRules['__forbidden__'] = {
         id: '__forbidden__',
         name: 'forbidden',
+        kind: 'class',
+        selector: '.__forbidden__',
+        order: 0,
         styles: {},
-        breakpointStyles: {},
+        contextStyles: {},
         createdAt: Date.now(),
         updatedAt: Date.now(),
       }

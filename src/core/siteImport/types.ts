@@ -330,7 +330,7 @@ export interface RuleConflict {
  * resolution).
  *
  * All URL-shaped values inside `pages[].nodeFragment` and
- * `styleRules[].styles` / `breakpointStyles` are normalized to FileMap keys
+ * `styleRules[].styles` / `contextStyles` are normalized to FileMap keys
  * so that `applyAssetRewrites` can replace them with new media URLs.
  */
 export interface ImportPlan {

@@ -197,9 +197,7 @@ export function bagToInlineStyle(bag: Record<string, unknown>): string {
  *
  * Each class has a base bag (`styles`) plus a unified `contextStyles` map keyed
  * by *context id*. A context id is either a width-breakpoint id (from
- * `breakpoints`) or a custom-condition id (from `conditions`). The two used to
- * be separate fields (`breakpointStyles` + `conditionalLayers`); they are the
- * same axis and are now one map.
+ * `breakpoints`) or a custom-condition id (from `conditions`).
  *
  * Cascade order (precedence Q-A): base → custom conditions (registry order) →
  * breakpoint @media (DESCENDING width: widest first, narrowest last). All

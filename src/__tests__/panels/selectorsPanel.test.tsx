@@ -12,7 +12,7 @@ import {
   getSelectorStyleSummary,
 } from '@site/panels/selectorUsage'
 import { selectRightSidebarExpanded, useEditorStore } from '@site/store/store'
-import type { StyleRule } from '@core/page-tree'
+import { classKindSelector, type StyleRule } from '@core/page-tree'
 import { makeNode, makePage, makeSite } from '../fixtures'
 import '@modules/base/index'
 
@@ -58,6 +58,9 @@ function makeClass(
   return {
     id,
     name,
+    kind: 'class',
+    selector: classKindSelector(name),
+    order: 0,
     styles,
     contextStyles: {},
     createdAt: 1,

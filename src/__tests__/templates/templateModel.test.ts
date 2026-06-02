@@ -4,7 +4,7 @@ import { validateSite, validatePages } from '@core/persistence/validate'
 import { useEditorStore } from '@site/store/store'
 
 describe('dynamic template model', () => {
-  it('preserves page template metadata and migrates string-prop bindings to tokens', () => {
+  it('preserves page template metadata and structured dynamic bindings', () => {
     const site = makeSite()
     const page = site.pages[0]
     const root = page.nodes[page.rootNodeId]
@@ -15,9 +15,7 @@ describe('dynamic template model', () => {
       priority: 100,
       conditions: [],
     }
-    // Legacy single-binding form on the root's `text` prop. The prop
-    // value happens to be undefined on a fresh fixture; the migration
-    // accepts that (treats it as a string-typed slot) and converts.
+    root.props = { text: 'Static fallback' }
     root.dynamicBindings = {
       text: { source: 'currentEntry', field: 'title', format: 'plain', fallback: 'static' },
     }
@@ -27,11 +25,14 @@ describe('dynamic template model', () => {
 
     // Template metadata round-trips unchanged.
     expect(pages[0].template).toEqual(page.template)
-    // The legacy binding has been migrated: `text` prop now contains a
-    // `{currentEntry.title}` token, and `dynamicBindings.text` is gone.
     const migrated = pages[0].nodes[page.rootNodeId]
-    expect(migrated.dynamicBindings?.text).toBeUndefined()
-    expect(migrated.props.text).toBe('{currentEntry.title}')
+    expect(migrated.dynamicBindings?.text).toEqual({
+      source: 'currentEntry',
+      field: 'title',
+      format: 'plain',
+      fallback: 'static',
+    })
+    expect(migrated.props.text).toBe('Static fallback')
   })
 
   it('converts a template back to a page by removing template metadata and all bindings', () => {

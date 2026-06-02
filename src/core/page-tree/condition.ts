@@ -12,9 +12,7 @@
  *     `@media` / `@container` / `@supports` block.
  *
  * Conditions are *reusable*: defined once on the site, any class can carry an
- * override under one. This mirrors how breakpoints already work and replaces
- * the old per-rule `conditionalLayers` array (which embedded the condition in
- * every rule, with no reuse).
+ * override under one. This mirrors how breakpoints already work.
  *
  * Constraint #269: no imports from editor / editor-store here.
  */
@@ -56,8 +54,7 @@ export type Condition = Static<typeof ConditionSchema>
 export const ConditionDefSchema = Type.Object({
   /**
    * Stable id. Deterministic from the condition content (see `conditionId`) so
-   * importing the same condition twice — or migrating legacy per-rule layers —
-   * dedupes to one definition.
+   * importing the same condition twice dedupes to one definition.
    */
   id: Type.String(),
   /** Human label shown in the context switcher (e.g. "Dark", "Card ≥400"). */

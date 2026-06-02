@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from 'bun:test'
 import { bagToCSS, collectClassCSS, generateClassCSS } from '@core/publisher'
-import { makeConditionDef } from '@core/page-tree'
+import { classKindSelector, makeConditionDef } from '@core/page-tree'
 import type { StyleRule, Page, PageNode, SiteDocument } from '@core/page-tree'
 
 // ---------------------------------------------------------------------------
@@ -30,6 +30,9 @@ function makeClass(
   return {
     id,
     name,
+    kind: 'class',
+    selector: classKindSelector(name),
+    order: 0,
     styles,
     contextStyles,
     createdAt: 0,

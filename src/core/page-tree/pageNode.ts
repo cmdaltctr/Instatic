@@ -12,7 +12,7 @@
 
 import { Type, type Static } from '@core/utils/typeboxHelpers'
 import { BaseNodeSchema, parsePropBindings } from './baseNode'
-import { DynamicPropBindingSchema, parseAndMigrateDynamicBindings } from './dynamicBinding'
+import { DynamicPropBindingSchema, parseDynamicBindings } from './dynamicBinding'
 import {
   asPlainObject,
   onlyStrings,
@@ -63,12 +63,9 @@ export function parsePageNode(raw: unknown, nodePath: string): PageNode {
   const moduleId = requireStringField(r, 'moduleId', nodePath)
   const rawChildren = requireArrayField(r, 'children', nodePath)
 
-  // dynamicBindings parsing mutates `props` in place to migrate legacy
-  // string-prop bindings into inline `{source.field}` tokens — see
-  // parseAndMigrateDynamicBindings.
   const props = parseStylesBag(r.props)
   const propBindings = parsePropBindings(r.propBindings)
-  const dynamicBindings = parseAndMigrateDynamicBindings(r.dynamicBindings, props)
+  const dynamicBindings = parseDynamicBindings(r.dynamicBindings)
   // Inline styles — same tolerant bag parser as props/class styles. Dropped
   // when missing or empty so nodes without inline styles stay lean.
   const inlineStyles = parseStylesBag(r.inlineStyles)

@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'bun:test'
 import { useClassPickerSuggestions } from '@site/panels/PropertiesPanel/useClassPickerSuggestions'
-import type { StyleRule } from '@core/page-tree'
+import { classKindSelector, type StyleRule } from '@core/page-tree'
 import type { SelectorSuggestionItem } from '@site/panels/PropertiesPanel/selectorPickerModel'
 
 // ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ function makeClass(name: string, id = `cls-${name}`): StyleRule {
     id,
     name,
     kind: 'class',
-    selector: `.${name}`,
+    selector: classKindSelector(name),
     order: 0,
     styles: {},
     contextStyles: {},

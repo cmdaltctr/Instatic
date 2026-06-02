@@ -37,7 +37,6 @@ import {
   parseStylesBag,
   parseTimestamp,
 } from './parseHelpers'
-import { conditionId, type Condition } from './condition'
 import { escapeCssIdentifier as escapeCssIdent } from './cssIdentifier'
 
 // ---------------------------------------------------------------------------
@@ -50,11 +49,8 @@ export type StyleRuleKind = Static<typeof StyleRuleKindSchema>
 export const StyleRuleSchema = Type.Object({
   id: Type.String(),
   name: Type.String(),
-  /**
-   * Discriminator. Old persisted shells written before this field existed
-   * default to `'class'` in `parseStyleRule`.
-   */
-  kind: withFallback(StyleRuleKindSchema, 'class' as StyleRuleKind),
+  /** Discriminator for class-attached vs selector-attached rules. */
+  kind: StyleRuleKindSchema,
   /**
    * The CSS selector expression emitted verbatim into the published
    * stylesheet:
@@ -64,17 +60,14 @@ export const StyleRuleSchema = Type.Object({
    *   - kind:'ambient' → any valid selector (`h1`, `h1 > span`, `.hero .title`,
    *                      `a:hover`, `[data-x="y"]`, ...).
    *
-   * Old shells without this field have it backfilled in `parseStyleRule` from
-   * `.${escapeCssIdentifier(name)}`.
    */
-  selector: withFallback(Type.String(), ''),
+  selector: Type.String(),
   /**
    * Cascade order — emitted rules are sorted ascending by `order`. Imported
    * rules preserve their position in the source stylesheet so author intent
-   * survives. User-created rules append at the end. Defaults to 0 (treated as
-   * "insertion order" by stable sort).
+   * survives. User-created rules append at the end.
    */
-  order: withFallback(Type.Number(), 0),
+  order: Type.Number(),
   description: Type.Optional(Type.String()),
   /**
    * Optional ownership scope. If the scope object does not match the exact
@@ -98,10 +91,7 @@ export const StyleRuleSchema = Type.Object({
    *   - or a condition id (from `site.conditions`) → custom
    *     `@media` / `@container` / `@supports`.
    *
-   * This replaces the old split between `breakpointStyles` (width breakpoints)
-   * and `conditionalLayers` (everything else) — they were the same axis twice.
-   * Falls back to {} when missing or invalid — handled in parseStyleRule, which
-   * also migrates the two legacy fields into this one.
+   * Falls back to {} when missing or invalid — handled in parseStyleRule.
    */
   contextStyles: withFallback(
     Type.Record(Type.String(), Type.Record(Type.String(), Type.Unknown())),
@@ -137,7 +127,7 @@ const HEADING_TAG_NAMES = new Set([
 
 /**
  * Build the canonical `.<escaped-name>` selector for a class-kind rule.
- * Used during creation and when backfilling missing `selector` on old data.
+ * Used during class-rule creation and renames.
  */
 export function classKindSelector(name: string): string {
   return `.${escapeCssIdent(name)}`
@@ -158,71 +148,9 @@ export function classifySelectorCreateInput(raw: string): SelectorCreateInput {
 // Tolerant parsing
 // ---------------------------------------------------------------------------
 
-/**
- * Resolve the context-id key for a legacy `conditionalLayers` entry's
- * condition. Legacy `breakpoint`-kind conditions key by their breakpoint id (so
- * they merge with migrated `breakpointStyles`); custom conditions key by the
- * deterministic `conditionId`. Returns null on an unrecognised shape.
- */
-function legacyLayerContextId(rawCondition: unknown): string | null {
-  const c = asPlainObject(rawCondition)
-  if (!c) return null
-  if (c.kind === 'breakpoint' && typeof c.breakpointId === 'string') return c.breakpointId
-  if (c.kind === 'media' && typeof c.query === 'string') {
-    return conditionId({ kind: 'media', query: c.query })
-  }
-  if (c.kind === 'container' && typeof c.query === 'string') {
-    const cond: Condition = {
-      kind: 'container',
-      query: c.query,
-      ...(typeof c.name === 'string' ? { name: c.name } : {}),
-    }
-    return conditionId(cond)
-  }
-  if (c.kind === 'supports' && typeof c.query === 'string') {
-    return conditionId({ kind: 'supports', query: c.query })
-  }
-  return null
-}
-
-/**
- * Build the `contextStyles` map for a rule, migrating the two legacy fields:
- *   - `contextStyles` (current shape) — taken as-is.
- *   - `breakpointStyles` (legacy width-breakpoint model) — folded in by
- *     breakpoint id.
- *   - `conditionalLayers` (legacy per-rule custom conditions) — folded in by
- *     condition id (or breakpoint id for legacy breakpoint-kind layers).
- *
- * The site-level `conditions` registry that names these condition ids is
- * reconstructed separately in `parseSiteDocument` from the same raw layers.
- */
+/** Parse the current `contextStyles` map for a rule. */
 function parseContextStyles(raw: Record<string, unknown>): Record<string, Record<string, unknown>> {
-  const out: Record<string, Record<string, unknown>> = {}
-  const merge = (key: string, bag: Record<string, unknown>) => {
-    if (Object.keys(bag).length === 0) return
-    out[key] = { ...(out[key] ?? {}), ...bag }
-  }
-
-  // Current shape.
-  const current = parseBreakpointStylesBag(raw.contextStyles)
-  for (const [key, bag] of Object.entries(current)) merge(key, bag)
-
-  // Legacy breakpointStyles → contextStyles[breakpointId].
-  const legacyBp = parseBreakpointStylesBag(raw.breakpointStyles)
-  for (const [key, bag] of Object.entries(legacyBp)) merge(key, bag)
-
-  // Legacy conditionalLayers → contextStyles[conditionId].
-  if (Array.isArray(raw.conditionalLayers)) {
-    for (const entry of raw.conditionalLayers) {
-      const layer = asPlainObject(entry)
-      if (!layer) continue
-      const key = legacyLayerContextId(layer.condition)
-      if (!key) continue
-      merge(key, parseStylesBag(layer.styles))
-    }
-  }
-
-  return out
+  return parseBreakpointStylesBag(raw.contextStyles)
 }
 
 /** Parse a StyleRule scope (currently only `{ type: 'node', nodeId, role: 'module-style' }`). */
@@ -234,20 +162,17 @@ function parseStyleRuleScope(raw: unknown): StyleRule['scope'] {
 }
 
 /**
- * Parse a StyleRule, providing fallbacks for resilient fields.
- *
- * Backfills for the selectors-system fields on legacy shells that predate them:
- *   - kind:      defaults to 'class' (the only kind that existed before).
- *   - selector:  defaults to the canonical `.<escaped-name>` for kind 'class'.
- *                For kind 'ambient' a missing selector falls back to the name
- *                verbatim (the importer always writes selector explicitly).
- *   - order:     defaults to 0 (stable-sort preserves insertion order).
+ * Parse a StyleRule, dropping entries that are missing the current selector
+ * metadata and providing fallbacks only for resilient style-bag fields.
  */
 export function parseStyleRule(raw: unknown): StyleRule | null {
   const r = asPlainObject(raw)
   if (!r) return null
   if (typeof r.id !== 'string') return null
   if (typeof r.name !== 'string') return null
+  if (r.kind !== 'class' && r.kind !== 'ambient') return null
+  if (typeof r.selector !== 'string' || r.selector.length === 0) return null
+  if (typeof r.order !== 'number' || !Number.isFinite(r.order)) return null
 
   const scope = parseStyleRuleScope(r.scope)
   const tags = parseStringArrayField(r.tags)
@@ -256,19 +181,12 @@ export function parseStyleRule(raw: unknown): StyleRule | null {
     ? (r.generated as StyleRule['generated'])
     : undefined
 
-  const kind: StyleRuleKind = r.kind === 'ambient' ? 'ambient' : 'class'
-  const rawSelector = typeof r.selector === 'string' ? r.selector : ''
-  const selector = rawSelector.length > 0
-    ? rawSelector
-    : (kind === 'class' ? classKindSelector(r.name) : r.name)
-  const order = typeof r.order === 'number' && Number.isFinite(r.order) ? r.order : 0
-
   return {
     id: r.id,
     name: r.name,
-    kind,
-    selector,
-    order,
+    kind: r.kind,
+    selector: r.selector,
+    order: r.order,
     ...(typeof r.description === 'string' ? { description: r.description } : {}),
     ...(scope !== undefined ? { scope } : {}),
     styles: parseStylesBag(r.styles),
@@ -280,7 +198,7 @@ export function parseStyleRule(raw: unknown): StyleRule | null {
   }
 }
 
-/** Parse the style rule registry: iterate entries and silently drop those with invalid id/name. */
+/** Parse the style rule registry: iterate entries and silently drop invalid current-shape rules. */
 export function parseStyleRuleRegistry(raw: unknown): Record<string, StyleRule> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
   const result: Record<string, StyleRule> = {}

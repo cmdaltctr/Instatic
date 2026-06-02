@@ -61,8 +61,11 @@ function validShell(overrides: Partial<SiteShell> = {}): SiteShell {
       class_1: {
         id: 'class_1',
         name: 'Hero',
+        kind: 'class',
+        selector: '.Hero',
+        order: 0,
         styles: { color: 'red' },
-        breakpointStyles: {},
+        contextStyles: {},
         createdAt: 1,
         updatedAt: 2,
       },

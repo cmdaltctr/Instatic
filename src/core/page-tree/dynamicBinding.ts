@@ -11,19 +11,14 @@
  * - `page` — fields of the page being rendered (title, slug, permalink, …).
  *   Always present on every render — no loop or template needed.
  * - `site` — site-level fields (name, baseUrl, settings.*). Always present.
- * - `viewer` — fields of the currently authenticated user, or `null` for
- *   anonymous renders. Bindings resolve to empty when null.
  * - `route` — URL frame (path, slug, segments). Always present.
  *
  * Format tag controls how the resolved value is rendered (plain text, raw
  * HTML, URL, media path). Fallback strategy controls behaviour when the
  * binding resolves to empty.
  *
- * The `parseAndMigrateDynamicBindings` helper is the single place where
- * string-prop bindings are migrated in-place to inline `{source.field}` tokens
- * stored directly in the prop value. Non-string-valued props (number, boolean)
- * keep the structured binding form because tokens cannot carry non-string
- * values.
+ * Structured bindings are stored as a prop-keyed overlay. String props can also
+ * contain inline `{source.field}` tokens; both forms resolve at render time.
  *
  * Constraint #269: no imports from editor / editor-store here.
  */
@@ -102,19 +97,9 @@ export function parseDynamicPropBinding(raw: unknown): DynamicPropBinding | null
 
 /**
  * Parse a raw dynamicBindings map. Invalid entries are silently dropped
- * (per-entry tolerance). For entries whose target prop currently holds a
- * string value (or is unset), the binding is migrated in-place to a
- * `{source.field}` token in the prop value and the binding entry is dropped.
- * Non-string-valued props (number, boolean) keep the structured binding form
- * because tokens cannot carry non-string values.
- *
- * Returns the surviving structured bindings, or `undefined` when none remain.
- * `props` is mutated in place — that is the source-of-truth migration.
+ * (per-entry tolerance). Returns `undefined` when no valid bindings remain.
  */
-export function parseAndMigrateDynamicBindings(
-  raw: unknown,
-  props: Record<string, unknown>,
-): Record<string, DynamicPropBinding> | undefined {
+export function parseDynamicBindings(raw: unknown): Record<string, DynamicPropBinding> | undefined {
   const outer = asPlainObject(raw)
   if (!outer) return undefined
 
@@ -122,15 +107,6 @@ export function parseAndMigrateDynamicBindings(
   for (const [propKey, entry] of Object.entries(outer)) {
     const binding = parseDynamicPropBinding(entry)
     if (!binding) continue
-
-    // Migrate string-prop bindings to inline tokens. The prop value becomes
-    // `{source.field}`; if the prop was unset, we still seed it as a string
-    // so token interpolation has something to walk.
-    const target = props[propKey]
-    if (typeof target === 'string' || target === undefined) {
-      props[propKey] = `{${binding.source}.${binding.field}}`
-      continue
-    }
     result[propKey] = binding
   }
   return Object.keys(result).length > 0 ? result : undefined

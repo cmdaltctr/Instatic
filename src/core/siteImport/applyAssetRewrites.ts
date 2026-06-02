@@ -9,7 +9,7 @@
  * Two surfaces to rewrite:
  *   1. Page node props — string values for `src`, `href`, `srcset` that equal
  *      a FileMap key after normalisation by `assetPlan`.
- *   2. CSS rule styles and breakpointStyles — `url('key')` expressions where
+ *   2. CSS rule `styles` and `contextStyles` — `url('key')` expressions where
  *      the URL payload is a normalised FileMap key.
  *
  * Idempotency: calling twice with the same map is safe — subsequent calls

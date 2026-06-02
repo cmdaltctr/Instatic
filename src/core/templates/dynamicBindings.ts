@@ -65,7 +65,7 @@ export interface TemplateRenderDataContext {
  * Dispatch by source:
  *   - `currentEntry` / `parentEntry` — read from the entry stack
  *     (top / second-from-top).
- *   - `page` / `site` / `viewer` / `route` — read from the corresponding
+ *   - `page` / `site` / `route` — read from the corresponding
  *     named frame on the context.
  *
  * Returns `undefined` for fields that don't exist on the resolved frame
@@ -74,10 +74,8 @@ export interface TemplateRenderDataContext {
  *
  * Field paths are dotted (`author.name`, `parent.slug`). The first
  * segment opens against the frame; subsequent segments walk plain
- * objects via `walkFieldPath`. Multi-segment paths against `currentEntry`
- * are how relation traversal will be wired (Phase 6) — until that lands,
- * only the first segment is meaningful for relations, which matches
- * legacy single-segment binding semantics.
+ * objects via `walkFieldPath`. Relation traversal is represented as ordinary
+ * multi-segment paths against `currentEntry`.
  *
  * `readFrame` / `walkFieldPath` are shared with the token interpolator
  * — both live in `./tokenInterpolation.ts` to avoid duplication.
@@ -121,7 +119,7 @@ export function resolveDynamicProps(
     return staticProps
   }
 
-  // Step 1: legacy single-binding overrides (for non-string props, this
+  // Step 1: structured whole-prop binding overrides (for non-string props, this
   // is the only way a prop gets a dynamic value).
   let resolved: Record<string, unknown> | null = null
   if (bindings) {
@@ -147,8 +145,8 @@ export function resolveDynamicProps(
   // assumed to be markdown source — typically `{currentEntry.body}` for
   // post-type templates — and is rendered to HTML here. Plain richtext
   // values typed by the page author flow through untouched (token-free
-  // values short-circuit before this code). This keeps legacy templates
-  // that use static token interpolation working *and* keeps explicit
+  // values short-circuit before this code). This keeps token interpolation
+  // working *and* keeps explicit
   // `dynamicBindings` with `format: 'html'` working (the binding resolver
   // already runs `renderMarkdownToHtml`; the resulting value contains no
   // tokens so the loop below does nothing).

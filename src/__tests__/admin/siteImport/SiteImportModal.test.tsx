@@ -81,7 +81,7 @@ function makeStyleRule(overrides: Partial<NewStyleRule> = {}): NewStyleRule {
     selector: overrides.selector ?? '.test-class',
     order: overrides.order ?? 0,
     styles: {},
-    breakpointStyles: {},
+    contextStyles: {},
   }
 }
 

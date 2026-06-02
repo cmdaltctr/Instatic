@@ -179,8 +179,11 @@ describe('VC inline — class CSS in published output', () => {
         'cls-1': {
           id: 'cls-1',
           name: 'big-title',
+          kind: 'class',
+          selector: '.big-title',
+          order: 0,
           styles: { fontSize: '3rem' },
-          breakpointStyles: {},
+          contextStyles: {},
           createdAt: 0,
           updatedAt: 0,
         },
@@ -362,4 +365,3 @@ describe('VC inline — unknown componentId', () => {
     expect(html).not.toContain('<div>')
   })
 })
-

@@ -420,17 +420,20 @@ describe('validateSite — site package manifest', () => {
   })
 })
 
-// ── classes round-trip ────────────────────────────────────────────────────────
+// ── style rules round-trip ────────────────────────────────────────────────────
 
-describe('validateSite — classes field', () => {
+describe('validateSite — styleRules field', () => {
   it('preserves generated framework class lock metadata', () => {
     const p = validSite()
     p.styleRules = {
       'framework:color:primary-token:base:text': {
         id: 'framework:color:primary-token:base:text',
         name: 'text-primary',
+        kind: 'class',
+        selector: '.text-primary',
+        order: 0,
         styles: { color: 'var(--primary)' },
-        breakpointStyles: {},
+        contextStyles: {},
         generated: {
           origin: 'framework',
           family: 'color',
@@ -453,6 +456,54 @@ describe('validateSite — classes field', () => {
       tokenName: 'primary',
       locked: true,
     })
+  })
+
+  it('ignores obsolete classes registry fields', () => {
+    const p = validSite() as unknown as Record<string, unknown>
+    delete p.styleRules
+    p.classes = {
+      'old-class': {
+        id: 'old-class',
+        name: 'old-class',
+        kind: 'class',
+        selector: '.old-class',
+        order: 0,
+        styles: { color: 'red' },
+        contextStyles: {},
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    }
+
+    const result = validateSite(p)
+    expect(result.styleRules).toEqual({})
+  })
+
+  it('does not reconstruct conditions from obsolete conditionalLayers', () => {
+    const p = validSite() as unknown as Record<string, unknown>
+    p.styleRules = {
+      'old-condition-rule': {
+        id: 'old-condition-rule',
+        name: 'old-condition-rule',
+        kind: 'class',
+        selector: '.old-condition-rule',
+        order: 0,
+        styles: {},
+        contextStyles: {},
+        conditionalLayers: [
+          {
+            id: 'legacy-layer',
+            condition: { kind: 'media', query: '(orientation: landscape)' },
+            styles: { color: 'blue' },
+          },
+        ],
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    }
+
+    const result = validateSite(p)
+    expect(result.conditions).toBeUndefined()
   })
 })
 

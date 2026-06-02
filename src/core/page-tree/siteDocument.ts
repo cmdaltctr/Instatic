@@ -20,7 +20,7 @@
  *     runtime → normalizeSiteRuntimeConfig (tolerant: fills scripts/styles/lock)
  *
  *   Per-entry leniency:
- *     styleRules — entries missing id/name are silently dropped
+ *     styleRules — entries missing current selector metadata are silently dropped
  *     files — invalid entries are silently dropped
  *
  * Constraint #269: no imports from editor / editor-store here.
@@ -32,10 +32,7 @@ import {
   ConditionDefSchema,
   type ConditionDef,
   parseConditions,
-  parseCondition,
-  makeConditionDef,
 } from './condition'
-import { asPlainObject } from './parseHelpers'
 import { StyleRuleSchema, parseStyleRuleRegistry } from './styleRule'
 import { SiteSettingsSchema, parseSiteSettings } from './siteSettings'
 import { SiteFileSchema, type SiteFile, type SiteFileType } from '@core/files/schemas'
@@ -67,7 +64,7 @@ const SiteDocumentSchema = Type.Object({
   breakpoints: Type.Array(BreakpointSchema),
   /**
    * Reusable site-level CSS conditions (custom @media / @container / @supports).
-   * Optional + tolerant: legacy shells without it parse to `[]`. Each class
+   * Optional + tolerant: missing or invalid entries parse to `[]`. Each class
    * carries overrides under a condition via `StyleRule.contextStyles[<conditionId>]`.
    */
   conditions: Type.Optional(Type.Array(ConditionDefSchema)),
@@ -148,41 +145,11 @@ function parseSiteFile(raw: unknown): SiteFile | null {
 const DEFAULT_PACKAGE_JSON: SitePackageJson = { dependencies: {}, devDependencies: {} }
 
 /**
- * Reconstruct site-level `ConditionDef`s from legacy per-rule
- * `conditionalLayers` (the pre-unification shape). Each layer's custom
- * condition (media / container / supports — breakpoint-kind layers are skipped,
- * they migrate to `contextStyles[breakpointId]`) becomes one reusable registry
- * entry, deduped by deterministic condition id. No-op for already-migrated
- * shells (no `conditionalLayers` present).
- */
-function collectLegacyConditions(rawStyleRules: unknown): ConditionDef[] {
-  const obj = asPlainObject(rawStyleRules)
-  if (!obj) return []
-  const defs: ConditionDef[] = []
-  const seen = new Set<string>()
-  for (const rule of Object.values(obj)) {
-    const r = asPlainObject(rule)
-    if (!r || !Array.isArray(r.conditionalLayers)) continue
-    for (const entry of r.conditionalLayers) {
-      const layer = asPlainObject(entry)
-      if (!layer) continue
-      const cond = parseCondition(layer.condition)
-      if (!cond) continue
-      const def = makeConditionDef(cond)
-      if (seen.has(def.id)) continue
-      seen.add(def.id)
-      defs.push(def)
-    }
-  }
-  return defs
-}
-
-/**
  * Tolerant parser for a site shell loaded from the `site` table.
  *
  * Throws if required fields (id, name, breakpoints, createdAt, updatedAt)
  * are missing or of the wrong type. Silently drops/defaults invalid entries
- * in classes, files, settings, etc.
+ * in styleRules, files, settings, etc.
  *
  * Pages and Visual Components are NOT parsed here — they live in `data_rows`
  * and are loaded separately:
@@ -215,24 +182,11 @@ export function parseSiteDocument(raw: unknown): SiteShell {
   }
 
   // Style rules — required object, per-entry leniency.
-  // Accepts either `styleRules` (current name) or the legacy `classes` field
-  // (tolerant forward-compat with persisted local DBs written before Phase 0b).
-  // Prefer `styleRules` when both keys are present.
-  const rawStyleRules = r.styleRules !== undefined ? r.styleRules : r.classes
-  const styleRules = parseStyleRuleRegistry(rawStyleRules)
+  const styleRules = parseStyleRuleRegistry(r.styleRules)
 
   // Conditions — optional reusable @media/@container/@supports registry.
-  // Tolerant: invalid entries dropped, missing → []. Legacy shells (written
-  // before the unified-condition model) carry per-rule conditionalLayers
-  // instead; those are lifted into this registry here (the per-rule styles
-  // themselves are migrated into contextStyles by parseStyleRule). Explicit
-  // `conditions` entries win over reconstructed ones (deduped by id).
-  const conditions: ConditionDef[] = (() => {
-    const explicit = parseConditions(r.conditions)
-    const seen = new Set(explicit.map((c) => c.id))
-    const legacy = collectLegacyConditions(rawStyleRules).filter((c) => !seen.has(c.id))
-    return [...explicit, ...legacy]
-  })()
+  // Tolerant: invalid entries dropped, missing → [].
+  const conditions: ConditionDef[] = parseConditions(r.conditions)
 
   // Files — required array, per-entry leniency (parseSiteFile keeps files with malformed blobs)
   const files: SiteFile[] = Array.isArray(r.files)

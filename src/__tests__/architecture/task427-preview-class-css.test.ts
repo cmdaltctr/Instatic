@@ -46,7 +46,7 @@
 
 import { describe, it, expect } from 'bun:test'
 import { collectClassCSS, publishPage } from '@core/publisher'
-import type { Page, PageNode, SiteDocument, StyleRule } from '@core/page-tree'
+import { classKindSelector, type Page, type PageNode, type SiteDocument, type StyleRule } from '@core/page-tree'
 import { makeModule, makeRegistry, makePage, makeSite } from '../publisher/helpers'
 
 // ---------------------------------------------------------------------------
@@ -57,6 +57,9 @@ function makeClass(id: string, styles: StyleRule['styles'] = {}): StyleRule {
   return {
     id,
     name: id,
+    kind: 'class',
+    selector: classKindSelector(id),
+    order: 0,
     styles,
     contextStyles: {},
     createdAt: 0,
@@ -428,6 +431,9 @@ describe('Gate 8 — class breakpoint overrides emit @media blocks in published 
       styleRules: {
         [classId]: {
           id: classId, name: classId,
+          kind: 'class',
+          selector: classKindSelector(classId),
+          order: 0,
           styles: { fontSize: '1rem' },
           contextStyles: {
             [bpId]: { fontSize: '0.875rem' },
@@ -456,6 +462,9 @@ describe('Gate 8 — class breakpoint overrides emit @media blocks in published 
       styleRules: {
         [classId]: {
           id: classId, name: classId,
+          kind: 'class',
+          selector: classKindSelector(classId),
+          order: 0,
           styles: { color: 'black' },
           contextStyles: { [bpId]: { color: 'white' } },
           createdAt: 0, updatedAt: 0,

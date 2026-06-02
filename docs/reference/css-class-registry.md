@@ -52,7 +52,7 @@ interface StyleRule {
 - a **width breakpoint id** (from `site.breakpoints`) → the publisher emits `@media (max-width: Npx)`; **or**
 - a **custom condition id** (from `site.conditions`, the reusable `@media`/`@container`/`@supports` registry) → the publisher emits that condition's `@`-prelude.
 
-This one map replaces the old split between `breakpointStyles` (width breakpoints) and `conditionalLayers` (everything else) — they were the same axis modelled twice. `parseStyleRule` migrates both legacy fields into `contextStyles`; the site-level `conditions` registry is reconstructed from legacy `conditionalLayers` in `parseSiteDocument`.
+`parseStyleRule` reads only the current `contextStyles` shape. Obsolete per-rule context fields are ignored rather than migrated.
 
 `styles` and `contextStyles` are typed `Record<string, unknown>` at the persistence boundary — narrowing happens at the publisher's `bagToCSS` (`classCss.ts`). The WRITE API (class slice, framework generators) uses the typed `CSSPropertyBag` shape from `src/core/page-tree/cssPropertyBag.ts`.
 

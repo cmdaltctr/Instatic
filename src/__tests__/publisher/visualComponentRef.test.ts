@@ -303,8 +303,11 @@ describe('VC inlining — class CSS collection', () => {
         'cls-heading': {
           id: 'cls-heading',
           name: 'heading-xl',
+          kind: 'class',
+          selector: '.heading-xl',
+          order: 0,
           styles: { fontSize: '2rem' },
-          breakpointStyles: {},
+          contextStyles: {},
           createdAt: 0,
           updatedAt: 0,
         },

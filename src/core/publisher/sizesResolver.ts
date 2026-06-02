@@ -13,8 +13,8 @@
  *     would need a parent-width context the publisher doesn't compute.
  *   - The **innermost** ancestor with a pixel-valued cap wins. Once one is
  *     found, traversal stops — outer ancestors can't loosen an inner cap.
- *   - The cap can shrink per-breakpoint via `class.breakpointStyles`. Each
- *     defined breakpoint emits a separate tier in the output.
+ *   - The cap can shrink per-breakpoint via `class.contextStyles[breakpointId]`.
+ *     Each defined breakpoint emits a separate tier in the output.
  *
  * Output: a `sizes` string emitted next to `srcset`, e.g.
  *   `(min-width: 769px) 1200px, (min-width: 376px) 600px, 100vw`
