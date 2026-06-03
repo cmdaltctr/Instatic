@@ -61,11 +61,52 @@
     font-weight: 650;
 }
 
+.invalidSelectorRow {
+    display: flex;
+    min-height: 30px;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: var(--editor-radius);
+    background: var(--editor-warning-bg);
+    color: var(--editor-warning-text);
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+.invalidSelectorIcon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    color: var(--editor-warning);
+}
+
+.invalidSelectorMessage {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .errorText {
     margin: -4px 0 0;
     color: var(--editor-danger);
     font-size: 11px;
     line-height: 1.35;
+}
+
+.noticeRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: -4px 0 0;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.noticeSelector {
+    color: var(--editor-text);
 }
 
 /* Suggestions dropdown section headers (Recent / Frequent / All classes).

@@ -24,6 +24,7 @@ import {
   readClassUsage,
   selectRecentAndFrequent,
 } from '@site/preferences/classUsage'
+import { isValidCssSelector } from '@site/store/styleRuleRename'
 import {
   type SelectorSuggestionItem,
 } from './selectorPickerModel'
@@ -96,6 +97,7 @@ export interface ClassPickerSuggestionsResult {
   exactMatchAlreadyAssigned: boolean
   exactMatchedSelectorItem: SelectorSuggestionItem | null
   createIntent: SelectorCreateInput
+  createValidationError: string | null
   canCreateNew: boolean
 
   /**
@@ -192,9 +194,13 @@ export function useClassPickerSuggestions(
   const exactMatchedSelectorItem = !isEmptyQuery && createIntent.kind === 'ambient'
     ? selectorItems.find((item) => styleRuleSelector(item.rule) === createIntent.selector) ?? null
     : null
+  const createValidationError = createIntent.kind === 'ambient' && !isValidCssSelector(createIntent.selector)
+    ? `Invalid CSS selector: ${createIntent.selector}`
+    : null
   const canCreateNew =
     !isEmptyQuery
     && createIntent.kind !== 'empty'
+    && createValidationError === null
     && exactMatchedClass === null
     && exactMatchedSelectorItem === null
 
@@ -213,6 +219,7 @@ export function useClassPickerSuggestions(
     highlightedSelectorItem,
     exactMatchedSelectorItem,
     canCreateNew,
+    createValidationError,
     createIntent,
     trimmedQueryRaw,
     exactMatchedClass,
@@ -241,6 +248,7 @@ export function useClassPickerSuggestions(
     exactMatchAlreadyAssigned,
     exactMatchedSelectorItem,
     createIntent,
+    createValidationError,
     canCreateNew,
     hasSubmittableQuery,
     submitTooltip,
@@ -293,6 +301,7 @@ function deriveSubmitTooltip(args: {
   highlightedSelectorItem: SelectorSuggestionItem | null
   exactMatchedSelectorItem: SelectorSuggestionItem | null
   canCreateNew: boolean
+  createValidationError: string | null
   createIntent: SelectorCreateInput
   trimmedQueryRaw: string
   exactMatchedClass: StyleRule | null
@@ -304,11 +313,13 @@ function deriveSubmitTooltip(args: {
     highlightedSelectorItem,
     exactMatchedSelectorItem,
     canCreateNew,
+    createValidationError,
     createIntent,
     trimmedQueryRaw,
     exactMatchedClass,
     exactMatchAlreadyAssigned,
   } = args
+  if (createValidationError) return createValidationError
   if (hasArrowSelection && highlightedName) return `Add class “${highlightedName}”`
   if (hasArrowSelection && highlightedSelectorItem) {
     if (highlightedSelectorItem.disabled) {

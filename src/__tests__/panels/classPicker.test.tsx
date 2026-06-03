@@ -97,6 +97,30 @@ function addRenderedCanvasFrame(html: string) {
   frame.contentDocument.body.innerHTML = html
 }
 
+type CssSupportsGlobal = {
+  CSS?: {
+    supports: (conditionText: string) => boolean
+  }
+}
+
+async function withCssSupports(
+  supports: (conditionText: string) => boolean,
+  run: () => Promise<void>,
+) {
+  const cssGlobal = globalThis as CssSupportsGlobal
+  const originalCss = cssGlobal.CSS
+  cssGlobal.CSS = { supports }
+  try {
+    await run()
+  } finally {
+    if (originalCss === undefined) {
+      delete cssGlobal.CSS
+    } else {
+      cssGlobal.CSS = originalCss
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Renders
 // ---------------------------------------------------------------------------
@@ -195,6 +219,36 @@ describe('ClassPicker — search + create', () => {
     // Submit button should still exist; the dropdown contextmenu is gone
     // (Suggestions dropdown is portaled; checking it disappears via DOM presence.)
     expect(screen.queryByRole('menu', { name: 'Selector suggestions' })).toBeNull()
+  })
+
+  it('validates selector creation before submit and never shows a create row for invalid CSS', async () => {
+    const user = userEvent.setup()
+    const { nodeId } = loadSiteWithNode()
+    render(<ClassPicker nodeId={nodeId} />)
+
+    await withCssSupports((conditionText) => {
+      if (conditionText === 'selector(*)') return true
+      return conditionText !== 'selector(input:placeholder)'
+    }, async () => {
+      const input = screen.getByPlaceholderText('Add or create selector…')
+      await user.click(input)
+      await user.type(input, 'input:placeholder')
+
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.getByTestId('class-picker-invalid-selector').textContent).toContain(
+        'Invalid CSS selector: input:placeholder',
+      )
+      expect(screen.queryByText('+ Create selector “input:placeholder”')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Submit selector' }).getAttribute('aria-disabled')).toBe('true')
+
+      await user.keyboard('{Enter}')
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.getByTestId('class-picker-invalid-selector').textContent).toContain(
+        'Invalid CSS selector: input:placeholder',
+      )
+      expect(screen.queryByText('+ Create selector “input:placeholder”')).toBeNull()
+      expect(screen.getByRole('menu', { name: 'Selector suggestions' })).toBeTruthy()
+    })
   })
 })
 
@@ -304,6 +358,31 @@ describe('ClassPicker — ambient selectors', () => {
     render(<ClassPicker nodeId={nodeId} />)
 
     expect(screen.getByRole('button', { name: 'Edit selector *' })).toBeTruthy()
+  })
+
+  it('shows an inline undo affordance when a newly-created ambient selector does not match', async () => {
+    const user = userEvent.setup()
+    const { nodeId } = loadSiteWithNode()
+    addRenderedCanvasElement(`<h1 data-node-id="${nodeId}" class="title"></h1>`)
+    render(<ClassPicker nodeId={nodeId} />)
+
+    const input = screen.getByPlaceholderText('Add or create selector…')
+    await user.click(input)
+    await user.type(input, '.hero .missing')
+    await user.keyboard('{Enter}')
+
+    const created = Object.values(useEditorStore.getState().site!.styleRules).find(
+      (rule) => rule.kind === 'ambient' && rule.selector === '.hero .missing',
+    )
+    expect(created).toBeDefined()
+    expect(useEditorStore.getState().activeClassId).not.toBe(created!.id)
+    expect(screen.getByText('.hero .missing')).toBeTruthy()
+    expect(screen.getByText(/was added but does not match this element/i)).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Undo selector .hero .missing creation' }))
+
+    expect(useEditorStore.getState().site!.styleRules[created!.id]).toBeUndefined()
+    expect(screen.queryByText(/was added but does not match this element/i)).toBeNull()
   })
 })
 

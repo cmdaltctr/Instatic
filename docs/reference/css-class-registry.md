@@ -92,6 +92,8 @@ The right Properties Panel exposes this through a unified selector picker:
 - non-matching ambient rules still appear in the dropdown, disabled with a "doesn't match this element" reason, so the user can see why the rule is not currently active.
 - class-kind pills and suggestion rows show the leading dot (`.hero-button`) because they are CSS selectors, not plain labels.
 - selector creation uses one input path. `classifySelectorCreateInput` treats one class token (`hero-button` or `.hero-button`) as a class-kind rule and selector-shaped input (`h1`, `.hero .title`, `a:hover`) as an ambient rule.
+- invalid selector-shaped input is validated in the picker autocomplete, disables submit, and replaces the "Create selector" row with a warning row. The store repeats the same validation as the final guard.
+- creating an ambient selector from the picker always creates the rule. If it does not match the selected element, the picker leaves selector-editing mode alone and shows an inline "added but does not match this element" notice with an Undo button.
 
 The picker decides ambient matches against the selected live canvas element as the selector subject (`element.matches(selector)`). A selector such as `.hero .title` appears when the selected element is `.title`, not when the selected element is the `.hero` ancestor. Supported trailing pseudo-state selectors (`:hover`, `:focus`, `:focus-visible`, `:active`) are surfaced as inactive matches by stripping the trailing pseudo and testing the base selector.
 

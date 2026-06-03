@@ -21,6 +21,12 @@ import { collectClassCSS, generateClassCSS } from '@core/publisher'
 import type { StyleRule } from '@core/page-tree'
 import '@modules/base'
 
+type CssSupportsGlobal = {
+  CSS?: {
+    supports: (conditionText: string) => boolean
+  }
+}
+
 function freshStore() {
   useEditorStore.setState({
     site: null,
@@ -39,6 +45,24 @@ function freshStore() {
     hasUnsavedChanges: false,
   })
   useEditorStore.getState().createSite('Test')
+}
+
+function withCssSupports(
+  supports: (conditionText: string) => boolean,
+  run: () => void,
+) {
+  const cssGlobal = globalThis as CssSupportsGlobal
+  const originalCss = cssGlobal.CSS
+  cssGlobal.CSS = { supports }
+  try {
+    run()
+  } finally {
+    if (originalCss === undefined) {
+      delete cssGlobal.CSS
+    } else {
+      cssGlobal.CSS = originalCss
+    }
+  }
 }
 
 describe('createAmbientRule', () => {
@@ -76,6 +100,29 @@ describe('createAmbientRule', () => {
     expect(() =>
       useEditorStore.getState().createAmbientRule({ selector: 'h1 >>> span' }),
     ).toThrow('Invalid CSS selector')
+  })
+
+  it('uses browser selector support to reject unknown pseudo-classes', () => {
+    freshStore()
+    withCssSupports((conditionText) => {
+      if (conditionText === 'selector(*)') return true
+      if (conditionText === 'selector(.a)') return true
+      if (conditionText === 'selector(input:placeholder)') return false
+      if (conditionText === 'selector(input::placeholder)') return true
+      return false
+    }, () => {
+      const store = useEditorStore.getState()
+      expect(() => store.createAmbientRule({ selector: 'input:placeholder' })).toThrow(
+        'Invalid CSS selector',
+      )
+      expect(() => store.createAmbientRule({ selector: '.a, input:placeholder' })).toThrow(
+        'Invalid CSS selector',
+      )
+      const rule = store.createAmbientRule({ selector: 'input::placeholder' })
+      expect(rule.selector).toBe('input::placeholder')
+      const listRule = store.createAmbientRule({ selector: '.a, input::placeholder' })
+      expect(listRule.selector).toBe('.a, input::placeholder')
+    })
   })
 
   it('appends to the cascade — order strictly greater than every existing rule', () => {

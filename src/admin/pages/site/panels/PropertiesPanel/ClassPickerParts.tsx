@@ -4,6 +4,8 @@ import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
 import { Input } from '@ui/components/Input'
 import { CornerDownLeftIcon } from 'pixel-art-icons/icons/corner-down-left'
+import { UndoIcon } from 'pixel-art-icons/icons/undo'
+import { WarningDiamondSolidIcon } from 'pixel-art-icons/icons/warning-diamond-solid'
 import { cn } from '@ui/cn'
 import { TagPill } from '@ui/components/TagPill'
 import {
@@ -247,12 +249,40 @@ export function SelectorInputArea({
   )
 }
 
+export function UnmatchedSelectorNotice({
+  selector,
+  onUndo,
+}: {
+  selector: string
+  onUndo: () => void
+}) {
+  return (
+    <div className={styles.noticeRow} aria-live="polite">
+      <span>
+        <span className={styles.noticeSelector}>{selector}</span>
+        {' was added but does not match this element'}
+      </span>
+      <Button
+        variant="ghost"
+        size="micro"
+        iconOnly
+        aria-label={`Undo selector ${selector} creation`}
+        tooltip="Undo"
+        onClick={onUndo}
+      >
+        <UndoIcon size={11} aria-hidden="true" />
+      </Button>
+    </div>
+  )
+}
+
 export interface RankedSuggestionsListProps {
   filteredSuggestions: readonly StyleRule[]
   selectorSuggestions: readonly SelectorSuggestionItem[]
   highlightedClassId: string | null
   highlightedSelectorId: string | null
   canCreateNew: boolean
+  createValidationError: string | null
   createIntentKind: 'class' | 'ambient' | 'empty'
   query: string
   onPick: (classId: string) => void
@@ -268,6 +298,7 @@ export function RankedSuggestionsList({
   highlightedClassId,
   highlightedSelectorId,
   canCreateNew,
+  createValidationError,
   createIntentKind,
   query,
   onPick,
@@ -329,7 +360,13 @@ export function RankedSuggestionsList({
           </ContextMenuItem>
         </>
       )}
-      {!hasClassSuggestions && !hasSelectorSuggestions && !canCreateNew && (
+      {createValidationError && (
+        <>
+          {(hasClassSuggestions || hasSelectorSuggestions) && <ContextMenuSeparator />}
+          <InvalidSelectorSuggestionRow message={createValidationError} />
+        </>
+      )}
+      {!hasClassSuggestions && !hasSelectorSuggestions && !canCreateNew && !createValidationError && (
         <div className={styles.noMatch}>
           No selectors match &ldquo;{query}&rdquo;
         </div>
@@ -364,6 +401,7 @@ export interface SelectorSuggestionsPortalProps {
   highlightedClassId: string | null
   highlightedSelectorId: string | null
   createIntentKind: 'class' | 'ambient' | 'empty'
+  createValidationError: string | null
   query: string
   onClose: () => void
   onPick: (classId: string) => void
@@ -387,6 +425,7 @@ export function SelectorSuggestionsPortal({
   highlightedClassId,
   highlightedSelectorId,
   createIntentKind,
+  createValidationError,
   query,
   onClose,
   onPick,
@@ -435,6 +474,7 @@ export function SelectorSuggestionsPortal({
           highlightedClassId={highlightedClassId}
           highlightedSelectorId={highlightedSelectorId}
           canCreateNew={visibility.canCreate}
+          createValidationError={createValidationError}
           createIntentKind={createIntentKind}
           query={query}
           onPick={onPick}
@@ -446,6 +486,21 @@ export function SelectorSuggestionsPortal({
       )}
     </ContextMenu>,
     document.body,
+  )
+}
+
+function InvalidSelectorSuggestionRow({ message }: { message: string }) {
+  return (
+    <div
+      className={styles.invalidSelectorRow}
+      aria-live="polite"
+      data-testid="class-picker-invalid-selector"
+    >
+      <span className={styles.invalidSelectorIcon} aria-hidden="true">
+        <WarningDiamondSolidIcon size={12} />
+      </span>
+      <span className={styles.invalidSelectorMessage}>{message}</span>
+    </div>
   )
 }
 

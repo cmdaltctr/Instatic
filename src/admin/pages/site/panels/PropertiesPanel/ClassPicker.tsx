@@ -1,22 +1,4 @@
-/**
- * ClassPicker — always-visible class chip manager.
- *
- * Replaces ClassesTab in the Properties Panel redesign (Spec #659 §2).
- * Now permanently visible (no tab click required — PP-2 acceptance criterion).
- *
- * Changes vs. ClassesTab:
- *   - Pill right-click context menu owns reorder/rename/remove actions — PP-8
- *   - Chip × has tooltip="Remove from this element" — PP-9
- *   - Class assignment UI lives directly under the selected element header
- *   - Uses reorderNodeClass store action (new in classSlice — Task #456)
- *
- * Architecture:
- *   - Always mounted when a node is selected (PropertiesPanel renders it unconditionally)
- *   - Active class styling is rendered by PropertiesPanel below the header class strip
- *   - Guideline #242: reorderNodeClass no-ops at array boundaries
- *   - Guideline #350: pixel-art-icons only; CloseIcon for × button
- *   - Constraint #451: X/Twitter logo icon is prohibited (use CloseIcon for × buttons)
- */
+/** ClassPicker — selector chip manager for the selected element. */
 
 import {
   useState,
@@ -64,6 +46,7 @@ import {
   SelectorInputArea,
   SelectorPillStack,
   SelectorSuggestionsPortal,
+  UnmatchedSelectorNotice,
 } from './ClassPickerParts'
 import dialogStyles from '../../../../shared/dialogs/SiteCreateDialog/SiteCreateDialog.module.css'
 import styles from './ClassPicker.module.css'
@@ -72,6 +55,11 @@ interface ClassContextMenuState {
   x: number
   y: number
   classId: string
+}
+
+interface UnmatchedSelectorNoticeState {
+  ruleId: string
+  selector: string
 }
 
 interface ClassPickerUiState {
@@ -132,7 +120,7 @@ function classPickerUiReducer(
     case 'setRenameTarget':
       return { ...state, renameTarget: action.renameTarget }
     case 'setCreateError':
-      return { ...state, createError: action.message }
+      return { ...state, createError: action.message, showSuggestions: false, highlightedIndex: -1 }
     case 'moveHighlight': {
       if (action.count <= 0) return state
       if (action.direction === 'next') {
@@ -241,24 +229,13 @@ function useClassPickerDerivedState({
   }
 }
 
-// ---------------------------------------------------------------------------
-// ClassPicker
-// ---------------------------------------------------------------------------
-
 export interface ClassPickerHandle {
-  /** Focus the 'Add or create selector…' input. */
   focusInput: () => void
 }
 
 interface ClassPickerProps {
   nodeId: string
-  /**
-   * Optional inline action rendered to the right of the 'Add or create selector…'
-   * input as a sibling cell in the same two-column row. The suggestions
-   * dropdown spans both cells so search results can use the full row width.
-   */
   trailingAction?: ReactNode
-  /** React 19: ref is a regular prop on function components. */
   ref?: Ref<ClassPickerHandle>
 }
 
@@ -278,8 +255,11 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
   const reorderNodeClass = useEditorStore((s) => s.reorderNodeClass)
   const setPreviewNodeClass = useEditorStore((s) => s.setPreviewNodeClass)
   const clearPreviewNodeClass = useEditorStore((s) => s.clearPreviewNodeClass)
+  const undo = useEditorStore((s) => s.undo)
 
   const [ui, dispatchUi] = useReducer(classPickerUiReducer, initialClassPickerUiState)
+  const [unmatchedSelectorNotice, setUnmatchedSelectorNotice] =
+    useState<UnmatchedSelectorNoticeState | null>(null)
   const { query, showSuggestions, contextMenu, renameTarget, createError, highlightedIndex } = ui
   const hoverPreviewEnabled = useEditorPreference('hoverPreview')
 
@@ -312,6 +292,7 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
     exactMatchAlreadyAssigned,
     exactMatchedSelectorItem,
     createIntent,
+    createValidationError,
     selectorSuggestions,
     hasSuggestionRows,
   } = useClassPickerDerivedState({
@@ -330,6 +311,7 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
   const openSuggestions = () => dispatchUi({ type: 'openSuggestions' })
 
   const handleAddExisting = (classId: string) => {
+    setUnmatchedSelectorNotice(null)
     addNodeClass(nodeId, classId)
     setActiveClass(classId)
     clearPreviewNodeClass(nodeId, classId)
@@ -339,6 +321,7 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
 
   const handleSelectAmbient = (item: SelectorSuggestionItem) => {
     if (item.disabled) return
+    setUnmatchedSelectorNotice(null)
     setActiveClass(item.rule.id)
     dispatchUi({ type: 'resetAfterSubmit' })
   }
@@ -348,6 +331,7 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
     if (intent.kind === 'empty') return
     try {
       if (intent.kind === 'class') {
+        setUnmatchedSelectorNotice(null)
         const newClass = createClass(intent.name)
         addNodeClass(nodeId, newClass.id)
         setActiveClass(newClass.id)
@@ -362,13 +346,18 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
           activeRuleId: null,
         })
         const createdSuggestion = createdModel.suggestions[0]
-        if (createdSuggestion && !createdSuggestion.disabled) setActiveClass(newRule.id)
+        if (createdSuggestion && !createdSuggestion.disabled) {
+          setUnmatchedSelectorNotice(null)
+          setActiveClass(newRule.id)
+        } else {
+          setUnmatchedSelectorNotice({ ruleId: newRule.id, selector: newRule.selector })
+        }
       }
       dispatchUi({ type: 'resetAfterSubmit' })
     } catch (err) {
       dispatchUi({
         type: 'setCreateError',
-        message: getErrorMessage(err, 'Unable to create selector'),
+        message: getErrorMessage(err, 'Unable to create selector').replace(/^\[[^\]]+\]\s*/, ''),
       })
     }
   }
@@ -457,6 +446,11 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
     removeNodeClass(nodeId, classId)
   }
 
+  const handleUndoUnmatchedSelector = () => {
+    undo()
+    setUnmatchedSelectorNotice(null)
+  }
+
   const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -509,7 +503,10 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
         query={query}
         hasSubmittableQuery={hasSubmittableQuery}
         submitTooltip={submitTooltip}
-        onQueryChange={(nextQuery) => dispatchUi({ type: 'inputChanged', query: nextQuery })}
+        onQueryChange={(nextQuery) => {
+          setUnmatchedSelectorNotice(null)
+          dispatchUi({ type: 'inputChanged', query: nextQuery })
+        }}
         onFocus={openSuggestions}
         onKeyDown={handleSearchKeyDown}
         onSubmit={submitQuery}
@@ -533,6 +530,7 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
           highlightedClassId={highlightedClassId}
           highlightedSelectorId={highlightedSelectorId}
           createIntentKind={createIntent.kind}
+          createValidationError={createValidationError}
           query={query}
           onClose={closeSuggestions}
           onPick={handleAddExisting}
@@ -543,6 +541,12 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
         />
       </SelectorInputArea>
       {createError && <p role="alert" className={styles.errorText}>{createError}</p>}
+      {unmatchedSelectorNotice && site?.styleRules[unmatchedSelectorNotice.ruleId] && (
+        <UnmatchedSelectorNotice
+          selector={unmatchedSelectorNotice.selector}
+          onUndo={handleUndoUnmatchedSelector}
+        />
+      )}
 
       <SelectorPillStack
         pills={selectorModel.pills}
@@ -561,15 +565,6 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
     </div>
   )
 }
-
-// ---------------------------------------------------------------------------
-// PillContextMenuPortal — portals the right-click menu over a single pill.
-//
-// Render the menu only when both `contextMenu` (the open-state record) and
-// `contextClass` (the class it points at) are present. Each action takes the
-// `cls` so the parent doesn't re-derive it; the menu always closes after the
-// caller's action runs (so callers don't have to remember to call onClose).
-// ---------------------------------------------------------------------------
 
 interface PillContextMenuPortalProps {
   contextMenu: ClassContextMenuState | null
