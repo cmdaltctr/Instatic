@@ -398,7 +398,7 @@ Server-side publishing helpers live in `server/publish/`:
 | `publicRouter.ts`                 | Visitor URL → resolution → Response. Composes Layer A disk-read + Layer B cache. Single entry for every visitor HTML request. |
 | `staticArtefact.ts`               | Layer A. Two-slot symlink swap (`current → slot-{a,b}`), atomic per-file `tmp + rename`, slot-aware read/write/purge. |
 | `renderCache.ts`                  | Layer B. Bounded LRU keyed by `(urlPath, queryString)`, entries versioned. Single-flight on cache miss. `bumpPublishVersion()` invalidates lazily; version captured at render start so mid-flight publishes discard without caching stale HTML. |
-| `holeRuntime.ts`                  | Layer C client-side runtime (~668 B). Exported as `HOLE_RUNTIME_JS`. |
+| `holeRuntime.ts`                  | Layer C client-side runtime (~668 B). Exports `runInstaticHoleRuntime` (TS source) and `HOLE_RUNTIME_JS` (IIFE-serialized for browser delivery). |
 | `publicRenderer.ts`               | `renderPublishedSnapshot`, `renderPublishedDataRowTemplate` — snapshot-aware wrappers around `publishPage`. |
 | `publishedHtmlPipeline.ts`        | Plugin frontend-asset injection + `publish.html` filter chain. Runs at publish time for every baked page (complete doc or hole shell); also runs in the Layer B factory for query-string / live renders (cached). |
 | `siteCssBundle.ts`                | Per-site reset / framework / style CSS bundles (hashed filenames).  |

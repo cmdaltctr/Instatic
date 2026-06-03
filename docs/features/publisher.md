@@ -47,7 +47,7 @@ server/publish/
 ├── publicRouter.ts                 — gateway: Layer A disk fast-path → Layer B LRU → live resolver
 ├── staticArtefact.ts               — two-slot symlink swap + read/write/purge artefacts (Layer A)
 ├── renderCache.ts                  — in-memory LRU + publishVersion bump + single-flight (Layer B)
-├── holeRuntime.ts                  — HOLE_RUNTIME_JS source string (~668 B, served by hole handler)
+├── holeRuntime.ts                  — Layer C client runtime; exports runInstaticHoleRuntime (TS source) + HOLE_RUNTIME_JS (IIFE-serialized, ~668 B)
 ├── publicRenderer.ts               — renderPublishedSnapshot, renderPublishedDataRowTemplate
 ├── publishedHtmlPipeline.ts        — post-process (sanitize + plugin filters + injections)
 ├── siteCssBundle.ts                — server-side hashing + file emission
@@ -274,7 +274,7 @@ Editing the CSP manually is **not** safe — it's a derived value. Edit the sour
 | `server/publish/publicRouter.ts`                | Gateway: Layer A disk fast-path → Layer B LRU → live `resolvePublicRoute` + `renderPublicResolution`. |
 | `server/publish/staticArtefact.ts`              | Two-slot symlink swap (`swapSlot`), per-file atomic writes (`writeArtefact`, `updateArtefactInPlace`), and reads (`readArtefact`). Layer A. |
 | `server/publish/renderCache.ts`                 | In-memory LRU keyed by `(urlPath, queryString)`, entries versioned. `getOrRender` (single-flight) + `bumpPublishVersion`. Version captured at render start — a publish landing mid-render discards the result rather than caching stale HTML. Layer B. |
-| `server/publish/holeRuntime.ts`                 | `HOLE_RUNTIME_JS` — the ~668 B `IntersectionObserver` script included only on pages with holes. Layer C. |
+| `server/publish/holeRuntime.ts`                 | Exports `runInstaticHoleRuntime` (the TypeScript source of the Layer C runtime) and `HOLE_RUNTIME_JS` (IIFE-serialized string, ~668 B, served to browsers). Tests call `runInstaticHoleRuntime()` directly to avoid dynamic eval. |
 | `server/publish/publicRenderer.ts`              | `renderPublishedSnapshot`, `renderPublishedDataRowTemplate`. Calls `publishPage`. |
 | `server/publish/publishedHtmlPipeline.ts`       | Post-process: DOMPurify the final HTML, run plugin `publish.html` filter, splice in declarative tags from plugin manifests, inject runtime assets. Runs at publish time only — never per-request. |
 | `server/publish/siteCssBundle.ts`               | Hash the three CSS strings, write `uploads/css/...` files.          |
