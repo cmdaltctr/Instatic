@@ -94,6 +94,12 @@ export function usePersistence(
   )
   /** Whether the initial load has completed — prevents auto-save before load */
   const loadedRef = useRef(false)
+  /**
+   * Page ids known to be in storage as of the last load/save — the
+   * optimistic-concurrency baseline sent on save so a sibling session's
+   * just-created page is never reaped by this client's reconcile (ISS-041).
+   */
+  const syncedPageIdsRef = useRef<string[]>([])
   /** Stable reference to the adapter so it doesn't trigger re-renders */
   const adapterRef = useRef(adapter)
   useEffect(() => {
@@ -108,7 +114,10 @@ export function usePersistence(
 
     setSaveStatus({ state: 'saving', message: 'Saving draft' })
     try {
-      await adapterRef.current.saveSite(site)
+      await adapterRef.current.saveSite(site, syncedPageIdsRef.current)
+      // The save just reconciled storage to this client's roster; that set is
+      // the new concurrency baseline for the next save.
+      syncedPageIdsRef.current = site.pages.map((p) => p.id)
       setHasUnsavedChanges(false)
       setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
     } catch (err) {
@@ -154,6 +163,7 @@ export function usePersistence(
           // Constraint #230 is satisfied at the adapter boundary.
           const site = await adapterRef.current.loadSite(idToTry)
           if (site && !cancelled) {
+            syncedPageIdsRef.current = site.pages.map((p) => p.id)
             loadSite(site)
             applyDefaultBreakpointPreference(site.breakpoints)
             loadedRef.current = true
@@ -179,8 +189,9 @@ export function usePersistence(
         const created = createSite('My Site')
         applyDefaultBreakpointPreference(created.breakpoints)
         loadedRef.current = true
+        syncedPageIdsRef.current = created.pages.map((p) => p.id)
         try {
-          await adapterRef.current.saveSite(created)
+          await adapterRef.current.saveSite(created, syncedPageIdsRef.current)
           setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
         } catch (err) {
           setHasUnsavedChanges(true)
@@ -210,6 +221,7 @@ export function usePersistence(
         const site = await adapterRef.current.loadSite(idToTry)
         if (!site) return
         const { loadSite, setHasUnsavedChanges } = useEditorStore.getState()
+        syncedPageIdsRef.current = site.pages.map((p) => p.id)
         loadSite(site)
         applyDefaultBreakpointPreference(site.breakpoints)
         // The site doc on disk is now authoritative; clear the unsaved flag so
@@ -278,7 +290,7 @@ export function usePersistence(
       const { site, hasUnsavedChanges } = useEditorStore.getState()
       if (!site || !loadedRef.current || !hasUnsavedChanges) return
       clearTimeout(timer)
-      void adapterRef.current.saveSite(site).catch((err) => {
+      void adapterRef.current.saveSite(site, syncedPageIdsRef.current).catch((err) => {
         console.error('[persistence] beforeunload save failed:', err)
       })
     }

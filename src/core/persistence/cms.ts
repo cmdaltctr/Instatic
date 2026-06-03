@@ -33,7 +33,7 @@ export class CmsAdapter implements IPersistenceAdapter {
    * Shell is written first; pages and components can then be written in
    * parallel since they do not depend on each other.
    */
-  async saveSite(site: SiteDocument): Promise<void> {
+  async saveSite(site: SiteDocument, baselinePageIds?: string[]): Promise<void> {
     // Extract shell (strip pages and visualComponents from the full SiteDocument)
     const { pages, visualComponents, ...shell } = site
 
@@ -51,7 +51,7 @@ export class CmsAdapter implements IPersistenceAdapter {
         method: 'PUT',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pages }),
+        body: JSON.stringify(baselinePageIds ? { pages, baselinePageIds } : { pages }),
       }),
       this.fetchImpl(`${this.basePath}/components`, {
         method: 'PUT',

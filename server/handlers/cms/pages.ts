@@ -45,6 +45,23 @@ import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '.
 import { Type } from '@core/utils/typeboxHelpers'
 import { CMS_API_PREFIX } from './shared'
 
+/**
+ * Decide which existing `pages` rows to soft-delete during a roster reconcile.
+ *
+ * With `baselineIds` (the page ids the saving client loaded), only reap a row
+ * the client knew about and dropped — never a row another session created
+ * concurrently, which the saving client never saw (ISS-041). With no baseline,
+ * reap every row missing from the incoming set (authoritative full replace,
+ * e.g. an import).
+ */
+export function pagesToReap(
+  existingIds: string[],
+  incomingIds: ReadonlySet<string>,
+  baselineIds?: ReadonlySet<string>,
+): string[] {
+  return existingIds.filter((id) => !incomingIds.has(id) && (baselineIds ? baselineIds.has(id) : true))
+}
+
 export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Response | null> {
   const url = new URL(req.url)
   if (url.pathname !== `${CMS_API_PREFIX}/pages`) return null
@@ -65,7 +82,14 @@ export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Res
     const user = await requireCapability(req, db, 'site.structure.edit')
     if (user instanceof Response) return user
 
-    const PagesBodySchema = Type.Object({ pages: Type.Array(Type.Unknown()) })
+    const PagesBodySchema = Type.Object({
+      pages: Type.Array(Type.Unknown()),
+      // Optimistic-concurrency token: the page ids the client loaded. When
+      // present, the reconcile only reaps rows the client knew about, so a
+      // sibling session's just-created page is never silently deleted (ISS-041).
+      // Absent = authoritative full replace (import).
+      baselinePageIds: Type.Optional(Type.Array(Type.String())),
+    })
     const body = await readValidatedBody(req, PagesBodySchema)
     if (!body) return badRequest('Invalid request body')
     const rawPages = body.pages
@@ -95,6 +119,7 @@ export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Res
       const existingRows = await listDataRows(tx, 'pages')
       const existingById = new Map(existingRows.map((r) => [r.id, r]))
       const incomingIds = new Set(pages.map((p) => p.id))
+      const baselineIds = body.baselinePageIds ? new Set(body.baselinePageIds) : undefined
 
       for (const page of pages) {
         const cells = pageToCells(page)
@@ -105,11 +130,10 @@ export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Res
         }
       }
 
-      // Soft-delete rows that are no longer in the incoming set
-      for (const [rowId] of existingById) {
-        if (!incomingIds.has(rowId)) {
-          await softDeleteDataRow(tx, rowId, user.id)
-        }
+      // Soft-delete only the rows the client knew about and dropped — never a
+      // concurrently-created sibling page (ISS-041).
+      for (const rowId of pagesToReap([...existingById.keys()], incomingIds, baselineIds)) {
+        await softDeleteDataRow(tx, rowId, user.id)
       }
     })
 
