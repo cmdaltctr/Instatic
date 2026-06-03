@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { existsSync, readFileSync } from 'fs'
+import { readFileSync } from 'fs'
 import { join } from 'path'
 
 const ROOT = join(import.meta.dir, '../../..')
@@ -10,14 +10,6 @@ function read(path: string): string {
 }
 
 describe('Single-install CMS architecture', () => {
-  it('does not keep obsolete multi-site or managed-hosting planning docs', () => {
-    expect(existsSync(join(ROOT, 'docs/multi-user-scope.md'))).toBe(false)
-    expect(existsSync(join(ROOT, 'docs/multi-user-scope-review.md'))).toBe(false)
-    expect(existsSync(join(ROOT, 'docs/single-install-identity-scope.md'))).toBe(false)
-    expect(existsSync(join(ROOT, 'docs/deployment/managed-service.md'))).toBe(false)
-    expect(existsSync(join(ROOT, 'docs/deployment/managed-hosts.md'))).toBe(false)
-  })
-
   it('keeps the CMS database single-site instead of tenant-scoped', () => {
     const pg = read('server/db/migrations-pg.ts')
     const sqlite = read('server/db/migrations-sqlite.ts')

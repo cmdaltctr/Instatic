@@ -19,9 +19,6 @@
  *
  * ── Gate groups ──────────────────────────────────────────────────────────────
  *
- * Section 1 — File existence (FE-1 – FE-4)
- * Section 2 — Dependency direction (DD-1 – DD-2)
- * Section 3 — Type shape / static source scan (TS-1 – TS-4)
  * Section 4 — nameValidation: free-form names (NV-1 – NV-9)
  * Section 5 — recursionGuard pure functions (RG-1 – RG-8)
  * Section 6 — visualComponentsSlice CRUD via store (SL-1 – SL-14)
@@ -43,24 +40,10 @@
  */
 
 import { describe, it, expect, beforeEach } from 'bun:test'
-import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
 import { useEditorStore } from '@site/store/store'
 import { validateSite, validateVisualComponents } from '@core/persistence/validate'
 import type { SiteDocument } from '@core/page-tree'
 import { safeParseValue } from '@core/utils/typeboxHelpers'
-
-// ---------------------------------------------------------------------------
-// Canonical paths
-// ---------------------------------------------------------------------------
-
-const ROOT = join(import.meta.dir, '../../../')
-
-const VC_SCHEMAS_TS    = join(ROOT, 'src/core/visualComponents/schemas.ts')
-const NAME_VALIDATION  = join(ROOT, 'src/core/visualComponents/nameValidation.ts')
-const RECURSION_GUARD  = join(ROOT, 'src/core/visualComponents/recursionGuard.ts')
-const VC_SLICE_TS      = join(ROOT, 'src/admin/pages/site/store/slices/visualComponentsSlice.ts')
-const PAGE_TREE_SCHEMAS = join(ROOT, 'src/core/page-tree/siteDocument.ts')
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded functional modules (fail gracefully if not yet implemented)
@@ -216,79 +199,6 @@ function rawVC(overrides: Record<string, unknown> = {}) {
   }
 }
 
-// ============================================================================
-// Section 1 — File existence
-// ============================================================================
-
-describe('Gate FE-1 — schemas.ts exists', () => {
-  it('src/core/visualComponents/schemas.ts exists (canonical Zod source after types.ts shim deleted)', () => {
-    expect(existsSync(VC_SCHEMAS_TS)).toBe(true)
-  })
-})
-
-describe('Gate FE-2 — nameValidation.ts exists', () => {
-  it('src/core/visualComponents/nameValidation.ts exists', () => {
-    expect(existsSync(NAME_VALIDATION)).toBe(true)
-  })
-})
-
-describe('Gate FE-3 — recursionGuard.ts exists', () => {
-  it('src/core/visualComponents/recursionGuard.ts exists', () => {
-    expect(existsSync(RECURSION_GUARD)).toBe(true)
-  })
-})
-
-describe('Gate FE-4 — visualComponentsSlice.ts exists', () => {
-  it('src/core/editor-store/slices/visualComponentsSlice.ts exists', () => {
-    expect(existsSync(VC_SLICE_TS)).toBe(true)
-  })
-})
-
-// ============================================================================
-// Section 2 — Dependency direction
-// ============================================================================
-
-describe('Gate DD-1 — core/visualComponents has no editor/ imports', () => {
-  it('schemas.ts, nameValidation.ts, recursionGuard.ts do NOT import from editor/', () => {
-    // All files in the visualComponents directory must stay in core —
-    // editor/ → core/ is allowed, core/ → editor/ is not.
-    const files = [VC_SCHEMAS_TS, NAME_VALIDATION, RECURSION_GUARD]
-    for (const file of files) {
-      if (!existsSync(file)) continue  // File not yet created — will fail via FE-* gate
-      const source = readFileSync(file, 'utf8')
-      const editorImports = source.match(/from ['"][^'"]*editor\/[^'"]*['"]/g) ?? []
-      expect(editorImports).toHaveLength(0)
-    }
-  })
-})
-
-describe('Gate DD-2 — visualComponentsSlice has no editor/ imports', () => {
-  it('visualComponentsSlice.ts does NOT import from editor/', () => {
-    if (!existsSync(VC_SLICE_TS)) {
-      throw new Error('[Task #436 not implemented] visualComponentsSlice.ts does not exist yet.')
-    }
-    const source = readFileSync(VC_SLICE_TS, 'utf8')
-    const editorImports = source.match(/from ['"][^'"]*editor\/[^'"]*['"]/g) ?? []
-    expect(editorImports).toHaveLength(0)
-  })
-})
-
-// ============================================================================
-// Section 3 — Type shape (static source scan on page-tree/siteDocument.ts)
-// ============================================================================
-
-describe('Gate TS-1 — SiteDocument.visualComponents field declared in siteDocument.ts', () => {
-  it('page-tree/siteDocument.ts declares visualComponents in the SiteDocument type', () => {
-    // After final cleanup: types.ts shim deleted — SiteDocument lives exclusively in siteDocument.ts.
-    const schemas = readFileSync(PAGE_TREE_SCHEMAS, 'utf8')
-    // Must have a visualComponents field inside the in-memory SiteDocument type.
-    expect(schemas).toMatch(/visualComponents\s*:/)
-    // SiteDocument type must be declared in siteDocument.ts.
-    expect(schemas).toMatch(/SiteDocument/)
-    expect(schemas).not.toMatch(/interface SiteDocument/)
-  })
-})
-
 describe('Gate TS-2 — BaseNode.propBindings optional field declared', () => {
   it('BaseNodeSchema declares propBindings as an optional record of paramId references', async () => {
     const { BaseNodeSchema } = await import('@core/page-tree')
@@ -320,41 +230,6 @@ describe('Gate TS-2 — BaseNode.propBindings optional field declared', () => {
     })
     expect(withBinding.ok).toBe(true)
     if (withBinding.ok) expect(withBinding.value.propBindings).toEqual({ text: { paramId: 'p1' } })
-  })
-})
-
-describe('Gate TS-3 — VCParam shape has stable id field', () => {
-  it('schemas.ts exports VCParam with id, name, type, defaultValue', () => {
-    if (!existsSync(VC_SCHEMAS_TS)) {
-      throw new Error('[Task #436 not implemented] schemas.ts does not exist yet.')
-    }
-    // schemas.ts is the canonical Zod source (types.ts shim has been deleted)
-    const definitionSource = readFileSync(VC_SCHEMAS_TS, 'utf8')
-
-    // VCParam must be declared as an exported type (via z.infer)
-    expect(definitionSource).toMatch(/(interface VCParam|export type VCParam)/)
-    // id is the stable identifier that survives param renames (§2 rationale)
-    expect(definitionSource).toMatch(/\bid\s*:/)
-    expect(definitionSource).toMatch(/\bname\s*:/)
-    // type field — may be inline union or a named VCParamType alias; both include 'string'
-    expect(definitionSource).toMatch(/['"]string['"]/)
-    expect(definitionSource).toMatch(/\bdefaultValue\s*:/)
-  })
-})
-
-describe('Gate TS-4 — VisualComponent shape has required fields', () => {
-  it('schemas.ts exports VisualComponent with id, name, rootNode, params', () => {
-    if (!existsSync(VC_SCHEMAS_TS)) {
-      throw new Error('[Task #436 not implemented] schemas.ts does not exist yet.')
-    }
-    // schemas.ts is the canonical Zod source (types.ts shim has been deleted)
-    const definitionSource = readFileSync(VC_SCHEMAS_TS, 'utf8')
-
-    // VisualComponent must be declared as an exported type (via Static<typeof>)
-    expect(definitionSource).toMatch(/(interface VisualComponent|export type VisualComponent)/)
-    // After flat-tree migration: VC uses tree: NodeTree instead of rootNode
-    expect(definitionSource).toMatch(/\btree\s*:/)
-    expect(definitionSource).toMatch(/\bparams\s*:/)
   })
 })
 

@@ -259,7 +259,7 @@ const tree = parsePageNodeTree(raw)
 | Branching on `kind === 'visualComponent'` inside a store mutation | Let `mutateActiveTree` route — keep the mutation generic |
 | Treating slot fills as a separate "slotContent" prop            | Slot fills are children of a `base.slot-instance` node in the same tree |
 | Adding a parallel `interface NodeTree` type                     | `NodeTreeSchema` and `NodeTree<TNode>` in `treeSchema.ts` are the source of truth |
-| Using a non-flat tree representation (nested `children: PageNode[]`) | Flat map + `children: string[]` — gated by `task455-tree-primitive.test.ts` |
+| Using a non-flat tree representation (nested `children: PageNode[]`) | Flat map + `children: string[]` — covered by `src/__tests__/persistence/treeSchemaShape.test.ts` |
 | Writing a mutation that takes a `Page` specifically             | Take `NodeTree<TNode>` — pages and VCs both pass            |
 | Deep-importing a concrete file: `import X from '@core/page-tree/mutations'` | Import through the barrel: `import { X } from '@core/page-tree'` — gated by `no-core-barrel-deep-imports.test.ts` |
 
@@ -280,7 +280,7 @@ const tree = parsePageNodeTree(raw)
   - `src/core/visualComponents/schemas.ts` — `VCNode` (= `BaseNode`)
   - `src/admin/pages/site/store/slices/site/nodeActions.ts` — store actions calling `mutateActiveTree`
 - Gate tests:
-  - `src/__tests__/architecture/task455-tree-primitive.test.ts`
+  - `src/__tests__/persistence/treeSchemaShape.test.ts`
   - `src/__tests__/architecture/no-vc-mode-branches-in-mutations.test.ts`
   - `src/__tests__/architecture/centralized-site-mutation-history.test.ts`
   - `src/__tests__/architecture/visual-components-mutation-contract.test.ts`

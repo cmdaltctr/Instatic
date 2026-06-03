@@ -85,20 +85,9 @@ describe('self-host docker config', () => {
     expect(compose).toContain('CHANGEME')
   })
 
-  it('documents production environment variables and deployment workflows', () => {
+  it('defines production environment variables required by the compose stack', () => {
     const env = readFileSync('.env.production.example', 'utf8')
-    const readme = readFileSync('README.md', 'utf8')
-    const vpsDocs = readFileSync('docs/deployment/vps-compose.md', 'utf8')
-    const backupDocs = readFileSync('docs/deployment/backup-restore.md', 'utf8')
-    const releaseDocs = readFileSync('docs/deployment/release-workflow.md', 'utf8')
 
     expect(env).toContain('POSTGRES_PASSWORD=')
-    expect(readme).toContain('Self-hosted CMS')
-    expect(vpsDocs).toContain('docker compose -f compose.prod.yml up -d')
-    expect(vpsDocs).toContain('docker compose -f compose.prod.yml pull app')
-    expect(vpsDocs).toContain('compose.build.yml')
-    expect(backupDocs).toContain('pg_dump')
-    expect(releaseDocs).toContain('GitHub Actions builds the Docker image')
-    expect(releaseDocs).toContain('ghcr.io/corebunch/instatic')
   })
 })

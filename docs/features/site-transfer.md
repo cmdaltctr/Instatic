@@ -287,4 +287,3 @@ A nightly cron can hit `/admin/api/cms/export` with an admin session cookie and 
   - `src/__tests__/architecture/cmsTransferPreview.test.ts`
   - `src/__tests__/architecture/cmsTransferImport.test.ts`
   - `src/__tests__/architecture/import-export-roundtrip.test.ts`
-  - `src/__tests__/architecture/selfHostedCmsExportRemoval.test.ts`

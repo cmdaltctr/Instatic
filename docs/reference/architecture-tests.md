@@ -6,7 +6,7 @@ Catalog of every test in `src/__tests__/architecture/`. These are structural gat
 
 ## TL;DR
 
-- 84 gate files across structural domains: SQL, JSON columns, migrations, CSS, icons, primitives, page tree, sandbox, agent, router, content storage, boundary validation, module size, AI, auth, etc.
+- 81 gate files across structural domains: SQL, JSON columns, migrations, CSS, icons, primitives, page tree, sandbox, agent, router, content storage, boundary validation, module size, AI, auth, etc.
 - Naming convention: `<topic>.test.ts` (kebab-case) or `<group>-<topic>.test.ts`. A few legacy `task<N>-*` ids remain for live invariants; new gates should use topic names.
 - Run them all: `bun test src/__tests__/architecture/`.
 - Most are **import / source scans** — they parse the files in scope and assert / reject patterns. Some are unit-style (a small in-test database, a synthesized page tree).
@@ -46,7 +46,6 @@ See [docs/reference/database-dialects.md](database-dialects.md).
 
 | Test                                          | What it enforces                                                                 |
 |-----------------------------------------------|----------------------------------------------------------------------------------|
-| `task455-tree-primitive.test.ts`              | The `Tree*` primitive lives at `src/admin/pages/site/ui/Tree/` and exports `TreeContainer`, `TreeRow`, `TreeChevron`, `TreeIconSlot`, `TreeLabel`. DOM panel and Site Explorer both import from `@site/ui/Tree` and render `<TreeContainer>` / `<TreeRow>`. Site Explorer renders via `SiteExplorerTreeSection` and stays concept-oriented (no `src/pages/` paths, no `window.prompt`). |
 | `no-vc-mode-branches-in-mutations.test.ts`    | The 11 store actions don't branch on `kind === 'visualComponent'`. Routing happens in `mutateActiveTree`. |
 | `visual-components-mutation-contract.test.ts` | VC tree mutations preserve the slot-instance / slot-outlet invariants.           |
 | `centralized-site-mutation-history.test.ts`   | Every mutation flows through one entry-point so undo / redo stays consistent.    |
@@ -106,7 +105,6 @@ See [docs/reference/ui-primitives.md](ui-primitives.md).
 
 | Test                                          | What it enforces                                                                 |
 |-----------------------------------------------|----------------------------------------------------------------------------------|
-| `admin-feature-folders.test.ts`               | `src/admin/pages/<workspace>/` workspaces own their own panels / hooks / utils.  |
 | `canvasFastRefreshBoundaries.test.ts`         | `.tsx` files don't mix component + non-component exports (breaks HMR).           |
 | `canvas-aware-selectors.test.ts`              | Canvas-related store selectors are subscribed correctly to canvas-state slices.  |
 | `admin-router-usage.test.ts`                  | Internal admin navigation uses `@admin/lib/routing`; raw `/admin` anchors and `react-router-dom` are banned. |
@@ -203,7 +201,6 @@ See [docs/features/site-import.md](../features/site-import.md).
 | `cmsTransferPreview.test.ts`                  | Preview matches what apply would do (no drift).                                  |
 | `cmsTransferImport.test.ts`                   | Importing a bundle yields a site equivalent to the source.                       |
 | `import-export-roundtrip.test.ts`             | Full round-trip parity: export → import → re-export = original.                  |
-| `selfHostedCmsExportRemoval.test.ts`          | Self-hosted-CMS-removal artifacts don't leak into bundles.                       |
 
 See [docs/features/site-transfer.md](../features/site-transfer.md).
 

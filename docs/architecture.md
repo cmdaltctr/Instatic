@@ -358,7 +358,7 @@ Architectural rules live as tests in `src/__tests__/architecture/*.test.ts` and 
 | Migrations parity between PG and SQLite                                                               | `migration-parity.test.ts`                                      |
 | JSON columns end in `_json`                                                                           | `db-json-column-naming.test.ts`                                 |
 | No Postgres-isms in repositories                                                                      | `db-postgres-isms.test.ts`                                      |
-| Page tree uses `NodeTree<PageNode>` only                                                              | `task455-tree-primitive.test.ts`                                |
+| Page tree uses the flat `NodeTree<TNode>` shape                                                       | `src/__tests__/persistence/treeSchemaShape.test.ts`             |
 | Store mutations don't branch on VC mode                                                               | `no-vc-mode-branches-in-mutations.test.ts`                      |
 | No Tailwind utility classes (covers all palette names: `bg-zinc-*`, `text-blue-*`, etc.)              | `noTailwindUtilities.test.ts`, `no-tailwind-deps.test.ts`       |
 | Every color in admin / ui CSS modules comes from a token (no hardcoded hex / rgb / hsl)               | `css-token-policy.test.ts`                                      |
@@ -370,7 +370,7 @@ Architectural rules live as tests in `src/__tests__/architecture/*.test.ts` and 
 | Provider SDKs only inside `server/ai/drivers/`; `@anthropic-ai/sdk` banned everywhere                 | `ai-driver-isolation.test.ts`                                   |
 | UI primitives live in `src/ui/components/`                                                            | `ui-primitives-location.test.ts`                                |
 
-See [docs/reference/architecture-tests.md](reference/architecture-tests.md) for the complete catalog (84 gate files).
+See [docs/reference/architecture-tests.md](reference/architecture-tests.md) for the complete catalog (81 gate files).
 
 ---
 
