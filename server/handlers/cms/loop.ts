@@ -83,7 +83,7 @@ export async function handleLoopRequest(
   let loopNode = null
   let containingPage = null
   for (const page of fallbackSnapshot.site.pages) {
-    const nodes = collectLoopNodes(page)
+    const nodes = collectLoopNodes(page, fallbackSnapshot.site)
     const match = nodes.find((n) => n.id === loopId)
     if (match) {
       loopNode = match

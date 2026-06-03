@@ -781,14 +781,9 @@ export async function updateDataRowStatus(
     returning id
   `
   if (!rows[0]) return null
-  // Layer B: a status change to draft/unpublished removes the row from
-  // visitor-facing content — invalidate the render cache. Serialize the bump
-  // with publishes so it can't fire between a concurrent publish's version
-  // read and its own bump, which would strand that publish's baked shells
-  // (ISS-038).
-  await withPublishLock(async () => {
-    bumpPublishVersion()
-  })
+  // Invalidate the render cache. Serialize the bump with publishes so it can't
+  // strand a concurrent publish's baked shells (ISS-038).
+  await withPublishLock(async () => { bumpPublishVersion() })
   return getDataRow(db, rows[0].id)
 }
 

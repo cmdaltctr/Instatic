@@ -23,10 +23,9 @@ import {
   validateComponentName,
   validateParamName,
   wouldCreateCycle,
-  syncSlotInstances,
-  applySlotSyncResult,
 } from '@core/visualComponents'
 import { buildSiteHelpers } from './site/helpers'
+import { syncAllVCRefSlotInstances, allTreeNodeMaps } from './vcSlotReconcile'
 
 // ---------------------------------------------------------------------------
 // Custom error types (exported so UI + tests can catch by class)
@@ -244,48 +243,6 @@ function clonePageSubtreeToFlatNodes(
   cloneNode(rootNodeId)
 
   return { nodes, rootNodeId: idMap.get(rootNodeId)! }
-}
-
-/**
- * Walk every page in the site and re-sync slot-instance children for every
- * `base.visual-component-ref` node that references the given VC.
- *
- * Called after a VC's slot-shape changes (slot param added, removed, or
- * renamed) — each ref needs its materialized slot-instance children to track
- * the VC's new param surface. Must run inside an Immer producer; the page
- * subtree is mutated in place via `applySlotSyncResult`.
- */
-function syncAllVCRefSlotInstances(
-  nodeMaps: Array<Record<string, BaseNode>>,
-  vcId: string,
-  vc: VisualComponent,
-): void {
-  for (const treeNodes of nodeMaps) {
-    for (const node of Object.values(treeNodes)) {
-      if (
-        node.moduleId === 'base.visual-component-ref' &&
-        node.props.componentId === vcId
-      ) {
-        const syncResult = syncSlotInstances(node, vc, treeNodes)
-        applySlotSyncResult(treeNodes, syncResult, node.id)
-      }
-    }
-  }
-}
-
-/**
- * Every node map that can host a VC ref: each page's nodes AND each VC's tree
- * nodes. A slot edit on one VC must reconcile refs to it wherever they live,
- * including refs nested inside *other* VC trees (ISS-026).
- */
-function allTreeNodeMaps(site: {
-  pages: Array<{ nodes: Record<string, PageNode> }>
-  visualComponents: Array<{ tree: { nodes: Record<string, BaseNode> } }>
-}): Array<Record<string, BaseNode>> {
-  return [
-    ...site.pages.map((p) => p.nodes as Record<string, BaseNode>),
-    ...site.visualComponents.map((vc) => vc.tree.nodes),
-  ]
 }
 
 // ---------------------------------------------------------------------------
@@ -728,7 +685,7 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
       if (Object.is(param.defaultValue, value)) return false
       param.defaultValue = value
       return true
-    })
+    }, { coalesceKey: `vcparam:${vcId}:${paramId}` }) // coalesce per-keystroke edits
   },
 
   renameParam(vcId, paramId, newName) {
