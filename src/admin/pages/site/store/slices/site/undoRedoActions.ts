@@ -1,17 +1,17 @@
 /**
  * Undo/redo actions for the site slice.
  *
- * The history stacks themselves (`_historyPast`, `_historyFuture`) are owned
- * by the slice and mutated here via the shared `set` helper. `pushHistory`
- * lives in `helpers.ts` because every mutation helper calls it.
+ * History is stored as Mutative patch pairs (see `HistoryEntry`): each entry
+ * carries `inverse` patches (applied on undo) and `forward` patches (applied on
+ * redo), scoped to the SiteDocument. Undo/redo `apply()` the relevant patch set
+ * to the current `site` — O(change), no full-site clone — then move the entry
+ * between the past/future stacks and re-derive the `packageJson` / `siteRuntime`
+ * mirrors from the restored site.
  */
 
-import {
-  clonePackageJson,
-} from '@core/site-dependencies/manifest'
-import {
-  cloneSiteRuntimeConfig,
-} from '@core/site-runtime'
+import { apply } from 'mutative'
+import { clonePackageJson } from '@core/site-dependencies/manifest'
+import { cloneSiteRuntimeConfig } from '@core/site-runtime'
 import type { SiteSlice, SiteSliceHelpers } from './types'
 
 export type UndoRedoActions = Pick<SiteSlice, 'undo' | 'redo'>
@@ -21,13 +21,17 @@ export function createUndoRedoActions({ get, set }: SiteSliceHelpers): UndoRedoA
     undo: () => {
       const { _historyPast, site } = get()
       if (_historyPast.length === 0 || !site) return
-      const previous = _historyPast[_historyPast.length - 1]
+      const entry = _historyPast[_historyPast.length - 1]!
+      const restored = apply(site, entry.inverse)
+      const packageJson = clonePackageJson(restored.packageJson)
+      const siteRuntime = cloneSiteRuntimeConfig(restored.runtime)
       set((state) => {
         state._historyPast.pop()
-        state._historyFuture.push(structuredClone(site))
-        const packageJson = clonePackageJson(previous.packageJson)
-        const siteRuntime = cloneSiteRuntimeConfig(previous.runtime)
-        state.site = { ...previous, packageJson, runtime: siteRuntime }
+        state._historyFuture.push(entry)
+        // End any in-progress input-coalescing burst so the next keystroke
+        // starts a fresh undo entry rather than folding into the undone one.
+        state._historyCoalesceKey = null
+        state.site = { ...restored, packageJson, runtime: siteRuntime }
         state.packageJson = packageJson
         state.siteRuntime = siteRuntime
         state.canUndo = state._historyPast.length > 0
@@ -43,13 +47,15 @@ export function createUndoRedoActions({ get, set }: SiteSliceHelpers): UndoRedoA
     redo: () => {
       const { _historyFuture, site } = get()
       if (_historyFuture.length === 0 || !site) return
-      const next = _historyFuture[_historyFuture.length - 1]
+      const entry = _historyFuture[_historyFuture.length - 1]!
+      const restored = apply(site, entry.forward)
+      const packageJson = clonePackageJson(restored.packageJson)
+      const siteRuntime = cloneSiteRuntimeConfig(restored.runtime)
       set((state) => {
         state._historyFuture.pop()
-        state._historyPast.push(structuredClone(site))
-        const packageJson = clonePackageJson(next.packageJson)
-        const siteRuntime = cloneSiteRuntimeConfig(next.runtime)
-        state.site = { ...next, packageJson, runtime: siteRuntime }
+        state._historyPast.push(entry)
+        state._historyCoalesceKey = null
+        state.site = { ...restored, packageJson, runtime: siteRuntime }
         state.packageJson = packageJson
         state.siteRuntime = siteRuntime
         state.canUndo = true

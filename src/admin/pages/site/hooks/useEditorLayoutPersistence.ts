@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { rawReturn } from 'mutative'
 import type { StoreApi, UseBoundStore } from 'zustand'
 import { useEditorStore, type EditorStore } from '@site/store/store'
 import {
@@ -271,7 +272,11 @@ function restoreSiteLayout(api: EditorStoreApi, layout: StoredWorkspaceLayout) {
         }
       : {}
 
-    return {
+    // Partial-merge update: rawReturn tells Mutative to apply this object as-is
+    // (zustand merges it) instead of finalizing a draft — and silences Mutative's
+    // "wrap in rawReturn()" perf warning. Building the patch object is clearer
+    // here than 12 conditional draft assignments.
+    return rawReturn({
       propertiesPanel: {
         ...state.propertiesPanel,
         collapsed: !propertiesOpen,
@@ -284,7 +289,7 @@ function restoreSiteLayout(api: EditorStoreApi, layout: StoredWorkspaceLayout) {
         ? layout.activeEditorFileId
         : state.activeEditorFileId,
       ...leftPanelPatch,
-    } satisfies Partial<EditorStore>
+    } satisfies Partial<EditorStore>)
   })
 }
 
@@ -308,7 +313,7 @@ function restoreNonSiteLayout(
     if (workspace === 'data' && typeof layout.leftOpen === 'boolean') {
       base.dataSidebarCollapsed = !layout.leftOpen
     }
-    return base
+    return rawReturn(base)
   })
 }
 

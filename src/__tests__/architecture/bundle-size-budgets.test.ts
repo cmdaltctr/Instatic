@@ -97,8 +97,8 @@ const BUDGETS: ChunkBudget[] = [
   },
   {
     prefix: 'state-vendor-',
-    maxBytes: 40_000,
-    rationale: 'dompurify + immer (current ~32 KB raw / 12 KB gzipped)',
+    maxBytes: 46_000,
+    rationale: 'dompurify + mutative + zustand-mutative (current ~42 KB raw / 15 KB gzipped)',
   },
 
   {

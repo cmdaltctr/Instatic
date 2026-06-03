@@ -119,7 +119,11 @@ function vendorChunkName(moduleId: string): string | null {
     return 'dnd-vendor'
   }
   if (moduleId.includes('node_modules/@sinclair/typebox')) return 'validation-vendor'
-  if (moduleId.includes('node_modules/dompurify') || moduleId.includes('node_modules/immer')) {
+  if (
+    moduleId.includes('node_modules/dompurify') ||
+    moduleId.includes('node_modules/mutative') ||
+    moduleId.includes('node_modules/zustand-mutative')
+  ) {
     return 'state-vendor'
   }
   return null
@@ -138,13 +142,13 @@ function vendorChunkName(moduleId: string): string | null {
 // helpers) is what produced the earlier errors. Leaving the preset on its
 // default avoids that whole failure mode.
 //
-// Zustand + Immer notes:
-//   - The immer middleware wraps `setState((draft) => ...)` in `produce()`.
-//     Drafts only live for the duration of that callback; after `produce`
+// Zustand + Mutative notes:
+//   - The mutative middleware wraps `setState((draft) => ...)` in `create()`.
+//     Drafts only live for the duration of that callback; after `create`
 //     returns, callers see a regular immutable object. Selectors used inside
 //     a component render therefore never see a draft proxy — the compiler's
-//     memo cache holds references to post-produce objects, which are valid
-//     forever (immer just replaces them on the next mutation).
+//     memo cache holds references to post-create objects, which are valid
+//     forever (mutative just replaces them on the next mutation).
 //   - The earlier "Cannot perform 'get' on a proxy that has been revoked"
 //     report was against pre-1.0 babel-plugin-react-compiler; v1.0 GA
 //     handles store-shaped reads cleanly in the patterns this codebase uses.

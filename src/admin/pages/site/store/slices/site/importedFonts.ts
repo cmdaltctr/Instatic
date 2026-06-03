@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import type { Draft } from 'immer'
+import type { Draft } from 'mutative'
 import type { SiteDocument } from '@core/page-tree'
 import type { ImportFontFamily, ImportFontToken } from '@core/siteImport'
 import type { FontEntry, FontFile, FontToken } from '@core/fonts/schemas'

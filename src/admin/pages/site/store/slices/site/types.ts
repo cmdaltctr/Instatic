@@ -7,7 +7,7 @@
  */
 
 import type { StoreApi } from 'zustand'
-import type { Draft } from 'immer'
+import type { Draft, Patches } from 'mutative'
 import type {
   SiteDocument,
   Page,
@@ -188,6 +188,21 @@ export type UpdateFontTokenPatch = Partial<{
   fallback: string
   order: number
 }>
+
+/**
+ * One undoable transaction, stored as Mutative patch pairs scoped to the
+ * SiteDocument (paths are relative to `site`, e.g. `['pages', 0, 'nodes', …]`).
+ *
+ * - `inverse` reverts the transaction (applied on undo).
+ * - `forward` re-applies it (applied on redo).
+ * - `coalesceKey` carries the in-progress input-burst identity so consecutive
+ *   per-keystroke edits fold into a single entry (see `commitHistory`).
+ */
+export interface HistoryEntry {
+  inverse: Patches
+  forward: Patches
+  coalesceKey: string | null
+}
 
 export interface SiteSlice {
   site: SiteDocument | null
@@ -389,21 +404,32 @@ export interface SiteSlice {
   mutateAllPagesAndSite(fn: (site: SiteDocument, helpers: SuperImportHelpers) => SiteMutationResult): boolean
 
   // ─── Undo / Redo ──────────────────────────────────────────────────────────
-  /** Snapshots of previous site states — most recent last */
-  _historyPast: SiteDocument[]
-  /** Snapshots popped by undo, available for redo — most recent last */
-  _historyFuture: SiteDocument[]
+  /**
+   * Per-transaction Mutative patch pairs — most recent last. Each entry stores
+   * `inverse` (applied on undo) + `forward` (applied on redo) patches scoped to
+   * the SiteDocument, so a step costs O(change) memory instead of a full-site
+   * clone. See `HistoryEntry`.
+   */
+  _historyPast: HistoryEntry[]
+  /** Entries popped by undo, available for redo — most recent last */
+  _historyFuture: HistoryEntry[]
   /** True if there's at least one state to undo to */
   canUndo: boolean
   /** True if there's at least one state to redo to */
   canRedo: boolean
+  /**
+   * Identity key of the in-progress history-coalescing burst, or `null`.
+   *
+   * Continuous-input mutations (per-keystroke text/number edits) pass a stable
+   * key derived from their target (`props:<nodeId>:<prop>`, etc.). While the
+   * incoming key matches this one, the mutation folds into the existing
+   * top-of-stack snapshot instead of cloning the whole site again — so typing a
+   * word is ONE undo step, not one per character. Any non-coalescing mutation,
+   * `undo`/`redo`, or a site (re)load resets it to `null`, ending the burst.
+   */
+  _historyCoalesceKey: string | null
   undo: () => void
   redo: () => void
-  /**
-   * Call before any undoable mutation to snapshot the current site.
-   * Exposed so external code (e.g., batch operations) can manage history.
-   */
-  pushHistory: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -414,11 +440,11 @@ export interface SiteSlice {
 
 /**
  * Recipe accepted by `set` / the `mutate*` helpers. Mirrors the
- * `zustand/immer` middleware signature: a recipe receives an Immer draft and
- * mutates it in place (returning `void`); returning a replacement value is
+ * `zustand-mutative` middleware signature: a recipe receives a Mutative draft
+ * and mutates it in place (returning `void`); returning a replacement value is
  * also tolerated for full-state replacement.
  */
-export type SiteSliceImmerRecipe = (state: Draft<EditorStore>) => void | EditorStore
+export type SiteSliceRecipe = (state: Draft<EditorStore>) => void | EditorStore
 
 /**
  * Mutation recipes return `false` when they intentionally did not change the
@@ -428,11 +454,8 @@ export type SiteMutationResult = void | boolean
 
 export interface SiteSliceHelpers {
   /** Raw set/get from the slice creator. Use only when no helper covers the case. */
-  set: (recipe: SiteSliceImmerRecipe) => void
+  set: (recipe: SiteSliceRecipe) => void
   get: StoreApi<EditorStore>['getState']
-
-  /** Snapshot current site into undo history, then clear redo stack. */
-  pushHistory: () => void
 
   /** Mutate the active page — commits undo history only on real changes. */
   mutatePage: (fn: (page: Page) => SiteMutationResult) => boolean
@@ -449,7 +472,10 @@ export interface SiteSliceHelpers {
    *     After the mutation, propagates any change in the VC's slot-outlet set
    *     to every consumer VC ref across all pages via `syncSlotInstances`.
    */
-  mutateActiveTree: (fn: (tree: NodeTree<PageNode>) => SiteMutationResult) => boolean
+  mutateActiveTree: (
+    fn: (tree: NodeTree<PageNode>) => SiteMutationResult,
+    opts?: { coalesceKey?: string },
+  ) => boolean
 
   /**
    * Mutate the active node tree AND the surrounding site — auto-snapshots
@@ -462,7 +488,10 @@ export interface SiteSliceHelpers {
   ) => boolean
 
   /** Mutate the site — commits undo history only on real changes. */
-  mutateSite: (fn: (site: SiteDocument) => SiteMutationResult) => boolean
+  mutateSite: (
+    fn: (site: SiteDocument) => SiteMutationResult,
+    opts?: { coalesceKey?: string },
+  ) => boolean
 
   /** Mutate the site and reconcile Site Explorer organization after a real change. */
   mutateSiteWithExplorerReconcile: (fn: (site: SiteDocument) => SiteMutationResult) => boolean

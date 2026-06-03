@@ -15,7 +15,7 @@
  */
 
 import { nanoid } from 'nanoid'
-import type { Draft } from 'immer'
+import type { Draft } from 'mutative'
 import type { EditorStore, EditorStoreSliceCreator } from '@site/store/types'
 import type { BaseNode, SiteDocument } from '@core/page-tree'
 import type { StyleRule, CSSPropertyBag, Condition } from '@core/page-tree'

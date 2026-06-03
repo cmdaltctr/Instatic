@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { immer } from 'zustand/middleware/immer'
+import { mutative } from 'zustand-mutative'
 import { subscribeWithSelector } from 'zustand/middleware'
 import type { Page } from '@core/page-tree'
 import { flattenVCToVirtualPage } from '@core/visualComponents'
@@ -51,19 +51,26 @@ export type { EditorStore }
 
 export const useEditorStore = create<EditorStore>()(
   subscribeWithSelector(
-    immer((...args) => ({
-      ...createSiteSlice(...args),
-      ...createSelectionSlice(...args),
-      ...createCanvasSlice(...args),
-      ...createUiSlice(...args),
-      ...createClassSlice(...args),
-      ...createFilesSlice(...args),
-      ...createVisualComponentsSlice(...args),
-      ...createSettingsSlice(...args),
-      ...createAgentSlice(siteAgentSliceConfig)(...args),
-      ...createSitePanelSlice(...args),
-      ...createClipboardSlice(...args),
-    }))
+    // Mutative replaces Immer (zustand-mutative middleware). enableAutoFreeze
+    // mirrors Immer's default dev guard against accidental external mutation —
+    // existing code already tolerates frozen state, so we keep it on for parity.
+    // Patch-based undo history opts INTO patches per-call via mutative `create`.
+    mutative(
+      (...args) => ({
+        ...createSiteSlice(...args),
+        ...createSelectionSlice(...args),
+        ...createCanvasSlice(...args),
+        ...createUiSlice(...args),
+        ...createClassSlice(...args),
+        ...createFilesSlice(...args),
+        ...createVisualComponentsSlice(...args),
+        ...createSettingsSlice(...args),
+        ...createAgentSlice(siteAgentSliceConfig)(...args),
+        ...createSitePanelSlice(...args),
+        ...createClipboardSlice(...args),
+      }),
+      { enableAutoFreeze: true },
+    )
   )
 )
 

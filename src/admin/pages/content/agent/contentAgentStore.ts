@@ -17,7 +17,7 @@
  * lifetime, which doesn't apply here.
  */
 import { create, type StateCreator } from 'zustand'
-import { immer } from 'zustand/middleware/immer'
+import { mutative } from 'zustand-mutative'
 import { subscribeWithSelector } from 'zustand/middleware'
 import {
   createAgentSlice,
@@ -43,12 +43,15 @@ export type ContentAgentStoreHook = ReturnType<typeof createContentAgentStore>
  */
 export function createContentAgentStore() {
   const sliceCreator = createAgentSlice(contentAgentSliceConfig) as unknown as
-    StateCreator<AgentSlice, [['zustand/immer', never]], [], AgentSlice>
+    StateCreator<AgentSlice, [['zustand/mutative', never]], [], AgentSlice>
   return create<ContentAgentStore>()(
     subscribeWithSelector(
-      immer((...args) => ({
-        ...sliceCreator(...args),
-      })),
+      mutative(
+        (...args) => ({
+          ...sliceCreator(...args),
+        }),
+        { enableAutoFreeze: true },
+      ),
     ),
   )
 }

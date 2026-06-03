@@ -450,12 +450,12 @@ export function createEditorPluginApi(
         },
         transaction(mutate) {
           assertPluginPermission(manifest, 'editor.store.write')
-          // The underlying editor store is created with the immer middleware
+          // The underlying editor store is created with the mutative middleware
           // (see `useEditorStore` in `@site/store/store`), so `setState`
           // accepts a void-returning mutator that mutates the draft in place.
-          // The bare `StoreApi<EditorStore>` type can't see the immer-augmented
+          // The bare `StoreApi<EditorStore>` type can't see the mutative-augmented
           // signature, hence the cast — runtime behavior is fully covered by
-          // immer's `produce`.
+          // mutative's `create`.
           const setState = requireEditorStore().setState as (
             updater: (state: EditorStore) => void,
           ) => void

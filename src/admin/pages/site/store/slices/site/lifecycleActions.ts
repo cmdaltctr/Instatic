@@ -44,6 +44,7 @@ export function createLifecycleActions({
         state.activeDocument = null
         state._historyPast = []
         state._historyFuture = []
+        state._historyCoalesceKey = null
         state.canUndo = false
         state.canRedo = false
         state.hasUnsavedChanges = false
@@ -71,6 +72,7 @@ export function createLifecycleActions({
         state.activeDocument = null
         state._historyPast = []
         state._historyFuture = []
+        state._historyCoalesceKey = null
         state.canUndo = false
         state.canRedo = false
         state.hasUnsavedChanges = false
@@ -88,6 +90,7 @@ export function createLifecycleActions({
         clearCanvasSelectionDraft(state)
         state._historyPast = []
         state._historyFuture = []
+        state._historyCoalesceKey = null
         state.canUndo = false
         state.canRedo = false
       })

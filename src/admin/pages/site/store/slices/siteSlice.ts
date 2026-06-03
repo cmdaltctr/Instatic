@@ -9,7 +9,7 @@
  * Domain layout:
  *   - `./site/types`            — SiteSlice interface + patch types + helpers contract
  *   - `./site/defaults`         — createDefaultSiteDocument + MAX_HISTORY
- *   - `./site/helpers`          — buildSiteHelpers (pushHistory + mutate*) + depthInTree
+ *   - `./site/helpers`          — buildSiteHelpers (mutate* + patch-based history) + depthInTree
  *   - `./site/undoRedoActions`  — undo / redo
  *   - `./site/lifecycleActions` — createSite / loadSite / clearSite / updateSiteName
  *   - `./site/pageActions`      — page CRUD + template conversions
@@ -49,7 +49,7 @@ declare module '@site/store/types' {
 
 export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) => {
   // Build the closure-shared mutation helpers once. Every action factory
-  // receives this same object — so there is exactly one `pushHistory` /
+  // receives this same object — so there is exactly one
   // `mutateActiveTree` / `mutateSite` / `mutatePage` per slice instance.
   const helpers = buildSiteHelpers(set, get)
 
@@ -57,15 +57,12 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
     // ─── Owned state ─────────────────────────────────────────────────────────
     site: null,
 
-    // Undo / redo history stacks
+    // Undo / redo history — Mutative patch-pair stacks (see HistoryEntry).
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,
     canRedo: false,
-
-    // pushHistory is part of the public surface (external batch operations
-    // call it before staging multiple mutations).
-    pushHistory: helpers.pushHistory,
+    _historyCoalesceKey: null,
 
     // mutateAllPagesAndSite is the public entry point for the Super Import
     // wizard — one Cmd+Z reverts the entire import.

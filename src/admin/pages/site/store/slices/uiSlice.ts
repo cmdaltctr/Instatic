@@ -333,7 +333,9 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
       (k) => !Object.is(current[k], partial[k]),
     )
     if (!anyChanged) return
-    set((state) => ({ domTreePanel: { ...state.domTreePanel, ...partial } }))
+    set((state) => {
+      state.domTreePanel = { ...state.domTreePanel, ...partial }
+    })
   },
 
   setPropertiesPanel: (partial) => {
@@ -344,7 +346,9 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
       (k) => !Object.is(current[k], partial[k]),
     )
     if (!anyChanged) return
-    set((state) => ({ propertiesPanel: { ...state.propertiesPanel, ...partial } }))
+    set((state) => {
+      state.propertiesPanel = { ...state.propertiesPanel, ...partial }
+    })
   },
 
   setPropertiesPanelMode: (mode) => {
@@ -359,19 +363,16 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
   },
 
   toggleDomTreePanel: () =>
-    set((state) => ({
-      domTreePanel: { ...state.domTreePanel, collapsed: !state.domTreePanel.collapsed },
-    })),
+    set((state) => {
+      state.domTreePanel.collapsed = !state.domTreePanel.collapsed
+    }),
 
   togglePropertiesPanel: () =>
-    set((state) => ({
-      propertiesPanel: {
-        ...state.propertiesPanel,
-        collapsed: state.propertiesPanel.collapsed
-          ? !state.selectedNodeId
-          : true,
-      },
-    })),
+    set((state) => {
+      state.propertiesPanel.collapsed = state.propertiesPanel.collapsed
+        ? !state.selectedNodeId
+        : true
+    }),
 
   setFocusedPanel: (panel) => set({ focusedPanel: panel }),
 
@@ -407,16 +408,16 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
     if (current.selectedNodeId !== nodeId || current.selectedNodeIds.length !== 1) {
       current.selectNode(nodeId)
     }
-    set((state) => ({
-      selectedSelectorClassId: null,
-      selectedSelectorClassIds: [],
-      propertiesPanel: { ...state.propertiesPanel, collapsed: false },
-      focusedPanel: 'properties',
-      componentizeEditorRequest: {
+    set((state) => {
+      state.selectedSelectorClassId = null
+      state.selectedSelectorClassIds = []
+      state.propertiesPanel = { ...state.propertiesPanel, collapsed: false }
+      state.focusedPanel = 'properties'
+      state.componentizeEditorRequest = {
         nodeId,
         requestId: (state.componentizeEditorRequest?.requestId ?? 0) + 1,
-      },
-    }))
+      }
+    })
   },
 
   clearComponentizeEditorRequest: (requestId) => {
@@ -439,22 +440,19 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
   setDependenciesPanelOpen: (open) => set({ dependenciesPanelOpen: open }),
 
   setLeftSidebarPanel: (panel) =>
-    set((state) => ({
-      siteExplorerPanelOpen: panel === 'site',
-      selectorsPanelOpen: panel === 'selectors',
-      colorsPanelOpen: panel === 'colors',
-      typographyPanelOpen: panel === 'typography',
-      spacingPanelOpen: panel === 'spacing',
-      mediaExplorerPanelOpen: panel === 'media',
-      dependenciesPanelOpen: panel === 'dependencies',
-      domTreePanel: {
-        ...state.domTreePanel,
-        collapsed: panel !== 'layers',
-      },
-      isAgentOpen: panel === 'agent',
+    set((state) => {
+      state.siteExplorerPanelOpen = panel === 'site'
+      state.selectorsPanelOpen = panel === 'selectors'
+      state.colorsPanelOpen = panel === 'colors'
+      state.typographyPanelOpen = panel === 'typography'
+      state.spacingPanelOpen = panel === 'spacing'
+      state.mediaExplorerPanelOpen = panel === 'media'
+      state.dependenciesPanelOpen = panel === 'dependencies'
+      state.domTreePanel.collapsed = panel !== 'layers'
+      state.isAgentOpen = panel === 'agent'
       // Built-in panels are mutually exclusive with plugin panels.
-      activePluginPanelId: null,
-    })),
+      state.activePluginPanelId = null
+    }),
 
   toggleLeftSidebarPanel: (panel) => {
     // Account for the plugin-panel-takes-precedence rule in
@@ -469,21 +467,18 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
   },
 
   setActivePluginPanel: (panelId) =>
-    set((state) => ({
-      siteExplorerPanelOpen: false,
-      selectorsPanelOpen: false,
-      colorsPanelOpen: false,
-      typographyPanelOpen: false,
-      spacingPanelOpen: false,
-      mediaExplorerPanelOpen: false,
-      dependenciesPanelOpen: false,
-      domTreePanel: {
-        ...state.domTreePanel,
-        collapsed: true,
-      },
-      isAgentOpen: false,
-      activePluginPanelId: panelId,
-    })),
+    set((state) => {
+      state.siteExplorerPanelOpen = false
+      state.selectorsPanelOpen = false
+      state.colorsPanelOpen = false
+      state.typographyPanelOpen = false
+      state.spacingPanelOpen = false
+      state.mediaExplorerPanelOpen = false
+      state.dependenciesPanelOpen = false
+      state.domTreePanel.collapsed = true
+      state.isAgentOpen = false
+      state.activePluginPanelId = panelId
+    }),
 
   toggleActivePluginPanel: (panelId) => {
     const current = get().activePluginPanelId
@@ -569,18 +564,16 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
       const next = current.includes(classId)
         ? current.filter((id) => id !== classId)
         : [...current, classId]
-      return {
-        selectedSelectorClassIds: next,
-        // Checking a box leaves single-edit mode so the bulk inspector takes over.
-        selectedSelectorClassId: next.length > 0 ? null : state.selectedSelectorClassId,
-      }
+      state.selectedSelectorClassIds = next
+      // Checking a box leaves single-edit mode so the bulk inspector takes over.
+      if (next.length > 0) state.selectedSelectorClassId = null
     }),
 
   setSelectedSelectorClassIds: (classIds) =>
-    set((state) => ({
-      selectedSelectorClassIds: classIds,
-      selectedSelectorClassId: classIds.length > 0 ? null : state.selectedSelectorClassId,
-    })),
+    set((state) => {
+      state.selectedSelectorClassIds = classIds
+      if (classIds.length > 0) state.selectedSelectorClassId = null
+    }),
 
   clearSelectorMultiSelect: () => {
     if (get().selectedSelectorClassIds.length === 0) return

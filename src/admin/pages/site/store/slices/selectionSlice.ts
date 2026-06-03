@@ -1,3 +1,4 @@
+import type { Draft } from 'mutative'
 import type { EditorStore, EditorStoreSliceCreator } from '@site/store/types'
 import { isUserVisibleClass } from '@core/page-tree'
 import type { BaseNode } from '@core/page-tree'
@@ -73,16 +74,13 @@ export const createSelectionSlice: EditorStoreSliceCreator<SelectionSlice> = (se
     if (id === null) {
       if (current.selectedNodeIds.length === 0) return
       const shouldCollapseProperties = !current.selectedSelectorClassId
-      set((state) => ({
-        selectedNodeIds: [],
-        selectedNodeId: null,
-        activeClassId: null,
-        inlineStyleEditing: false,
-        propertiesPanel: {
-          ...state.propertiesPanel,
-          collapsed: shouldCollapseProperties,
-        },
-      }))
+      set((state) => {
+        state.selectedNodeIds = []
+        state.selectedNodeId = null
+        state.activeClassId = null
+        state.inlineStyleEditing = false
+        state.propertiesPanel.collapsed = shouldCollapseProperties
+      })
       return
     }
 
@@ -211,9 +209,7 @@ export function clearCanvasSelectionDraft(state: EditorStore): void {
  *   selector class is active
  */
 function applySelection(
-  set: (
-    partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>),
-  ) => void,
+  set: (updater: (state: Draft<EditorStore>) => void) => void,
   current: EditorStore,
   nextIds: string[],
 ): void {
@@ -238,23 +234,20 @@ function applySelection(
 
   if (!idsChanged && !anchorChanged && !panelChanged && !activeClassChanged && !inlineEditingChanged) return
 
-  set((state) => ({
-    selectedNodeIds: nextIds,
-    selectedNodeId: nextAnchor,
-    selectedSelectorClassId: nextAnchor ? null : state.selectedSelectorClassId,
-    activeClassId: nextActiveClassId,
+  set((state) => {
+    state.selectedNodeIds = nextIds
+    state.selectedNodeId = nextAnchor
+    if (nextAnchor) state.selectedSelectorClassId = null
+    state.activeClassId = nextActiveClassId
     // Each new selection seeds its own edit target — inline mode for an
     // inline-only node, otherwise class/empty — never carrying a prior node's
     // inline-editing mode across.
-    inlineStyleEditing: anchorChanged ? nextInlineEditing : state.inlineStyleEditing,
-    propertiesPanel: panelChanged
-      ? { ...state.propertiesPanel, collapsed: shouldCollapseProperties }
-      : state.propertiesPanel,
-    componentizeEditorRequest:
-      current.componentizeEditorRequest?.nodeId === nextAnchor
-        ? state.componentizeEditorRequest
-        : null,
-  }))
+    if (anchorChanged) state.inlineStyleEditing = nextInlineEditing
+    if (panelChanged) state.propertiesPanel.collapsed = shouldCollapseProperties
+    if (current.componentizeEditorRequest?.nodeId !== nextAnchor) {
+      state.componentizeEditorRequest = null
+    }
+  })
 }
 
 /**

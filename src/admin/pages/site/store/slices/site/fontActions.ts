@@ -8,7 +8,7 @@
  */
 
 import { nanoid } from 'nanoid'
-import type { Draft } from 'immer'
+import type { Draft } from 'mutative'
 import type { BaseNode, SiteDocument } from '@core/page-tree'
 import type { FontEntry, FontToken, SiteFontsSettings } from '@core/fonts/schemas'
 import {

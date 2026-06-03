@@ -19,6 +19,7 @@
  */
 
 import type { StoreApi } from 'zustand'
+import { rawReturn } from 'mutative'
 import type { EditorStore, EditorStoreSliceCreator } from '@site/store/types'
 import { useAdminUi, bindEditorSettingsBridge } from '@admin/state/adminUi'
 
@@ -132,11 +133,16 @@ export function bindSettingsBridgeStoreApi(api: StoreApi<EditorStore>): void {
     if (!editorStoreApi || bridgeReentrancyGuard) return
     bridgeReentrancyGuard = true
     try {
-      editorStoreApi.setState((state) => ({
-        isSettingsOpen: open,
-        activeSection:
-          open && section ? (section as SettingsSection) : state.activeSection,
-      }))
+      // Bare StoreApi.setState (un-augmented type) takes a partial-returning
+      // updater. rawReturn marks it as a raw value so Mutative skips draft
+      // finalization (and its perf warning); zustand still merges the partial.
+      editorStoreApi.setState((state) =>
+        rawReturn({
+          isSettingsOpen: open,
+          activeSection:
+            open && section ? (section as SettingsSection) : state.activeSection,
+        }),
+      )
     } finally {
       bridgeReentrancyGuard = false
     }

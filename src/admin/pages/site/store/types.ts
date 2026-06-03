@@ -39,28 +39,30 @@
 export interface EditorStore {}
 
 /**
- * Shared StateCreator alias for slices in the immer-wrapped store.
+ * Shared StateCreator alias for slices in the mutative-wrapped store.
  *
  * The store at `./store.ts` is composed via:
- *   create<EditorStore>()(subscribeWithSelector(immer((...args) => ({...slices}))))
+ *   create<EditorStore>()(subscribeWithSelector(mutative((...args) => ({...slices}))))
  *
- * The immer middleware lets slice writers mutate `state` directly inside
- * `set((state) => { state.foo = bar })` and immer applies `produce()` for them.
- * For TypeScript to type `set` accordingly (i.e. accept void-returning
- * mutators rather than requiring a returned new state), the StateCreator
- * needs the `['zustand/immer', never]` mutator marker in its second type
- * parameter.
+ * The mutative middleware (zustand-mutative) lets slice writers mutate `state`
+ * directly inside `set((state) => { state.foo = bar })` and applies Mutative's
+ * `create()` for them. For TypeScript to type `set` accordingly (i.e. accept
+ * void-returning mutators rather than requiring a returned new state), the
+ * StateCreator needs the `['zustand/mutative', never]` mutator marker in its
+ * second type parameter.
  *
  * Use this alias in every slice instead of `StateCreator<EditorStore, [], [], T>`.
  *
- * IMPORTANT: never call `produce()` manually inside `set()`. The middleware
- * already does. Calling produce manually nests the call and yields revoked
- * proxies in subscribers (see immerjs/immer issue #936).
+ * IMPORTANT: never call `create()`/`produce()` manually inside `set()`. The
+ * middleware already does. Manual nesting yields revoked proxies in subscribers.
+ * (The patch-based undo history is the one deliberate exception — it calls
+ * mutative `create(get().site, …, { enablePatches: true })` on a plain snapshot,
+ * NOT on a live draft, then assigns the result via `set`.)
  */
 import type { StateCreator } from 'zustand'
 export type EditorStoreSliceCreator<T> = StateCreator<
   EditorStore,
-  [['zustand/immer', never]],
+  [['zustand/mutative', never]],
   [],
   T
 >

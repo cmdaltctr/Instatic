@@ -114,6 +114,24 @@ function recordPatchChanges(
   return Object.entries(patch).some(([key, value]) => !Object.is(current[key], value))
 }
 
+/**
+ * Build the history-coalescing options for a single-field patch, or `undefined`
+ * for multi-field patches (which always get their own discrete undo entry).
+ *
+ * Per-keystroke text/number controls patch exactly one prop per change, so a
+ * stable `<scope>:<nodeId>:<prop>` key lets `pushHistorySnapshot` fold a whole
+ * typing burst into one undo step instead of cloning the site per character.
+ */
+function coalesceKeyForPatch(
+  scope: string,
+  nodeId: string,
+  patch: Record<string, unknown>,
+): { coalesceKey: string } | undefined {
+  const keys = Object.keys(patch)
+  if (keys.length !== 1) return undefined
+  return { coalesceKey: `${scope}:${nodeId}:${keys[0]}` }
+}
+
 export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
   const { get, set, mutatePage, mutateActiveTree, mutateActiveTreeAndSite } = helpers
 
@@ -258,13 +276,16 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
     },
 
     updateNodeProps: (nodeId, patch) => {
-      mutateActiveTree((tree) => {
-        const node = tree.nodes[nodeId]
-        if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
-        if (!recordPatchChanges(node.props, patch)) return false
-        updateNodeProps(tree, nodeId, patch)
-        return true
-      })
+      mutateActiveTree(
+        (tree) => {
+          const node = tree.nodes[nodeId]
+          if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
+          if (!recordPatchChanges(node.props, patch)) return false
+          updateNodeProps(tree, nodeId, patch)
+          return true
+        },
+        coalesceKeyForPatch('props', nodeId, patch),
+      )
     },
 
     setNodeInlineStyles: (nodeId, patch) => {
@@ -307,15 +328,18 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
     },
 
     setBreakpointOverride: (nodeId, breakpointId, patch) => {
-      mutateActiveTree((tree) => {
-        const node = tree.nodes[nodeId]
-        if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
-        if (!recordPatchChanges(node.breakpointOverrides[breakpointId] ?? {}, patch)) {
-          return false
-        }
-        setBreakpointOverride(tree, nodeId, breakpointId, patch)
-        return true
-      })
+      mutateActiveTree(
+        (tree) => {
+          const node = tree.nodes[nodeId]
+          if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
+          if (!recordPatchChanges(node.breakpointOverrides[breakpointId] ?? {}, patch)) {
+            return false
+          }
+          setBreakpointOverride(tree, nodeId, breakpointId, patch)
+          return true
+        },
+        coalesceKeyForPatch(`bp:${breakpointId}`, nodeId, patch),
+      )
     },
 
     clearBreakpointOverride: (nodeId, breakpointId) => {

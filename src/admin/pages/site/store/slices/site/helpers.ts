@@ -23,7 +23,8 @@ import type {
 import type { SiteRuntimeConfig } from '@core/site-runtime'
 import { addPage, createNode, reconcileSiteExplorerInPlace } from '@core/page-tree'
 import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents'
-import type { Draft } from 'immer'
+import { create } from 'mutative'
+import type { Draft, Patches } from 'mutative'
 import type { ImportFragment } from '@core/htmlImport'
 import type {
   NewStyleRule,
@@ -39,7 +40,7 @@ import { MAX_HISTORY } from './defaults'
 import { reconcileFrameworkClasses } from './framework/reconcile'
 import { indexStyleRulesByName, linkImportedClassNames } from './importLinking'
 import { addImportedFonts, addImportedFontTokens } from './importedFonts'
-import type { SiteMutationResult, SiteSliceHelpers, SiteSliceImmerRecipe, SuperImportHelpers } from './types'
+import type { HistoryEntry, SiteMutationResult, SiteSliceHelpers, SiteSliceRecipe, SuperImportHelpers } from './types'
 
 /**
  * Walk every page's tree, find every `base.visual-component-ref` that points
@@ -118,60 +119,123 @@ export function depthInTree(tree: NodeTree<PageNode>, nodeId: string): number {
  * `src/__tests__/architecture/no-vc-mode-branches-in-mutations.test.ts`.
  */
 export function buildSiteHelpers(
-  set: (recipe: SiteSliceImmerRecipe) => void,
+  set: (recipe: SiteSliceRecipe) => void,
   get: StoreApi<EditorStore>['getState'],
 ): SiteSliceHelpers {
   function recipeDidMutate(result: SiteMutationResult): boolean {
     return result !== false
   }
 
-  function pushHistorySnapshot(
-    state: Parameters<SiteSliceImmerRecipe>[0],
-    snapshot: SiteDocument,
-  ): void {
-    state._historyPast.push(snapshot)
+  /**
+   * Commit one transaction's site-scoped patch pair to undo history.
+   *
+   * Coalescing: when the incoming key matches the in-progress burst, the entry
+   * folds into the existing top entry instead of pushing a new one — the new
+   * inverse is PREPENDED (so undo reverts newest-change-first back to the
+   * pre-burst state) and the new forward is APPENDED (redo replays in order).
+   * A whole typing burst is therefore one undo step. Patch arrays stay tiny
+   * (one path per keystroke), so the concatenation cost is negligible.
+   */
+  function commitHistory(state: Draft<EditorStore>, entry: HistoryEntry): void {
+    const coalescing =
+      entry.coalesceKey !== null &&
+      entry.coalesceKey === state._historyCoalesceKey &&
+      state._historyPast.length > 0
+    if (coalescing) {
+      const top = state._historyPast[state._historyPast.length - 1]!
+      top.inverse = [...entry.inverse, ...top.inverse]
+      top.forward = [...top.forward, ...entry.forward]
+      state._historyFuture = []
+      state.canRedo = false
+      return
+    }
+
+    state._historyPast.push(entry)
     if (state._historyPast.length > MAX_HISTORY) {
       state._historyPast.shift() // evict oldest
     }
     state._historyFuture = []
+    // Open a new burst (coalesceKey set) or end any prior one (null).
+    state._historyCoalesceKey = entry.coalesceKey
     state.canUndo = true
     state.canRedo = false
   }
 
-  function snapshotCurrentSite(): SiteDocument | null {
-    const { site } = get()
-    return site ? structuredClone(site) : null
-  }
+  /**
+   * Core of every undoable mutation. Runs `recipe` against a Mutative draft of
+   * the WHOLE editor store with patch capture, then:
+   *   - applies every changed top-level field to the live store, and
+   *   - records ONLY the `site`-scoped patches in undo history.
+   *
+   * Editor-state fields a recipe touches (selection, runtime mirror, …) are
+   * applied live but are NOT undoable — matching the prior snapshot model, which
+   * only ever restored `site`. Capturing over the whole store (rather than just
+   * `site`) is what lets `mutateSiteState` mutate editor state and the document
+   * in one pass while keeping history `site`-only.
+   *
+   * Cost is O(change): Mutative only drafts/copies the paths the recipe touches,
+   * so there is no full-site clone per mutation.
+   */
+  function runHistoricMutation(
+    recipe: (draft: Draft<EditorStore>) => SiteMutationResult,
+    coalesceKey: string | null,
+  ): boolean {
+    const cur = get()
+    if (!cur.site) return false
 
-  /** Snapshot current site into undo history, then clear redo stack. */
-  function pushHistory(): void {
-    const { site } = get()
-    if (!site) return
-    set((state) => {
-      pushHistorySnapshot(state, structuredClone(site))
-    })
-  }
+    let result: SiteMutationResult = false
+    const [next, patches, inverse] = create(
+      cur,
+      (draft) => {
+        result = recipe(draft as Draft<EditorStore>)
+        if (result !== false && draft.site) {
+          draft.site.updatedAt = Date.now()
+        }
+      },
+      { enablePatches: true },
+    )
+    if (result === false) return false
 
-  /** Mutate the active page — auto-snapshots undo history on real changes. */
-  function mutatePage(fn: (page: Page) => SiteMutationResult): boolean {
-    const snapshot = snapshotCurrentSite()
-    let changed = false
+    const touched = new Set<string>()
+    for (const p of patches) touched.add(String(p.path[0]))
+    if (touched.size === 0) return true // non-false result but no actual change
+
+    // History stores patches relative to `site` (strip the leading `'site'`
+    // segment) so undo/redo can `apply(site, …)` directly.
+    const siteForward: Patches = patches
+      .filter((p) => p.path[0] === 'site')
+      .map((p) => ({ ...p, path: p.path.slice(1) }))
+    const siteInverse: Patches = inverse
+      .filter((p) => p.path[0] === 'site')
+      .map((p) => ({ ...p, path: p.path.slice(1) }))
+
     set((state) => {
-      if (!state.site || !snapshot) return
-      const page = state.site.pages.find((p) => p.id === state.activePageId)
-      if (!page) return
-      const result = fn(page)
-      if (!recipeDidMutate(result)) return
-      pushHistorySnapshot(state, snapshot)
-      state.site.updatedAt = Date.now()
+      // Apply every changed top-level field (site + any editor fields) from the
+      // produced `next` onto the live draft. Each is a structurally-shared new
+      // object, so this is a cheap reference copy, not a deep clone.
+      const live = state as unknown as Record<string, unknown>
+      const produced = next as unknown as Record<string, unknown>
+      for (const key of touched) live[key] = produced[key]
+
+      if (siteForward.length > 0) {
+        commitHistory(state, { inverse: siteInverse, forward: siteForward, coalesceKey })
+      }
       state.hasUnsavedChanges = true
-      changed = true
     })
-    return changed
+    return true
+  }
+
+  /** Mutate the active page — auto-records undo history on real changes. */
+  function mutatePage(fn: (page: Page) => SiteMutationResult): boolean {
+    return runHistoricMutation((draft) => {
+      const page = draft.site!.pages.find((p) => p.id === draft.activePageId)
+      if (!page) return false
+      return fn(page)
+    }, null)
   }
 
   /**
-   * Mutate the active node tree — auto-snapshots undo history on real changes.
+   * Mutate the active node tree — auto-records undo history on real changes.
    *
    * Routes to the correct tree based on `activeDocument`:
    *   - Page mode (null or kind === 'page'): passes the active Page directly —
@@ -181,65 +245,43 @@ export function buildSiteHelpers(
    *     adds optional `dynamicBindings`), so the cast is safe for all tree
    *     mutations that operate on BaseNode-level fields.
    *     After the mutation, propagates any change in the VC's slot-outlet set
-   *     to every consumer VC ref across all pages via `syncSlotInstances`.
-   *     This is what makes adding a `base.slot-outlet` to a VC automatically
-   *     materialize a `base.slot-instance` child on every consumer.
+   *     to every consumer VC ref across all pages via `syncSlotInstances` —
+   *     run INSIDE the recipe so those writes are captured in the same patch set.
    */
-  function mutateActiveTree(fn: (tree: NodeTree<PageNode>) => SiteMutationResult): boolean {
-    const snapshot = snapshotCurrentSite()
-    let changed = false
-    set((state) => {
-      if (!state.site || !snapshot) return
-      const { activeDocument } = state
+  function mutateActiveTree(
+    fn: (tree: NodeTree<PageNode>) => SiteMutationResult,
+    opts?: { coalesceKey?: string },
+  ): boolean {
+    return runHistoricMutation((draft) => {
+      const site = draft.site!
+      const { activeDocument } = draft
 
       if (activeDocument?.kind === 'visualComponent') {
-        const vc = state.site.visualComponents.find((v) => v.id === activeDocument.vcId)
-        if (!vc) return
+        const vc = site.visualComponents.find((v) => v.id === activeDocument.vcId)
+        if (!vc) return false
         // VCNode is structurally compatible with PageNode (dynamicBindings is optional).
-        // All tree mutations operate on BaseNode-level fields, so the cast is safe.
         const result = fn(vc.tree as NodeTree<PageNode>)
-        if (!recipeDidMutate(result)) return
-        pushHistorySnapshot(state, snapshot)
-        state.site.updatedAt = Date.now()
-        state.hasUnsavedChanges = true
-        changed = true
-
+        if (result === false) return false
         // Propagate slot-outlet changes to every consumer VC ref. Idempotent
-        // when the slot-outlet set is unchanged. Cheap: O(pages × refs × tree
-        // size); for non-trivial sites still well below a frame budget.
-        reconcileVCRefsForVc(state, vc.id)
-        return
+        // when the slot-outlet set is unchanged.
+        reconcileVCRefsForVc({ site }, vc.id)
+        return result
       }
 
       // Page mode (activeDocument is null or kind === 'page').
-      // Page IS NodeTree<PageNode> — pass directly, no conversion needed.
-      const pageId = activeDocument?.kind === 'page' ? activeDocument.pageId : state.activePageId
-      const page = state.site.pages.find((p) => p.id === pageId)
-      if (!page) return
-      const result = fn(page)
-      if (!recipeDidMutate(result)) return
-      pushHistorySnapshot(state, snapshot)
-      state.site.updatedAt = Date.now()
-      state.hasUnsavedChanges = true
-      changed = true
-    })
-    return changed
+      const pageId = activeDocument?.kind === 'page' ? activeDocument.pageId : draft.activePageId
+      const page = site.pages.find((p) => p.id === pageId)
+      if (!page) return false
+      return fn(page)
+    }, opts?.coalesceKey ?? null)
   }
 
-  /** Mutate the site — auto-snapshots undo history on real changes. */
-  function mutateSite(fn: (site: SiteDocument) => SiteMutationResult): boolean {
-    const snapshot = snapshotCurrentSite()
-    let changed = false
-    set((state) => {
-      if (!state.site || !snapshot) return
-      const result = fn(state.site)
-      if (!recipeDidMutate(result)) return
-      pushHistorySnapshot(state, snapshot)
-      state.site.updatedAt = Date.now()
-      state.hasUnsavedChanges = true
-      changed = true
-    })
-    return changed
+  /** Mutate the site — auto-records undo history on real changes. */
+  function mutateSite(
+    fn: (site: SiteDocument) => SiteMutationResult,
+    opts?: { coalesceKey?: string },
+  ): boolean {
+    return runHistoricMutation((draft) => fn(draft.site!), opts?.coalesceKey ?? null)
   }
 
   const mutateSiteWithExplorerReconcile: SiteSliceHelpers['mutateSiteWithExplorerReconcile'] = (fn) =>
@@ -250,25 +292,18 @@ export function buildSiteHelpers(
       return result
     })
 
-  /** Mutate editor state and site together — auto-snapshots undo history on real changes. */
-  const mutateSiteState: SiteSliceHelpers['mutateSiteState'] = (fn) => {
-    const snapshot = snapshotCurrentSite()
-    let changed = false
-    set((state) => {
-      if (!state.site || !snapshot) return
-      const result = fn(state, state.site)
-      if (!recipeDidMutate(result)) return
-      pushHistorySnapshot(state, snapshot)
-      state.site.updatedAt = Date.now()
-      state.hasUnsavedChanges = true
-      changed = true
-    })
-    return changed
-  }
+  /**
+   * Mutate editor state and site together — records undo history on real
+   * changes. The recipe gets the full editor draft plus the SiteDocument draft;
+   * site changes are undoable, editor-state changes are applied live only
+   * (parity with the prior snapshot model — see `runHistoricMutation`).
+   */
+  const mutateSiteState: SiteSliceHelpers['mutateSiteState'] = (fn) =>
+    runHistoricMutation((draft) => fn(draft, draft.site!), null)
 
   /**
-   * Mutate the active node tree AND the surrounding site — auto-snapshots
-   * undo history on real changes. Same active-document routing as `mutateActiveTree`, but
+   * Mutate the active node tree AND the surrounding site — records undo history
+   * on real changes. Same active-document routing as `mutateActiveTree`, but
    * also hands the recipe a `SiteDocument` draft so it can read or write
    * site-level state alongside the tree mutation in one transaction.
    *
@@ -280,37 +315,25 @@ export function buildSiteHelpers(
   function mutateActiveTreeAndSite(
     fn: (tree: NodeTree<PageNode>, site: SiteDocument) => SiteMutationResult,
   ): boolean {
-    const snapshot = snapshotCurrentSite()
-    let changed = false
-    set((state) => {
-      if (!state.site || !snapshot) return
-      const { activeDocument } = state
+    return runHistoricMutation((draft) => {
+      const site = draft.site!
+      const { activeDocument } = draft
 
       if (activeDocument?.kind === 'visualComponent') {
-        const vc = state.site.visualComponents.find((v) => v.id === activeDocument.vcId)
-        if (!vc) return
-        const result = fn(vc.tree as NodeTree<PageNode>, state.site)
-        if (!recipeDidMutate(result)) return
-        pushHistorySnapshot(state, snapshot)
-        state.site.updatedAt = Date.now()
-        state.hasUnsavedChanges = true
-        changed = true
+        const vc = site.visualComponents.find((v) => v.id === activeDocument.vcId)
+        if (!vc) return false
+        const result = fn(vc.tree as NodeTree<PageNode>, site)
+        if (result === false) return false
         // Mirror mutateActiveTree's slot-outlet propagation contract.
-        reconcileVCRefsForVc(state, vc.id)
-        return
+        reconcileVCRefsForVc({ site }, vc.id)
+        return result
       }
 
-      const pageId = activeDocument?.kind === 'page' ? activeDocument.pageId : state.activePageId
-      const page = state.site.pages.find((p) => p.id === pageId)
-      if (!page) return
-      const result = fn(page, state.site)
-      if (!recipeDidMutate(result)) return
-      pushHistorySnapshot(state, snapshot)
-      state.site.updatedAt = Date.now()
-      state.hasUnsavedChanges = true
-      changed = true
-    })
-    return changed
+      const pageId = activeDocument?.kind === 'page' ? activeDocument.pageId : draft.activePageId
+      const page = site.pages.find((p) => p.id === pageId)
+      if (!page) return false
+      return fn(page, site)
+    }, null)
   }
 
   /**
@@ -331,11 +354,8 @@ export function buildSiteHelpers(
   function mutateAllPagesAndSite(
     fn: (site: SiteDocument, helpers: SuperImportHelpers) => SiteMutationResult,
   ): boolean {
-    const snapshot = snapshotCurrentSite()
-    let changed = false
-    set((state) => {
-      if (!state.site || !snapshot) return
-      const site = state.site
+    return runHistoricMutation((draft) => {
+      const site = draft.site!
       let didMutate = false
 
       // Build the name→id index once. All helpers share this map so that
@@ -463,27 +483,23 @@ export function buildSiteHelpers(
         },
 
         addScripts(scripts): { id: string; path: string }[] {
-          const committed = addImportedScripts(site, state.siteRuntime, scripts)
+          const committed = addImportedScripts(site, draft.siteRuntime, scripts)
           if (committed.length > 0) didMutate = true
           return committed
         },
       }
 
       const result = fn(site as SiteDocument, helpers)
-      if (recipeDidMutate(result) && didMutate) {
-        pushHistorySnapshot(state, snapshot)
-        state.site.updatedAt = Date.now()
-        state.hasUnsavedChanges = true
-        changed = true
-      }
-    })
-    return changed
+      // Push history only when the recipe reported a change AND a helper
+      // actually mutated the site — `runHistoricMutation` treats `false` as a
+      // no-op (no patches captured, no history entry).
+      return recipeDidMutate(result) && didMutate ? true : false
+    }, null)
   }
 
   return {
     set,
     get,
-    pushHistory,
     mutatePage,
     mutateActiveTree,
     mutateActiveTreeAndSite,
