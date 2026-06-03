@@ -429,11 +429,13 @@ Why this matters: selection rings and the floating selection toolbar are portale
 
 | Element                               | z-index           |
 |---------------------------------------|-------------------|
-| CanvasModeToggle, CanvasNotch         | 24                |
-| CanvasContextSelector                 | 25                |
+| CanvasModeToggle                      | 24                |
 | PluginCanvasOverlayLayer              | 50                |
 | Selection ring, hover ring, selection toolbar | 51        |
 | Alt/Option inspect ladder             | 52                |
+| CanvasNotch                           | 53                |
+| CanvasContextSelector                 | 60                |
+| VisualComponentModeControl            | 200               |
 | Drop-indicator inside iframe          | 2147483647 (max)  |
 
 Canvas-internal values are not CSS tokens — they are raw integers intentionally scoped to the canvas stacking context and isolated from the layout stacking context by the `z-index: 0` on `CanvasRoot`.

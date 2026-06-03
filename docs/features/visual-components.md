@@ -138,6 +138,19 @@ When the ref is first inserted, slot-instances are seeded with the slot's defaul
 
 ---
 
+## Inline preview rendering (`VCInlineTree`)
+
+The editor canvas preview for a `base.visual-component-ref` node is rendered by `VisualComponentRefEditor` (`src/modules/base/visualComponentRef/VisualComponentRefEditor.tsx`), which calls `instantiateVCAtRef` and passes the resulting flat node map to `VCInlineTree` (`src/modules/base/visualComponentRef/VCInlineTree.tsx`).
+
+`VCInlineTree` renders the VC's flat node map as a React subtree using the module registry. Two props from the page-level ref node are forwarded onto the **first rendered root element** of the VC:
+
+- `rootMcClassName` — the ref node's own resolved class string, so styles assigned to the ref instance apply to its rendered root (same contract as the publisher's `injectClassIntoRootElement`).
+- `rootNodeWrapperProps` — the editor wrapper bag (`data-node-id`, event handlers, etc.) so canvas selection, hover, and overlay positioning target the rendered component content rather than a dropped wrapper or the iframe `<body>`.
+
+**`base.body` is transparent in inline preview.** Every VC tree has `base.body` as its stored root. In the editor preview, `base.body` is not rendered as a DOM element — `VCInlineTree` renders `base.body`'s children directly, forwarding `rootMcClassName` and `rootNodeWrapperProps` to the **first renderable** child (the first non-hidden child with a registered module). This prevents a nested component body from overwriting the canvas iframe's real `<body>` element's attributes. The real iframe `<body>` always belongs to the page root node only.
+
+---
+
 ## Param substitution and prop bindings
 
 A VC ref instance carries `instanceProps` — the values for the VC's `params`. Inside the VC tree, any node prop can be bound to a param via `propBindings`:
@@ -403,6 +416,8 @@ const { refNode, slotInstances } = instantiateVCAtRef(vc, { /* instanceProps */ 
   - `src/core/visualComponents/virtualPage.ts` — `flattenVCToVirtualPage` (VC-mode wrapper)
   - `src/core/visualComponents/origin.ts` — `findParamOrigin`
   - `src/core/publisher/renderVisualComponentRef.ts` — render-time inlining
+  - `src/modules/base/visualComponentRef/VCInlineTree.tsx` — editor inline preview renderer
+  - `src/modules/base/visualComponentRef/VisualComponentRefEditor.tsx` — editor canvas component for `base.visual-component-ref`
   - `src/core/data/componentFromRow.ts` — VC ↔ data row serialization
   - `src/admin/pages/site/componentization/componentizeEligibility.ts` — `canComponentizeNode`
   - `src/admin/pages/site/panels/PropertiesPanel/ConvertToComponentButton.tsx` — inline name-input strip
@@ -413,3 +428,5 @@ const { refNode, slotInstances } = instantiateVCAtRef(vc, { /* instanceProps */ 
   - `src/__tests__/architecture/no-vc-in-site-shell.test.ts`
   - `src/__tests__/architecture/no-vc-mode-branches-in-mutations.test.ts`
   - `src/__tests__/architecture/multiWrapDefaults.test.ts`
+- Regression tests:
+  - `src/__tests__/canvas/visualComponentRefInlineBody.test.tsx` — verifies `base.body`-rooted VCs don't overwrite the iframe `<body>` and that selection still works
