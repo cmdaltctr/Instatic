@@ -115,22 +115,44 @@ export function createSqliteClient(filename: string): DbClient {
     return { rows: rows.map(parseJsonColumns), rowCount: rows.length }
   }
 
-  // bun:sqlite is synchronous; simulate transactions with explicit
-  // BEGIN / COMMIT / ROLLBACK via the same connection.
-  fn.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> => {
-    await fn.unsafe('BEGIN')
-    try {
-      const result = await cb(fn)
-      await fn.unsafe('COMMIT')
-      return result
-    } catch (err) {
+  // bun:sqlite is synchronous, but a transaction body may `await` real async
+  // work while its BEGIN is still open. Since every statement runs on this one
+  // shared connection, two transactions must never overlap — otherwise the
+  // second BEGIN throws "cannot start a transaction within a transaction" and
+  // its ROLLBACK aborts the first transaction, silently losing committed writes
+  // (ISS-040). Serialize them: each transaction runs to completion before the
+  // next BEGIN, regardless of whether the previous one committed or threw.
+  let txChain: Promise<unknown> = Promise.resolve()
+  fn.transaction = <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> => {
+    const run = async (): Promise<T> => {
+      let began = false
+      await fn.unsafe('BEGIN')
+      began = true
       try {
-        await fn.unsafe('ROLLBACK')
-      } catch {
-        // swallow rollback failure — the original error is more important
+        const result = await cb(fn)
+        await fn.unsafe('COMMIT')
+        return result
+      } catch (err) {
+        // Only roll back a transaction we actually opened; never let a failed
+        // BEGIN issue a ROLLBACK that could abort an unrelated transaction.
+        if (began) {
+          try {
+            await fn.unsafe('ROLLBACK')
+          } catch {
+            // swallow rollback failure — the original error is more important
+          }
+        }
+        throw err
       }
-      throw err
     }
+    const result = txChain.then(run, run)
+    // Advance the chain on settlement without propagating this transaction's
+    // outcome to the next one waiting in line.
+    txChain = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
   }
 
   return Object.assign(fn, { dialect: 'sqlite' as const })
