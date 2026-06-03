@@ -16,7 +16,7 @@ Schemas are the **source of truth**. Domain types come from `Static<typeof Schem
 - **Schemas are source of truth.** `type Foo = Static<typeof FooSchema>` — never a hand-rolled interface beside the schema.
 - **Soft fallbacks** for corrupted local storage / optional config use `withFallback(schema, default)` + `parseJsonWithFallback`.
 - **Hard fallbacks** for required documents throw and bubble to an error boundary.
-- **`zod` is banned outside `server/ai/drivers/`.** The Anthropic driver (`typeboxToZod.ts`, `anthropic.ts`) translates TypeBox schemas to Zod for the SDK's `tool()` API. Gated by `ai-driver-isolation.test.ts`.
+- **`zod` is banned outside `server/ai/drivers/`.** The Anthropic and OpenRouter drivers (`typeboxToZod.ts`, `anthropic.ts`, `openrouter.ts`) translate TypeBox schemas to Zod for their SDKs' `tool()` APIs. Gated by `ai-driver-isolation.test.ts`.
 
 ---
 
@@ -306,7 +306,7 @@ Common boundaries already wrapped — extend the same pattern when you add a new
   - `src/core/persistence/validate.ts` — `validateSite`, `validatePages`, `ValidatePagesOptions`, `SiteValidationError`
   - `src/core/plugins/manifest.ts` — `parsePluginManifest`
   - `server/http.ts` — `readValidatedBody`, `jsonResponse`, `badRequest`
-  - `server/ai/drivers/typeboxToZod.ts`, `server/ai/drivers/anthropic.ts` — the only legitimate `zod` exemption (Anthropic driver translates TypeBox schemas to Zod for the SDK)
+  - `server/ai/drivers/typeboxToZod.ts`, `server/ai/drivers/anthropic.ts`, `server/ai/drivers/openrouter.ts` — the only legitimate `zod` exemptions (Anthropic and OpenRouter drivers translate TypeBox schemas to Zod for their SDKs)
 - Gate tests:
   - `src/__tests__/architecture/boundary-validation.test.ts` — enforces the four HTTP / JSON-parse boundary rules (no `res.json() as`, no `JSON.parse as`, no raw `fetch(` in admin, no raw `req.json(` in server handlers)
   - `src/__tests__/architecture/ai-driver-isolation.test.ts` — enforces provider SDK isolation; `@anthropic-ai/sdk` banned everywhere, `zod` restricted to `server/ai/drivers/`
