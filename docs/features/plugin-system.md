@@ -432,6 +432,13 @@ The permission alone is insufficient. `performGatedFetch` in `server/plugins/hos
 
 3. **Manual redirect following with re-validation.** The host does not use transparent redirect following (`redirect: 'manual'` is always set). Each redirect location is validated with both the allowlist and the DNS SSRF guard before the next hop. The chain is capped at 5 hops. Method downgrade (303 → GET; 301/302 non-GET → GET) follows the Fetch spec.
 
+**`networkAllowedHosts` entry constraints (checked at manifest parse time).** The manifest parser validates every entry before a plugin can be installed. Only plain or wildcard hostnames are accepted — the entry pattern already rejects IPv6 literals, ports, paths, and query strings. Two additional checks run on top:
+
+- `localhost` and `*.localhost` are rejected — localhost is not a valid outbound target.
+- IPv4 dotted-quad literals (e.g. `127.0.0.1`, `169.254.169.254`) are rejected — IP literals bypass DNS resolution and are incoherent with the SSRF guard model. Use a hostname instead.
+
+The DNS SSRF guard in `performGatedFetch` remains the load-bearing defense; the manifest check is defense-in-depth so operators see the problem at install time rather than at the first fetch call.
+
 ---
 
 ## Permissions
@@ -579,6 +586,7 @@ Manifest:
 | `eval(...)` / `new Function(...)`                                        | Blocked — no replacement                                     |
 | Calling a host capability without the matching permission                | Declare it in `plugin.json`'s `permissions`                  |
 | Reaching the DB directly from a plugin                                   | Use `api.cms.storage.*`                                      |
+| IP literals or `localhost` in `networkAllowedHosts`                      | Use a hostname — rejected at manifest parse time             |
 | Skipping `instatic-plugin lint` before upload                                  | Always lint — the host scans anyway and refuses the upload   |
 | Calling host APIs from inside a constructor / module top-level           | Use lifecycle hooks (`activate(api)`) — host APIs are only bound there |
 
