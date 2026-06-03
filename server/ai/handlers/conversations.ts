@@ -41,7 +41,6 @@ const UpdateBodySchema = Type.Object({
   title: Type.Optional(Type.String({ minLength: 1 })),
   credentialId: Type.Optional(Type.String({ minLength: 1 })),
   modelId: Type.Optional(Type.String({ minLength: 1 })),
-  sessionId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 })
 
 export function tryHandleAiConversations(

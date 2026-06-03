@@ -85,7 +85,6 @@ export interface AgentSlice {
   isAgentStreaming: boolean
   agentMessages: AgentMessage[]
   agentError: string | null
-  agentSessionId: string | null
   /**
    * Active conversation row id in `ai_conversations`. Created lazily on the
    * first sendAgentMessage call (uses the site default credential/model);
@@ -243,7 +242,6 @@ export function createAgentSlice(
     isAgentStreaming: false,
     agentMessages: [],
     agentError: null,
-    agentSessionId: null,
     agentConversationId: null,
     agentActiveCredentialId: null,
     agentActiveModelId: null,
@@ -259,7 +257,9 @@ export function createAgentSlice(
     },
 
     toggleAgent() {
-      set((s) => ({ isAgentOpen: !s.isAgentOpen }))
+      set((s) => {
+        s.isAgentOpen = !s.isAgentOpen
+      })
     },
 
     abortAgent() {
@@ -272,7 +272,6 @@ export function createAgentSlice(
       set({
         agentMessages: [],
         agentError: null,
-        agentSessionId: null,
         agentConversationId: null,
         agentActiveCredentialId: null,
         agentActiveModelId: null,
@@ -285,7 +284,6 @@ export function createAgentSlice(
       set({
         agentMessages: [],
         agentError: null,
-        agentSessionId: null,
         agentConversationId: null,
         agentActiveCredentialId: null,
         agentActiveModelId: null,

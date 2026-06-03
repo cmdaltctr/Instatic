@@ -725,7 +725,6 @@ export const sqliteMigrations: Migration[] = [
         title text not null,
         credential_id text references ai_provider_credentials(id) on delete set null,
         model_id text not null,
-        session_id text,
         context_json text,
         prompt_tokens_total integer not null default 0,
         completion_tokens_total integer not null default 0,

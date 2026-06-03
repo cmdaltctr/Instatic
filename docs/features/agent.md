@@ -41,14 +41,19 @@ server/ai/
 │   │   └── snapshot.ts     — SiteSnapshot interface (wire shape from browser)
 │   └── content/            — content-workspace tools (separate scope)
 ├── drivers/
-│   ├── anthropic.ts        — Anthropic driver (allowed to import the Claude Agent SDK + Zod)
+│   ├── http/
+│   │   ├── sse.ts          — parseSseStream(res): reassemble SSE frames across chunks
+│   │   ├── execTool.ts     — executeAiTool(): server-handler vs browser-bridge dispatch
+│   │   ├── toolLoop.ts     — runToolLoop(): provider-agnostic multi-turn loop
+│   │   └── errors.ts       — isAbortError / classifyHttpError
+│   ├── anthropic.ts        — Anthropic driver: direct POST /v1/messages (no SDK)
 │   ├── openai.ts           — OpenAI Agents driver
 │   ├── openrouter.ts       — OpenRouter driver (allowed to import @openrouter/agent + Zod; native cost)
 │   ├── ollama.ts           — Ollama driver
-│   └── typeboxToZod.ts     — TypeBox→Zod conversion helper (Anthropic + OpenRouter drivers)
+│   └── typeboxToZod.ts     — TypeBox→Zod conversion helper (OpenRouter driver)
 └── runtime/
     ├── runner.ts           — runChat(): drives a driver, emits stream events
-    ├── persister.ts        — ConversationsPersister: messages + usage + session id to DB
+    ├── persister.ts        — ConversationsPersister: messages + usage to DB
     ├── types.ts            — canonical AiStreamEvent / AiMessage / AiTool / ToolContext
     └── transport.ts        — createBridge() / resolveBridgeToolResult()
 
@@ -96,7 +101,7 @@ agentSlice.sendAgentMessage(content)
 Server: chat.ts
     │
     ├─→ CSRF + requireCapability('ai.chat')
-    ├─→ load conversation row  (credentialId, modelId, sessionId, message history)
+    ├─→ load conversation row  (credentialId, modelId) + full message history
     ├─→ decrypt credential; resolveDriver(credential.providerId)
     ├─→ selectToolsForScope('site', capabilities)
     │     — write tools excluded unless caller has ai.tools.write
@@ -104,9 +109,9 @@ Server: chat.ts
     ├─→ createBridge(emit)  →  { bridgeId, bridge, destroy }
     ├─→ emit { type: 'bridgeReady', bridgeId }
     └─→ runChat({ driver, request, persister, emit })  — streaming begins
-          │  request carries resumeSessionId: conversation.sessionId
-          │  (Anthropic driver sets options.resume = resumeSessionId so the SDK
-          │   replays prior history; null/undefined on first turn = fresh session)
+          │  request carries the FULL conversation history as req.messages.
+          │  Direct HTTP drivers have no server-side session — every turn
+          │  replays the whole log, mapped into the provider's message array.
           │
           ├─→ read tool (e.g. inspect_page)
           │     → resolved server-side from snapshot; result returned to model
@@ -118,7 +123,6 @@ Server: chat.ts
 
 NDJSON stream events (one JSON object + \n per line):
     { type: 'bridgeReady', bridgeId }
-    { type: 'session', sessionId }                         ← Anthropic only; runner persists to DB for next-turn resume
     { type: 'text', text: '…' }
     { type: 'toolCall', toolCallId, toolName, input, status: 'pending' }
     { type: 'toolRequest', requestId, toolName, input }    ← write tools only
@@ -130,7 +134,6 @@ NDJSON stream events (one JSON object + \n per line):
 Browser: processStreamEvent(event) in streamEvents.ts
     │
     ├─→ 'bridgeReady'   → store bridgeId in closure
-    ├─→ 'session'       → store agentSessionId in slice state (server already persisted it to DB)
     ├─→ 'toolRequest'   → executeAgentTool(toolName, input)  (executor.ts)
     │       – TypeBox-validates input
     │       – e.g. runInsertHtml → importHtml(html) → insertImportedNodes(parentId, …)
@@ -176,12 +179,12 @@ This snapshot travels with every prompt so server-side read tools resolve entire
 
 The handler (`server/ai/handlers/chat.ts`):
 1. CSRF-checks and requires `ai.chat`.
-2. Loads the conversation row (credentialId, modelId, `sessionId`, persisted message history).
+2. Loads the conversation row (credentialId, modelId) and the full persisted message history (`listMessagesForConversation` → `buildMessageHistory` → `AiMessage[]`).
 3. Decrypts the credential and resolves the driver.
 4. Calls `selectToolsForScope('site', capabilities)` — write tools excluded without `ai.tools.write`.
 5. Builds the system prompt via `buildSiteSystemPrompt(snapshot)`.
 6. Creates a bridge (`createBridge(emit, req.signal)`), emits `bridgeReady`.
-7. Calls `runChat(...)` with `resumeSessionId: conversation.sessionId`. The Anthropic driver passes this as `options.resume` so the SDK replays the prior session; the runner persists the returned `session` event's id back to the DB via `createConversationsPersister`. Pipes all stream events to the HTTP response.
+7. Calls `runChat(...)` with the full history as `req.messages`. Direct HTTP drivers have no server-side session, so each driver maps the whole `AiMessage[]` log into the provider's native message array every turn (the Anthropic driver pairs assistant `tool_use` blocks with their following `tool_result` turns). The runner pipes all stream events to the HTTP response. The multi-turn agentic loop lives in `drivers/http/toolLoop.ts`, not in a provider SDK.
 8. Emits a terminal `ai.chat.completed` / `ai.chat.failed` audit event.
 
 ### `POST /admin/api/ai/tool-result`

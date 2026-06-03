@@ -11,7 +11,6 @@
  *   toolCall      driver issued a tool call (status: pending)
  *   toolResult    a previously-issued tool call completed (ok/error)
  *   toolRequest   server asks the browser to apply a write tool
- *   session       Claude Agent SDK session id (for follow-up resume)
  *   usage         per-turn token + cost totals
  *   error         server-side terminal error
  *   done          stream finished cleanly
@@ -72,7 +71,6 @@ export const ServerStreamEventSchema = Type.Union([
     ok: Type.Boolean(),
     error: Type.Optional(Type.String()),
   }),
-  Type.Object({ type: Type.Literal('session'), sessionId: Type.String() }),
   Type.Object({
     type: Type.Literal('usage'),
     promptTokens: Type.Number(),
@@ -194,13 +192,6 @@ export async function processStreamEvent(
     case 'usage': {
       // Token + cost totals — persisted server-side automatically. Nothing
       // to do in the UI for now (Phase 6 surfaces these in the audit page).
-      break
-    }
-
-    case 'session': {
-      set({
-        agentSessionId: event.sessionId,
-      })
       break
     }
 

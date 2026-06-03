@@ -81,15 +81,14 @@ export interface AiStreamRequest {
    * to the prefix; others concatenate.
    */
   readonly systemPrompt: string[]
+  /**
+   * The full conversation history, oldest-first. Direct HTTP drivers have no
+   * server-side session, so every turn replays the entire log: the driver
+   * maps `AiMessage[]` into its provider's native message array.
+   */
   readonly messages: AiMessage[]
   readonly tools: AiTool[]
   readonly modelId: string
-  /**
-   * The provider session id to resume, when this is a follow-up turn in an
-   * existing conversation. The driver passes it to the SDK so prior history is
-   * replayed; null/undefined starts a fresh session (ISS-031).
-   */
-  readonly resumeSessionId?: string | null
   readonly credentials: AiResolvedCredential
   readonly signal: AbortSignal
   readonly bridge: AiBrowserBridge

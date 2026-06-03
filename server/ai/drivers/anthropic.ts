@@ -1,58 +1,46 @@
 /**
- * Anthropic driver — `@anthropic-ai/claude-agent-sdk`.
+ * Anthropic driver — direct HTTP against the Messages API.
  *
- * Authentication:
- *   API key only. The driver scopes `ANTHROPIC_API_KEY` to the SDK call
- *   via the `Options.env` field for that single invocation — the host
- *   process env is never mutated.
+ * Talks to `POST https://api.anthropic.com/v1/messages` with no SDK: the
+ * shared `http/` layer owns SSE parsing, the multi-turn tool loop, tool
+ * execution, and error classification; this file owns the Anthropic-specific
+ * mapping — request body, `AiMessage[] → messages[]`, and the SSE→AiStreamEvent
+ * translator.
  *
- * Tool registration:
- *   The SDK's `tool()` API requires `AnyZodRawShape`. Each canonical
- *   AiTool's TypeBox input schema is converted via `typeboxToZod.ts` (the
- *   ONLY legitimate Zod use in the repo, kept inside the drivers/ tree).
- *   The MCP server is built per-request via `createSdkMcpServer` so the
- *   browser bridge + per-call context can close over the tools cleanly.
+ * Prompt caching is GA (no beta header): the static system prefix carries
+ * `cache_control: { type: 'ephemeral' }` so follow-up turns hit the cache.
  *
- * Streaming:
- *   The SDK yields SdkMessage values; this driver normalises them into
- *   canonical AiStreamEvent. Translation lives in `./anthropicStream.ts`
- *   so this file stays small.
- *
- * Gated by `ai-driver-isolation.test.ts`: this file is the only legal
- * importer of `@anthropic-ai/claude-agent-sdk` and `zod` in the repo.
+ * Tools are sent with their canonical TypeBox `inputSchema` as `input_schema`
+ * directly — TypeBox schemas ARE JSON Schema, so there is no Zod bridge.
  */
 
-import {
-  createSdkMcpServer,
-  query,
-  tool,
-  type Options,
-  type SdkMcpToolDefinition,
-} from '@anthropic-ai/claude-agent-sdk'
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import type { ZodTypeAny } from 'zod'
-import { parseValue } from '@core/utils/typeboxHelpers'
+import { Type, parseValue, type Static } from '@core/utils/typeboxHelpers'
 import type {
   AiAuthMode,
+  AiContentBlock,
   AiMessage,
   AiProviderId,
   AiStreamEvent,
-  AiTool,
-  AiToolOutput,
-  ToolContext,
 } from '../runtime/types'
 import type {
   AiProvider,
   AiProviderModel,
   AiStreamRequest,
 } from './types'
-import { typeboxObjectToZodRawShape } from './typeboxToZod'
-import {
-  createAnthropicStreamState,
-  toAiStreamEvents,
-} from './anthropicStream'
+import { runToolLoop, type ProviderAdapter, type TurnResult, type TurnToolCall, type TurnToolResult, type TurnTranslator, type TurnUsage } from './http/toolLoop'
+import type { SseFrame } from './http/sse'
 
 const SUPPORTED_AUTH_MODES: AiAuthMode[] = ['apiKey']
+
+const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages'
+const ANTHROPIC_VERSION = '2023-06-01'
+const SYSTEM_PROMPT_DYNAMIC_BOUNDARY = '__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__'
+
+// Per-turn output cap. Anthropic requires `max_tokens`; the prior SDK left it
+// to its own default. 8192 comfortably covers a single agent turn (a few
+// insertHtml chunks + a short narration) without risking truncation; multi-turn
+// work continues across loop iterations, not within one response.
+const MAX_OUTPUT_TOKENS = 8192
 
 // Static model list — current as of May 2026. Updating this in lockstep with
 // provider releases is a known maintenance cost; the alternative (hitting
@@ -110,283 +98,431 @@ export const anthropicDriver: AiProvider = {
   },
 
   async *stream(req: AiStreamRequest): AsyncIterable<AiStreamEvent> {
-    yield* runAnthropicStream(req)
+    if (req.credentials.authMode !== 'apiKey' || !req.credentials.apiKey) {
+      // Defensive: a non-apiKey credential reaching the driver implies a
+      // mismatched DB row or a bypassed UI. Fail cleanly instead of POSTing
+      // and getting a generic 401.
+      yield {
+        type: 'error',
+        message:
+          'Anthropic requires an API key. Add an API-key credential in /admin/ai/providers and pick it for the site default.',
+      }
+      return
+    }
+    yield* runToolLoop(anthropicAdapter, req)
   },
 }
 
 // ---------------------------------------------------------------------------
-// Streaming implementation
+// Provider-native message shapes (request side — we construct, never parse)
 // ---------------------------------------------------------------------------
 
-async function* runAnthropicStream(req: AiStreamRequest): AsyncIterable<AiStreamEvent> {
-  if (req.credentials.authMode !== 'apiKey' || !req.credentials.apiKey) {
-    // Defensive: a non-apiKey credential reaching the driver implies a
-    // mismatched DB row or a bypassed UI. Fail cleanly instead of
-    // delegating to the SDK and getting a generic 401.
-    yield {
-      type: 'error',
-      message:
-        'Anthropic requires an API key. Add an API-key credential in /admin/ai/providers and pick it for the site default.',
-    }
-    return
-  }
-
-  const mcpServer = buildMcpServerForTools(req.tools, req.bridge, req.signal, req.toolContextBase)
-  const options = buildQueryOptions(req, mcpServer)
-  const prompt = serialiseMessagesAsPrompt(req.messages)
-  const streamState = createAnthropicStreamState()
-  let emittedSession = false
-
-  for await (const message of query({ prompt, options })) {
-    // Surface the SDK session id once so the runner can persist it; the next
-    // turn passes it back as `resume` to replay history (ISS-031).
-    if (!emittedSession) {
-      const sessionId = (message as { session_id?: unknown }).session_id
-      if (typeof sessionId === 'string' && sessionId) {
-        emittedSession = true
-        yield { type: 'session', sessionId }
-      }
-    }
-
-    for (const event of toAiStreamEvents(message, streamState)) {
-      yield event
-    }
-
-    if (message.type === 'assistant') {
-      const sdkMsg = message as { type: 'assistant'; message?: unknown; error?: unknown }
-      if (!sdkMsg.message) {
-        // Auth/billing failure surfaces here as an absent message body.
-        // Log + emit a classified error. Admin-only surface (capability
-        // gated) so the detail is fine to forward when present.
-        console.error('[ai/anthropic] assistant message unavailable (auth/billing):', sdkMsg.error)
-        const detail = formatAnthropicError(sdkMsg.error)
-        yield {
-          type: 'error',
-          message: detail
-            ? `Anthropic error: ${detail}. Check your credentials in /admin/ai/providers.`
-            : 'Anthropic auth or billing error. Check your credentials in /admin/ai/providers.',
-        }
-        return
-      }
-    } else if (message.type === 'result') {
-      const result = message as { type: 'result'; is_error?: boolean; subtype?: string; errors?: string[] }
-      if (result.is_error) {
-        console.error('[ai/anthropic] SDK result error:', result.subtype, result.errors)
-        const detail = [result.subtype, ...(result.errors ?? [])]
-          .filter((s): s is string => typeof s === 'string' && s.length > 0)
-          .join(' — ')
-        yield {
-          type: 'error',
-          message: detail
-            ? `Anthropic session error: ${detail}`
-            : 'Anthropic session ended with an error. Please try again.',
-        }
-        return
-      }
-    }
-  }
+interface AnthropicTextBlock {
+  type: 'text'
+  text: string
+  cache_control?: { type: 'ephemeral' }
 }
+interface AnthropicImageBlock {
+  type: 'image'
+  source: { type: 'base64'; media_type: string; data: string }
+}
+interface AnthropicToolUseBlock {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: unknown
+}
+interface AnthropicToolResultBlock {
+  type: 'tool_result'
+  tool_use_id: string
+  content: string
+  is_error?: boolean
+}
+type AnthropicContentBlock =
+  | AnthropicTextBlock
+  | AnthropicImageBlock
+  | AnthropicToolUseBlock
+  | AnthropicToolResultBlock
 
-/**
- * Extract a short, user-facing message from the SDK's `error` field on an
- * assistant message with no body. The SDK wraps either an `Error` instance,
- * a plain string, or an object with a `message` property. Anything else
- * collapses to null so the caller falls back to its generic copy.
- */
-function formatAnthropicError(err: unknown): string | null {
-  if (!err) return null
-  if (typeof err === 'string') return err
-  if (err instanceof Error) return err.message
-  if (typeof err === 'object' && 'message' in err) {
-    const msg = (err as { message?: unknown }).message
-    if (typeof msg === 'string') return msg
-  }
-  return null
+export interface AnthropicMessage {
+  role: 'user' | 'assistant'
+  content: AnthropicContentBlock[]
 }
 
 // ---------------------------------------------------------------------------
-// SDK query options
+// Adapter
 // ---------------------------------------------------------------------------
 
-// The in-app panel edits the live site only. Filesystem + shell tools have
-// no use case here and would be a managed-mode risk; deny them at the SDK
-// level so the model can't request them.
-const DISALLOWED_TOOLS = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'NotebookEdit']
+const anthropicAdapter: ProviderAdapter<AnthropicMessage> = {
+  label: 'Anthropic',
+  endpoint: ANTHROPIC_ENDPOINT,
 
-function buildQueryOptions(
-  req: AiStreamRequest,
-  mcpServer: ReturnType<typeof createSdkMcpServer>,
-): Options {
-  const options: Options = {
-    systemPrompt: req.systemPrompt,
-    model: req.modelId,
-    cwd: process.cwd(),
-    mcpServers: { ai_tools: mcpServer },
-    includePartialMessages: true,
-    skills: [],
-    disallowedTools: DISALLOWED_TOOLS,
-    // Anything past the deny-rule check is auto-approved — the in-app panel
-    // has no user-facing tool-approval prompt; the user reviews via Cmd+Z.
-    canUseTool: async (_name, input) => ({ behavior: 'allow', updatedInput: input }),
-  }
-
-  // Scope `ANTHROPIC_API_KEY` to this single SDK call via Options.env so
-  // the host process env stays clean and concurrent chats with different
-  // keys don't race.
-  options.env = {
-    ...process.env,
-    ANTHROPIC_API_KEY: req.credentials.apiKey!,
-  } as Record<string, string>
-
-  // Honour the request abort signal (ISS-029): a client disconnect / cancelled
-  // chat must stop the agent loop so it stops generating (and billing) tokens
-  // and the stream is torn down — matching the drivers/types.ts contract and
-  // the OpenAI driver. The SDK cancels via its own AbortController, so bridge
-  // req.signal to it.
-  const controller = new AbortController()
-  if (req.signal.aborted) controller.abort()
-  else req.signal.addEventListener('abort', () => controller.abort(), { once: true })
-  options.abortController = controller
-
-  // Resume the prior session so the model sees the conversation history
-  // (ISS-031). The SDK replays the stored transcript for this session id.
-  if (req.resumeSessionId) options.resume = req.resumeSessionId
-
-  return options
-}
-
-// ---------------------------------------------------------------------------
-// MCP server — adapts canonical AiTool[] into the SDK's tool() shape
-// ---------------------------------------------------------------------------
-
-function buildMcpServerForTools(
-  tools: AiTool[],
-  bridge: AiStreamRequest['bridge'],
-  signal: AbortSignal,
-  toolContextBase: AiStreamRequest['toolContextBase'],
-) {
-  const sdkTools = tools.map((t) => toolToSdkDefinition(t, bridge, signal, toolContextBase))
-  return createSdkMcpServer({
-    name: 'ai_tools',
-    version: '1.0.0',
-    alwaysLoad: true,
-    tools: sdkTools,
-  })
-}
-
-function toolToSdkDefinition(
-  aiTool: AiTool,
-  bridge: AiStreamRequest['bridge'],
-  signal: AbortSignal,
-  toolContextBase: AiStreamRequest['toolContextBase'],
-): SdkMcpToolDefinition<Record<string, ZodTypeAny>> {
-  const rawShape = typeboxObjectToZodRawShape(aiTool.inputSchema)
-  return tool(
-    aiTool.name,
-    aiTool.description,
-    rawShape,
-    async (input) => callTool(aiTool, input, bridge, signal, toolContextBase),
-    { alwaysLoad: true },
-  )
-}
-
-async function callTool(
-  aiTool: AiTool,
-  rawInput: unknown,
-  bridge: AiStreamRequest['bridge'],
-  signal: AbortSignal,
-  toolContextBase: AiStreamRequest['toolContextBase'],
-): Promise<CallToolResult> {
-  // Defence in depth: re-validate against the TypeBox schema before either
-  // calling the handler OR forwarding to the browser. The SDK already
-  // validated against Zod, but the TypeBox schema is the canonical source
-  // of truth and may carry stricter constraints in edge cases.
-  let validated: unknown
-  try {
-    validated = parseValue(aiTool.inputSchema, rawInput)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Invalid tool input.'
-    return errorResult(message)
-  }
-
-  if (aiTool.execution === 'server') {
-    if (!aiTool.handler) {
-      return errorResult(`Tool ${aiTool.name} declares execution='server' but has no handler.`)
+  buildHeaders(req) {
+    return {
+      'x-api-key': req.credentials.apiKey!,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
     }
-    try {
-      const ctx: ToolContext = {
-        ...toolContextBase,
-        signal,
-      }
-      const result = await aiTool.handler(validated, ctx)
-      return successResult(result)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : `Tool ${aiTool.name} failed.`
-      return errorResult(message)
+  },
+
+  mapHistory(req) {
+    return mapHistory(req.messages)
+  },
+
+  buildRequestBody(messages, req) {
+    const body: Record<string, unknown> = {
+      model: req.modelId,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      system: buildSystemBlocks(req.systemPrompt),
+      messages,
+      stream: true,
     }
-  }
+    if (req.tools.length > 0) {
+      body.tools = req.tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        // The TypeBox schema IS JSON Schema — pass it straight through.
+        input_schema: t.inputSchema,
+      }))
+    }
+    return body
+  },
 
-  // Browser-execution: forward to the bridge and wait.
-  try {
-    const result: AiToolOutput = await bridge.callBrowser(aiTool.name, validated)
-    if (!result.ok) return errorResult(result.error ?? `Tool ${aiTool.name} failed.`)
-    return successResult(result.data ?? { ok: true })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : `Tool ${aiTool.name} failed.`
-    return errorResult(message)
-  }
-}
+  buildToolResultMessage(results) {
+    return buildToolResultMessage(results)
+  },
 
-function successResult(data: unknown): CallToolResult {
-  return {
-    content: [{ type: 'text', text: JSON.stringify(data) }],
-    structuredContent: typeof data === 'object' && data !== null
-      ? (data as Record<string, unknown>)
-      : { value: data },
-  }
-}
-
-function errorResult(message: string): CallToolResult {
-  return {
-    isError: true,
-    content: [{ type: 'text', text: message }],
-    structuredContent: { ok: false, error: message },
-  }
+  createTurnTranslator() {
+    return new AnthropicTurnTranslator()
+  },
 }
 
 // ---------------------------------------------------------------------------
-// Messages → prompt string
+// System prompt → system blocks
 // ---------------------------------------------------------------------------
 
 /**
- * The Claude Agent SDK takes `prompt` as a single string (a one-shot
- * "user said this" representation). The runner threads `messages` through
- * for history; we serialise it back into a single string.
+ * Map the canonical `systemPrompt` array into Anthropic's `system` field.
  *
- * For a brand-new conversation the array contains one user message and we
- * emit just its text. For a follow-up turn, history is replayed by the SDK via
- * `Options.resume` (wired end-to-end: the runner persists each turn's session
- * id and the handler passes it back as `resumeSessionId`), so the prompt only
- * needs to carry the latest user message.
+ *   - 3-element `[prefix, BOUNDARY, suffix]` → two text blocks, `cache_control`
+ *     on the static prefix so it's served from the prompt cache on later turns.
+ *   - 1-element `[text]` → the plain string (no caching).
+ *   - any other length → joined into one uncached block (defensive).
  */
-function serialiseMessagesAsPrompt(messages: AiMessage[]): string {
-  const last = messages.at(-1)
-  if (!last || last.role !== 'user') {
-    return messages
-      .filter((m): m is Extract<AiMessage, { role: 'user' }> => m.role === 'user')
-      .map((m) => contentBlocksToText(m.content))
-      .join('\n')
+export function buildSystemBlocks(systemPrompt: string[]): string | AnthropicTextBlock[] {
+  if (systemPrompt.length === 3 && systemPrompt[1] === SYSTEM_PROMPT_DYNAMIC_BOUNDARY) {
+    return [
+      { type: 'text', text: systemPrompt[0]!, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: systemPrompt[2]! },
+    ]
   }
-  return contentBlocksToText(last.content)
+  if (systemPrompt.length === 1) {
+    return systemPrompt[0]!
+  }
+  return systemPrompt.filter((s) => s !== SYSTEM_PROMPT_DYNAMIC_BOUNDARY).join('\n\n')
 }
 
-function contentBlocksToText(content: Extract<AiMessage, { role: 'user' }>['content']): string {
-  return content
-    .map((block) => {
-      if (block.kind === 'text') return block.text
-      if (block.kind === 'image') return '[image attached]'
-      if (block.kind === 'toolCall') return `[tool: ${block.toolName}]`
-      return ''
-    })
-    .join(' ')
+// ---------------------------------------------------------------------------
+// AiMessage[] → Anthropic messages[]
+// ---------------------------------------------------------------------------
+
+/**
+ * Map the canonical conversation log into Anthropic's `messages` array.
+ *
+ * Anthropic requires strictly alternating user/assistant turns and pairs each
+ * assistant `tool_use` block with a following `{ role:'user', content:[tool_result] }`
+ * turn. The persisted log stores each tool call + result as separate rows, so
+ * we coalesce consecutive assistant rows into one assistant turn and consecutive
+ * `role:'tool'` rows into one user turn of `tool_result` blocks.
+ */
+export function mapHistory(messages: AiMessage[]): AnthropicMessage[] {
+  const out: AnthropicMessage[] = []
+  let i = 0
+  while (i < messages.length) {
+    const msg = messages[i]!
+    if (msg.role === 'user') {
+      out.push({ role: 'user', content: userContent(msg.content) })
+      i += 1
+    } else if (msg.role === 'assistant') {
+      const content: AnthropicContentBlock[] = []
+      while (i < messages.length && messages[i]!.role === 'assistant') {
+        content.push(...assistantContent((messages[i] as Extract<AiMessage, { role: 'assistant' }>).content))
+        i += 1
+      }
+      out.push({ role: 'assistant', content })
+    } else if (msg.role === 'tool') {
+      const content: AnthropicContentBlock[] = []
+      while (i < messages.length && messages[i]!.role === 'tool') {
+        content.push(toolResultBlock(messages[i] as Extract<AiMessage, { role: 'tool' }>))
+        i += 1
+      }
+      out.push({ role: 'user', content })
+    } else {
+      // role:'system' never appears in `messages` (system is its own field).
+      i += 1
+    }
+  }
+  return out
+}
+
+function userContent(blocks: AiContentBlock[]): AnthropicContentBlock[] {
+  const out: AnthropicContentBlock[] = []
+  for (const block of blocks) {
+    if (block.kind === 'text') out.push({ type: 'text', text: block.text })
+    else if (block.kind === 'image') {
+      out.push({ type: 'image', source: { type: 'base64', media_type: block.mimeType, data: block.data } })
+    }
+    // user-authored toolCall blocks don't exist; ignore defensively.
+  }
+  return out
+}
+
+function assistantContent(blocks: AiContentBlock[]): AnthropicContentBlock[] {
+  const out: AnthropicContentBlock[] = []
+  for (const block of blocks) {
+    if (block.kind === 'text') {
+      if (block.text) out.push({ type: 'text', text: block.text })
+    } else if (block.kind === 'toolCall') {
+      out.push({ type: 'tool_use', id: block.toolCallId, name: block.toolName, input: block.input ?? {} })
+    }
+    // assistant image blocks don't occur; ignore.
+  }
+  return out
+}
+
+function toolResultBlock(msg: Extract<AiMessage, { role: 'tool' }>): AnthropicToolResultBlock {
+  return {
+    type: 'tool_result',
+    tool_use_id: msg.toolCallId,
+    content: toolOutputToContent(msg.output),
+    is_error: msg.output.ok ? undefined : true,
+  }
+}
+
+function buildToolResultMessage(results: TurnToolResult[]): AnthropicMessage {
+  return {
+    role: 'user',
+    content: results.map((r) => ({
+      type: 'tool_result' as const,
+      tool_use_id: r.id,
+      content: toolOutputToContent(r.output),
+      is_error: r.output.ok ? undefined : true,
+    })),
+  }
+}
+
+function toolOutputToContent(output: { ok: boolean; data?: unknown; error?: string }): string {
+  if (output.ok) return JSON.stringify(output.data ?? { ok: true })
+  return output.error ?? 'Tool call failed.'
+}
+
+// ---------------------------------------------------------------------------
+// SSE event schema (boundary validation — no `as` on parsed JSON)
+// ---------------------------------------------------------------------------
+
+const AnthropicUsageSchema = Type.Object(
+  {
+    input_tokens: Type.Optional(Type.Number()),
+    output_tokens: Type.Optional(Type.Number()),
+    cache_read_input_tokens: Type.Optional(Type.Number()),
+    cache_creation_input_tokens: Type.Optional(Type.Number()),
+  },
+  { additionalProperties: true },
+)
+
+const AnthropicSseEventSchema = Type.Object(
+  {
+    type: Type.String(),
+    index: Type.Optional(Type.Number()),
+    content_block: Type.Optional(
+      Type.Object(
+        {
+          type: Type.Optional(Type.String()),
+          id: Type.Optional(Type.String()),
+          name: Type.Optional(Type.String()),
+          input: Type.Optional(Type.Unknown()),
+        },
+        { additionalProperties: true },
+      ),
+    ),
+    delta: Type.Optional(
+      Type.Object(
+        {
+          type: Type.Optional(Type.String()),
+          text: Type.Optional(Type.String()),
+          partial_json: Type.Optional(Type.String()),
+          stop_reason: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+        },
+        { additionalProperties: true },
+      ),
+    ),
+    message: Type.Optional(
+      Type.Object(
+        { usage: Type.Optional(AnthropicUsageSchema) },
+        { additionalProperties: true },
+      ),
+    ),
+    usage: Type.Optional(AnthropicUsageSchema),
+    error: Type.Optional(
+      Type.Object(
+        { type: Type.Optional(Type.String()), message: Type.Optional(Type.String()) },
+        { additionalProperties: true },
+      ),
+    ),
+  },
+  { additionalProperties: true },
+)
+
+// ---------------------------------------------------------------------------
+// SSE translator — one per API call in the loop
+// ---------------------------------------------------------------------------
+
+interface MutableUsage {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
+}
+
+export class AnthropicTurnTranslator implements TurnTranslator<AnthropicMessage> {
+  // Block order as it streams, so the assistant turn rebuilds text/tool_use
+  // blocks in the sequence the model emitted them.
+  private readonly order: number[] = []
+  private readonly textByIndex = new Map<number, string>()
+  private readonly toolByIndex = new Map<number, { id: string; name: string; json: string }>()
+  private readonly toolCalls: TurnToolCall[] = []
+  private usage: MutableUsage = {}
+  private stopReason: string | null = null
+
+  translate(frame: SseFrame): AiStreamEvent[] {
+    let event: Static<typeof AnthropicSseEventSchema>
+    try {
+      event = parseValue(AnthropicSseEventSchema, JSON.parse(frame.data))
+    } catch {
+      // A frame we can't parse (keep-alive comment, malformed payload) is not
+      // fatal — skip it.
+      return []
+    }
+
+    switch (event.type) {
+      case 'message_start':
+        if (event.message?.usage) this.mergeUsage(event.message.usage)
+        return []
+
+      case 'content_block_start': {
+        const index = event.index ?? 0
+        const block = event.content_block
+        if (block?.type === 'tool_use') {
+          this.order.push(index)
+          this.toolByIndex.set(index, {
+            id: typeof block.id === 'string' ? block.id : `tool-${index}`,
+            name: typeof block.name === 'string' ? block.name : 'tool',
+            json: '',
+          })
+        } else if (block?.type === 'text') {
+          this.order.push(index)
+          this.textByIndex.set(index, '')
+        }
+        return []
+      }
+
+      case 'content_block_delta': {
+        const index = event.index ?? 0
+        const delta = event.delta
+        if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+          this.textByIndex.set(index, (this.textByIndex.get(index) ?? '') + delta.text)
+          return [{ type: 'text', text: delta.text }]
+        }
+        if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+          const tool = this.toolByIndex.get(index)
+          if (tool) tool.json += delta.partial_json
+        }
+        return []
+      }
+
+      case 'content_block_stop': {
+        const index = event.index ?? 0
+        const tool = this.toolByIndex.get(index)
+        if (!tool) return []
+        const input = parseJsonOrEmpty(tool.json)
+        this.toolCalls.push({ id: tool.id, name: tool.name, input })
+        return [{
+          type: 'toolCall',
+          toolCallId: tool.id,
+          toolName: tool.name,
+          input,
+          status: 'pending',
+        }]
+      }
+
+      case 'message_delta': {
+        if (typeof event.delta?.stop_reason === 'string') this.stopReason = event.delta.stop_reason
+        if (event.usage) this.mergeUsage(event.usage)
+        return []
+      }
+
+      case 'error': {
+        const detail = event.error?.message
+        return [{
+          type: 'error',
+          message: detail
+            ? `Anthropic error: ${detail}`
+            : 'Anthropic stream failed. Check your credentials in /admin/ai/providers.',
+        }]
+      }
+
+      // message_stop, ping, and unrecognised events carry nothing we surface.
+      default:
+        return []
+    }
+  }
+
+  finish(): TurnResult<AnthropicMessage> {
+    const content: AnthropicContentBlock[] = []
+    for (const index of this.order) {
+      const text = this.textByIndex.get(index)
+      if (text !== undefined) {
+        if (text) content.push({ type: 'text', text })
+        continue
+      }
+      const tool = this.toolByIndex.get(index)
+      if (tool) {
+        content.push({ type: 'tool_use', id: tool.id, name: tool.name, input: parseJsonOrEmpty(tool.json) })
+      }
+    }
+
+    return {
+      stop: this.stopReason !== 'tool_use',
+      toolCalls: this.toolCalls,
+      assistantMessage: content.length > 0 ? { role: 'assistant', content } : null,
+      usage: this.toTurnUsage(),
+    }
+  }
+
+  private mergeUsage(usage: MutableUsage): void {
+    // input/cache fields land on message_start; output_tokens is cumulative on
+    // message_delta — last-wins captures the final values correctly.
+    for (const key of ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'] as const) {
+      const value = usage[key]
+      if (typeof value === 'number') this.usage[key] = value
+    }
+  }
+
+  private toTurnUsage(): TurnUsage {
+    return {
+      promptTokens: this.usage.input_tokens ?? 0,
+      completionTokens: this.usage.output_tokens ?? 0,
+      cacheReadTokens: this.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: this.usage.cache_creation_input_tokens ?? 0,
+    }
+  }
+}
+
+function parseJsonOrEmpty(value: string): unknown {
+  if (!value.trim()) return {}
+  try {
+    return JSON.parse(value)
+  } catch {
+    return {}
+  }
 }

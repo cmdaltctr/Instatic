@@ -51,7 +51,6 @@ interface ConversationRow {
   title: string
   credential_id: string | null
   model_id: string
-  session_id: string | null
   context_json: string | null
   prompt_tokens_total: number | string
   completion_tokens_total: number | string
@@ -93,7 +92,6 @@ function conversationRowToRecord(row: ConversationRow): ConversationRecord {
     title: row.title,
     credentialId: row.credential_id,
     modelId: row.model_id,
-    sessionId: row.session_id,
     contextJson: row.context_json,
     promptTokensTotal: toNumber(row.prompt_tokens_total),
     completionTokensTotal: toNumber(row.completion_tokens_total),
@@ -199,7 +197,7 @@ export async function listConversationsForUserScope(
   scope: ToolScope,
 ): Promise<ConversationRecord[]> {
   const { rows } = await db<ConversationRow>`
-    select id, user_id, scope, title, credential_id, model_id, session_id,
+    select id, user_id, scope, title, credential_id, model_id,
            context_json, prompt_tokens_total, completion_tokens_total,
            cost_usd_total, cache_read_tokens_total, cache_creation_tokens_total, created_at, updated_at, deleted_at
     from ai_conversations
@@ -221,7 +219,7 @@ export async function readConversationForUser(
   conversationId: string,
 ): Promise<ConversationRecord | null> {
   const { rows } = await db<ConversationRow>`
-    select id, user_id, scope, title, credential_id, model_id, session_id,
+    select id, user_id, scope, title, credential_id, model_id,
            context_json, prompt_tokens_total, completion_tokens_total,
            cost_usd_total, cache_read_tokens_total, cache_creation_tokens_total, created_at, updated_at, deleted_at
     from ai_conversations
@@ -277,7 +275,7 @@ export async function createConversationForUser(
       ${id}, ${userId}, ${input.scope}, ${title},
       ${input.credentialId}, ${input.modelId}, ${input.contextJson ?? null}
     )
-    returning id, user_id, scope, title, credential_id, model_id, session_id,
+    returning id, user_id, scope, title, credential_id, model_id,
               context_json, prompt_tokens_total, completion_tokens_total,
               cost_usd_total, cache_read_tokens_total, cache_creation_tokens_total, created_at, updated_at, deleted_at
   `
@@ -285,27 +283,7 @@ export async function createConversationForUser(
 }
 
 /**
- * Set just the provider session id on a conversation. Server-internal (called
- * by the chat runner after the conversation is already authorised), so it is
- * keyed on id alone — the next turn resumes this session to replay history
- * (ISS-031).
- */
-export async function setConversationSessionId(
-  db: DbClient,
-  conversationId: string,
-  sessionId: string,
-): Promise<void> {
-  await db`
-    update ai_conversations
-    set session_id = ${sessionId},
-        updated_at = current_timestamp
-    where id = ${conversationId}
-  `
-}
-
-/**
- * Patch a conversation. Pass only fields to update. `sessionId: null`
- * explicitly clears the provider session.
+ * Patch a conversation. Pass only fields to update.
  */
 export async function updateConversationForUser(
   db: DbClient,
@@ -321,18 +299,15 @@ export async function updateConversationForUser(
     patch.credentialId !== undefined ? patch.credentialId : existing.credentialId
   const nextModelId =
     patch.modelId !== undefined ? patch.modelId : existing.modelId
-  const nextSessionId =
-    patch.sessionId !== undefined ? patch.sessionId : existing.sessionId
 
   const { rows } = await db<ConversationRow>`
     update ai_conversations
     set title = ${nextTitle},
         credential_id = ${nextCredentialId},
         model_id = ${nextModelId},
-        session_id = ${nextSessionId},
         updated_at = current_timestamp
     where id = ${conversationId} and user_id = ${userId}
-    returning id, user_id, scope, title, credential_id, model_id, session_id,
+    returning id, user_id, scope, title, credential_id, model_id,
               context_json, prompt_tokens_total, completion_tokens_total,
               cost_usd_total, cache_read_tokens_total, cache_creation_tokens_total, created_at, updated_at, deleted_at
   `

@@ -8,7 +8,7 @@
  */
 
 import type { DbClient } from '../../db/client'
-import { appendMessage, setConversationSessionId } from '../conversations/store'
+import { appendMessage } from '../conversations/store'
 import { calculateCostUsd } from '../pricing'
 import type { AiContentBlock, AiProviderId } from './types'
 
@@ -32,11 +32,6 @@ export interface ConversationsPersister {
     cacheReadTokens?: number
     cacheCreationTokens?: number
   }): Promise<void>
-  /**
-   * Persist the SDK session id so the next turn resumes the same session and
-   * the model sees the prior conversation history (ISS-031).
-   */
-  recordSession(sessionId: string): Promise<void>
 }
 
 export interface ConversationsPersisterContext {
@@ -86,8 +81,8 @@ export function createConversationsPersister(
 
     async appendToolResult({ toolCallId, toolName, ok, error }) {
       // role='tool' messages mirror the OpenAI shape; the Anthropic driver
-      // translates these to `{ role: 'user', content: [tool_result block] }`
-      // when feeding history back to the SDK.
+      // maps these to `{ role: 'user', content: [tool_result block] }`
+      // when replaying history into the Messages API.
       const blocks: AiContentBlock[] = [{
         kind: 'text',
         text: ok ? '' : (error ?? 'Tool call failed.'),
@@ -129,10 +124,6 @@ export function createConversationsPersister(
         usage.cacheReadTokens ?? 0,
         usage.cacheCreationTokens ?? 0,
       )
-    },
-
-    async recordSession(sessionId) {
-      await setConversationSessionId(db, conversationId, sessionId)
     },
   }
 }

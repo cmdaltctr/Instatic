@@ -130,8 +130,6 @@ export interface ToolContext {
 export type AiStreamEvent =
   /** First event of every stream — carries the bridge id for tool-result POSTs. */
   | { type: 'bridgeReady'; bridgeId: string }
-  /** Provider's session id, if any (Anthropic resume token, OpenAI thread id). */
-  | { type: 'session'; sessionId: string }
   /** Streaming text delta from the assistant. */
   | { type: 'text'; text: string }
   /** A tool call has been issued by the model. `status: 'pending'` until completion. */

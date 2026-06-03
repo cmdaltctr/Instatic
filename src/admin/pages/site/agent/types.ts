@@ -108,12 +108,6 @@ interface ToolResultEvent {
   error?: string
 }
 
-/** Provider session id (e.g. Claude Agent SDK resume token). */
-interface SessionEvent {
-  type: 'session'
-  sessionId: string
-}
-
 /** Aggregated token usage for the entire turn — emitted just before `done`. */
 interface UsageEvent {
   type: 'usage'
@@ -128,7 +122,6 @@ export type ServerStreamEvent =
   | ToolRequestEvent
   | ToolCallEvent
   | ToolResultEvent
-  | SessionEvent
   | UsageEvent
   | DoneEvent
   | ErrorEvent

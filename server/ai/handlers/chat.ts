@@ -205,12 +205,11 @@ async function handleAiChat(
 
         const request: AiStreamRequest = {
           systemPrompt,
+          // Full conversation history — direct HTTP drivers replay it every
+          // turn (there is no server-side session to resume).
           messages,
           tools,
           modelId: conversation.modelId,
-          // Resume the prior SDK session so the model sees the conversation
-          // history on follow-up turns (ISS-031).
-          resumeSessionId: conversation.sessionId,
           credentials: resolvedCredential,
           signal: req.signal,
           bridge,

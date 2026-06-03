@@ -5,7 +5,7 @@
  * Sequence:
  *
  *   1. Handler creates a bridge via `createBridge(emit)` → bridgeId + sink.
- *   2. Handler emits the `bridgeReady` + (optional) `session` events.
+ *   2. Handler emits the `bridgeReady` event.
  *   3. Handler calls `runChat({ driver, request, persister, emit })`.
  *   4. `runChat` iterates driver.stream(request), threading every event
  *      through `emit` (NDJSON to browser) AND `persister` (DB writes for
@@ -115,12 +115,6 @@ export async function runChat(args: RunChatArgs): Promise<void> {
           // message in their history.
           await flushPendingAssistantText()
           return
-        }
-        case 'session': {
-          // Persist the SDK session id so the next turn resumes this session
-          // and the model sees prior history (ISS-031).
-          await persister.recordSession(event.sessionId)
-          break
         }
         // `bridgeReady`, `toolRequest`, `done`: nothing to persist.
         default:
