@@ -12,6 +12,7 @@ import { Dialog } from '@ui/components/Dialog'
 import { FileUpload } from '@ui/components/FileUpload'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
 import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
+import { formatBytes } from '../../utils/formatBytes'
 import styles from './ReplaceFileDialog.module.css'
 
 interface ReplaceFileDialogProps {
@@ -19,13 +20,6 @@ interface ReplaceFileDialogProps {
   open: boolean
   onClose: () => void
   onReplace: (file: File) => Promise<unknown>
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 // ---------------------------------------------------------------------------

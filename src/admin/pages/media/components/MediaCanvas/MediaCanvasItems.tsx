@@ -9,6 +9,7 @@ import type { CmsMediaAsset, CmsMediaFolder } from '@core/persistence/cmsMedia'
 import type { FolderSelection } from '../../hooks/useMediaWorkspace'
 import { bucketForMime } from '../../utils/filters'
 import { blurHashToDataUrl, pickVariantUrl } from '../../utils/variants'
+import { formatBytes } from '../../utils/formatBytes'
 import styles from './MediaCanvas.module.css'
 
 export interface ParentFolderEntry {
@@ -32,13 +33,6 @@ interface AssetItemProps {
 // row's 24-px preview). DPR-aware picking happens inside pickVariantUrl.
 const TILE_CSS_WIDTH = 140
 const ROW_CSS_WIDTH = 24
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-}
 
 export function AssetTile({
   asset,

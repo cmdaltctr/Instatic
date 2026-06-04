@@ -14,6 +14,7 @@ import { ReloadIcon } from 'pixel-art-icons/icons/reload'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
 import { FloatingWindow } from '../FloatingWindow/FloatingWindow'
 import type { UploadItem, UseUploadQueueResult } from '../../hooks/useUploadQueue'
+import { formatBytes } from '../../utils/formatBytes'
 import styles from './UploadQueueWindow.module.css'
 
 interface UploadQueueWindowProps {
@@ -26,13 +27,6 @@ interface UploadQueueWindowProps {
    * when unfiled).
    */
   onRevealAsset?: (uploadId: string) => void
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 export function UploadQueueWindow({ queue, open, onClose, onRevealAsset }: UploadQueueWindowProps) {

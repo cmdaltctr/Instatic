@@ -41,6 +41,7 @@ import { useDebouncedSave } from '../../hooks/useDebouncedSave'
 import { TagEditor } from '../TagEditor/TagEditor'
 import { ReplaceFileDialog } from '../ReplaceFileDialog/ReplaceFileDialog'
 import { ViewerBody } from '../viewers/ViewerBody'
+import { formatBytes } from '../../utils/formatBytes'
 import styles from './MediaViewerWindow.module.css'
 
 /**
@@ -84,13 +85,6 @@ function arraysEqual(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
   return true
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 function formatDate(iso: string): string {
