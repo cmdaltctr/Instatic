@@ -1,20 +1,20 @@
 /**
  * Agent read-surface token benchmark — JSON snapshot vs annotated HTML.
  *
- * The site-editor agent reads a page as structured JSON today: `inspect_page`
- * (the full node tree) + `list_classes` (CSS classes) + `list_tokens` (design
- * tokens), each `JSON.stringify`'d verbatim into a tool_result. This bench
- * measures the exact token cost of that payload against the *other* direction —
- * the same page rendered as clean HTML annotated with `data-node-id` on each
- * tag, plus its CSS bundle — so we can decide whether an annotated-HTML read
- * surface would be cheaper.
+ * Before the HTML read surface landed, the site-editor agent read a page as
+ * structured JSON: `inspect_page` (the full node tree) + `list_classes` (CSS
+ * classes) + `list_tokens` (design tokens), each `JSON.stringify`'d verbatim
+ * into a tool_result. This bench measures the exact token cost of that legacy
+ * payload against the surface that replaced it — the same page rendered as
+ * clean HTML annotated with `uid` on each tag, plus its CSS bundle — and stays
+ * on as a regression guard so the win can't silently erode.
  *
  * Fairness guarantees:
- * - JSON side is built from `buildPageSnapshot` (the SAME builder the editor's
- *   `buildPageContext` delegates to) and assembled into the exact three tool
- *   payloads the server emits — it cannot drift from what the agent receives.
+ * - JSON side is rebuilt by a local `flattenForBench` that reproduces the old
+ *   `buildPageSnapshot` mapping (the same node/class/token shapes the deleted
+ *   JSON tools emitted) and assembled into the exact three tool payloads.
  * - HTML side uses `publishPage(..., { annotateNodeIds: true })` — the real
- *   publisher, not an estimate.
+ *   `read_page` path, not an estimate.
  * - Tokens are counted with Anthropic `count_tokens` (model-accurate).
  *
  * Fixtures are the real seeded pages in `.tmp/dev.db` (the `bun run dev`
@@ -25,6 +25,8 @@ import { resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 import type { Page, SiteDocument } from '@core/page-tree'
 import type { DataRow } from '@core/data/schemas'
+import { describeFrameworkTokens } from '@core/framework'
+import { describeFontTokens } from '@core/fonts'
 import type { BenchModule, BenchResult, BenchRow, BenchSection, BenchContext } from '../lib/types'
 import { fmtNum } from '../lib/stats'
 import { log } from '../lib/log'
@@ -52,7 +54,6 @@ async function loadDeps() {
   const { registry } = await import('../../../src/core/module-engine/registry')
   const { publishPage } = await import('../../../src/core/publisher/render')
   const { buildSiteCssBundle } = await import('../../../server/publish/siteCssBundle')
-  const { buildPageSnapshot } = await import('../../../src/admin/pages/site/agent/pageSnapshot')
   return {
     createSqliteClient,
     getDraftSite,
@@ -63,11 +64,121 @@ async function loadDeps() {
     registry,
     publishPage,
     buildSiteCssBundle,
-    buildPageSnapshot,
   }
 }
 
 type Deps = Awaited<ReturnType<typeof loadDeps>>
+
+// ---------------------------------------------------------------------------
+// Local flattener — reproduces the deleted `buildPageSnapshot` mapping for the
+// fields this bench counts (nodes / classes / tokens). Kept inline so the
+// JSON-vs-HTML comparison survives the read-surface swap as a regression guard.
+// ---------------------------------------------------------------------------
+
+interface BenchSnapshot {
+  pageId: string
+  pageTitle: string
+  rootNodeId: string
+  selectedNodeId: string | null
+  activeBreakpointId: string
+  breakpoints: SiteDocument['breakpoints']
+  nodes: Array<{
+    id: string
+    moduleId: string
+    label?: string
+    parentId: string | null
+    children: string[]
+    props: Record<string, unknown>
+    breakpointOverrides: Record<string, Record<string, unknown>>
+    classIds: string[]
+  }>
+  classes: Array<{
+    id: string
+    name: string
+    styles: Record<string, unknown>
+    breakpointStyles: Record<string, Record<string, unknown>>
+    generated?: string
+  }>
+  tokens: ReturnType<typeof describeFrameworkTokens> & {
+    fonts: ReturnType<typeof describeFontTokens>
+  }
+}
+
+function serializableRecord(record: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(record)) out[k] = serializableValue(v)
+  return out
+}
+
+function serializableValue(value: unknown): unknown {
+  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return value
+  if (Array.isArray(value)) return value.map(serializableValue)
+  if (typeof value === 'object' && value) return serializableRecord(value as Record<string, unknown>)
+  return String(value)
+}
+
+function serializableBreakpointRecords(
+  records: Record<string, Partial<Record<string, unknown>>>,
+): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {}
+  for (const [bp, styles] of Object.entries(records)) {
+    out[bp] = serializableRecord((styles ?? {}) as Record<string, unknown>)
+  }
+  return out
+}
+
+function flattenForBench(
+  page: Page,
+  site: SiteDocument,
+  options: { selectedNodeId: string | null; activeBreakpointId: string },
+): BenchSnapshot {
+  const parentMap: Record<string, string | null> = {}
+  for (const node of Object.values(page.nodes)) {
+    for (const childId of node.children) parentMap[childId] = node.id
+    if (!parentMap[node.id]) parentMap[node.id] = null
+  }
+
+  const nodes = Object.values(page.nodes).map((node) => ({
+    id: node.id,
+    moduleId: node.moduleId,
+    label: node.label,
+    parentId: parentMap[node.id] ?? null,
+    children: node.children,
+    props: node.props,
+    breakpointOverrides: serializableBreakpointRecords(node.breakpointOverrides ?? {}),
+    classIds: node.classIds ?? [],
+  }))
+
+  const breakpointIds = new Set(site.breakpoints.map((bp) => bp.id))
+  const classes = Object.values(site.styleRules ?? {}).map((c) => {
+    const breakpointStyles: Record<string, Record<string, unknown>> = {}
+    for (const [contextId, bag] of Object.entries(c.contextStyles ?? {})) {
+      if (breakpointIds.has(contextId)) breakpointStyles[contextId] = bag as Record<string, unknown>
+    }
+    return {
+      id: c.id,
+      name: c.name,
+      styles: serializableRecord(c.styles ?? {}),
+      breakpointStyles: serializableBreakpointRecords(breakpointStyles),
+      ...(c.generated ? { generated: c.generated.family } : {}),
+    }
+  })
+
+  return {
+    pageId: page.id,
+    pageTitle: page.title,
+    rootNodeId: page.rootNodeId,
+    selectedNodeId: options.selectedNodeId,
+    activeBreakpointId: options.activeBreakpointId,
+    breakpoints: site.breakpoints,
+    nodes,
+    classes,
+    tokens: {
+      ...describeFrameworkTokens(site.settings.framework),
+      fonts: describeFontTokens(site.settings.fonts),
+    },
+  }
+}
 
 /** Assemble the full draft SiteDocument (shell + pages + VCs) from the dev DB. */
 async function loadSeededSite(deps: Deps): Promise<SiteDocument | null> {
@@ -124,13 +235,13 @@ interface PageSerializations {
 
 /** Build both representations for a single page. */
 function serializePage(deps: Deps, site: SiteDocument, page: Page): PageSerializations {
-  const snapshot = deps.buildPageSnapshot(page, site, deps.registry, {
+  const snapshot = flattenForBench(page, site, {
     selectedNodeId: null,
     activeBreakpointId: defaultBreakpointId(site),
   })
 
-  // JSON side — exactly the three tool payloads the server stringifies into
-  // tool_result blocks (see server/ai/tools/site/readTools.ts).
+  // JSON side — exactly the three tool payloads the deleted JSON read tools
+  // stringified into tool_result blocks.
   const jsonTree = JSON.stringify({
     page: {
       pageId: snapshot.pageId,
@@ -161,7 +272,7 @@ function serializePage(deps: Deps, site: SiteDocument, page: Page): PageSerializ
   const css = cssBody ? `<style>\n${cssBody}\n</style>` : ''
   const cssMediaBlocks = (cssBody.match(/@media/g) ?? []).length
 
-  const annotatedTags = (htmlBody.match(/data-node-id="/g) ?? []).length
+  const annotatedTags = (htmlBody.match(/uid="/g) ?? []).length
   const nodesWithBreakpointOverrides = snapshot.nodes.filter(
     (n) => Object.keys(n.breakpointOverrides ?? {}).length > 0,
   ).length
