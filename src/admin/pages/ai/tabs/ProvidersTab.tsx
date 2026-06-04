@@ -353,7 +353,14 @@ function AddCredentialDialog({
               value={apiKey}
               onChange={(e) => setApiKey(e.currentTarget.value)}
               placeholder={API_KEY_PLACEHOLDER[providerId] ?? 'sk-...'}
-              autoComplete="off"
+              // Browsers ignore autoComplete="off" on password fields and
+              // inject the saved admin login. "new-password" suppresses that;
+              // the data-* attributes opt out of password-manager overlays.
+              autoComplete="new-password"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
+              data-form-type="other"
               required
             />
           </div>
@@ -379,7 +386,13 @@ function AddCredentialDialog({
                 value={apiKey}
                 onChange={(e) => setApiKey(e.currentTarget.value)}
                 placeholder="Leave blank if no auth"
-                autoComplete="off"
+                // See the API key field above: "new-password" + data-* opt-outs
+                // stop the browser/password manager autofilling the admin login.
+                autoComplete="new-password"
+                data-1p-ignore="true"
+                data-lpignore="true"
+                data-bwignore="true"
+                data-form-type="other"
               />
             </div>
           </>
