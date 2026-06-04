@@ -19,6 +19,8 @@ export { processStreamEvent, ServerStreamEventSchema } from './streamEvents'
 
 // Site-specific page snapshot builders.
 export { buildPageContext, buildCurrentPageContext } from './pageContext'
+export { buildPageSnapshot } from './pageSnapshot'
+export type { PageSnapshotOptions } from './pageSnapshot'
 
 // Browser-side tool dispatch + render evidence + markdown rendering.
 export { executeAgentTool } from './executor'

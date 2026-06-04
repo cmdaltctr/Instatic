@@ -10,6 +10,8 @@
  */
 
 import type { AiToolOutput } from '@core/ai'
+import type { ColorTokenDescriptor, ScaleGroupDescriptor } from '@core/framework'
+import type { FontTokenDescriptor } from '@core/fonts'
 
 // ---------------------------------------------------------------------------
 // Execution result
@@ -338,7 +340,27 @@ export interface PageContext {
     name: string
     styles?: Record<string, unknown>
     breakpointStyles?: Record<string, Record<string, unknown>>
+    /**
+     * Set when this class is a locked framework utility class generated from a
+     * design token (so the agent can prefer it). The value is the token family;
+     * omitted for user-authored classes.
+     */
+    generated?: 'color' | 'typography' | 'spacing'
   }>
+  /**
+   * The site's design tokens — color tokens, typography & spacing scale steps,
+   * and font tokens — each paired with its CSS variable and the utility
+   * class(es) bound to it, so the agent references the design system instead of
+   * hardcoding values. Built from `describeFrameworkTokens` + `describeFontTokens`.
+   */
+  tokens: PageContextTokens
+}
+
+export interface PageContextTokens {
+  colors: ColorTokenDescriptor[]
+  typography: ScaleGroupDescriptor[]
+  spacing: ScaleGroupDescriptor[]
+  fonts: FontTokenDescriptor[]
 }
 
 // ---------------------------------------------------------------------------

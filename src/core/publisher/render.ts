@@ -144,6 +144,13 @@ export interface PublishPageOptions {
    * on first fetch, which is safe — the next page load sees the real version).
    */
   publishVersion?: number
+  /**
+   * Editor-only: annotate each node's outermost emitted element with
+   * `data-node-id="<id>"`. Default off — real publishes emit clean, id-less
+   * HTML. Used by the agent read-surface token benchmark to produce an
+   * HTML representation the agent could target nodes through.
+   */
+  annotateNodeIds?: boolean
 }
 
 /**
@@ -494,6 +501,7 @@ export function publishPage(
     // After rendering, buildRuntimeAssetsBlock reads .size > 0 to decide
     // whether to inject the /_instatic/hole-runtime.js <script> tag.
     holeNodeIds: new Set<string>(),
+    annotateNodeIds: options.annotateNodeIds,
   }
 
   // Render entire tree from root. The walker also accumulates module CSS

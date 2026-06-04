@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { useEditorStore } from '@site/store/store'
-import { buildPageContext } from '@site/agent'
+import { buildPageContext, buildPageSnapshot } from '@site/agent'
 import { registry } from '@core/module-engine'
 import type { AnyModuleDefinition } from '@core/module-engine'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
@@ -137,6 +137,41 @@ describe('buildPageContext — dynamic module registry', () => {
     })
   })
 
+  it('surfaces framework design tokens with their CSS vars and utility classes', () => {
+    const page = freshSite()
+    useEditorStore.getState().createFrameworkColorToken({
+      slug: 'brand',
+      lightValue: 'hsla(200, 80%, 50%, 1)',
+    })
+
+    const context = buildPageContext(useEditorStore.getState(), page)
+    const brand = context.tokens.colors.find((token) => token.slug === 'brand')
+
+    expect(brand).toBeDefined()
+    expect(brand?.cssVar).toBe('--brand')
+    expect(brand?.ref).toBe('var(--brand)')
+    expect(brand?.utilityClasses).toContain('text-brand')
+    // No fonts configured on a fresh site.
+    expect(context.tokens.fonts).toEqual([])
+  })
+
+  it('flags framework-generated classes with their token family, leaving user classes unflagged', () => {
+    const page = freshSite()
+    useEditorStore.getState().createFrameworkColorToken({
+      slug: 'brand',
+      lightValue: 'hsla(200, 80%, 50%, 1)',
+    })
+    const userClass = useEditorStore.getState().createClass('hero-dark', { color: '#fff' })
+
+    const context = buildPageContext(useEditorStore.getState(), page)
+
+    const generatedClass = context.classes.find((cls) => cls.name === 'text-brand')
+    expect(generatedClass?.generated).toBe('color')
+
+    const plainClass = context.classes.find((cls) => cls.id === userClass.id)
+    expect(plainClass?.generated).toBeUndefined()
+  })
+
   it('includes the full page list with active + isHomepage flags', () => {
     const page = freshSite()
     // Add a second page so the list isn't trivial.
@@ -155,5 +190,41 @@ describe('buildPageContext — dynamic module registry', () => {
     expect(home?.isHomepage).toBe(true) // freshSite's home gets slug 'index'
     expect(about?.active).toBe(false)
     expect(about?.isHomepage).toBe(false)
+  })
+})
+
+describe('buildPageContext — delegates to pure buildPageSnapshot (no drift)', () => {
+  it('produces byte-identical output to buildPageSnapshot called with the store scalars', () => {
+    const page = freshSite()
+    // Make the snapshot non-trivial: a class, a token, a second page, a non-default breakpoint.
+    useEditorStore.getState().createClass('hero-dark', { color: '#fff', paddingTop: '40px' })
+    useEditorStore.getState().createFrameworkColorToken({
+      slug: 'brand',
+      lightValue: 'hsla(200, 80%, 50%, 1)',
+    })
+    useEditorStore.getState().addPage('About', 'about')
+    useEditorStore.setState({ activePageId: page.id, selectedNodeId: page.rootNodeId })
+    useEditorStore.getState().setActiveBreakpoint('mobile')
+
+    const state = useEditorStore.getState()
+    const viaAdapter = buildPageContext(state, page)
+    const viaPure = buildPageSnapshot(page, state.site!, registry, {
+      selectedNodeId: state.selectedNodeId,
+      activeBreakpointId: state.activeBreakpointId,
+    })
+
+    // The adapter is exactly the pure builder fed the two editor-only scalars.
+    expect(JSON.stringify(viaAdapter)).toBe(JSON.stringify(viaPure))
+    expect(viaAdapter.selectedNodeId).toBe(page.rootNodeId)
+    expect(viaAdapter.activeBreakpointId).toBe('mobile')
+  })
+
+  it('returns the empty snapshot when there is no active page', () => {
+    freshSite()
+    const context = buildPageContext(useEditorStore.getState(), undefined)
+    expect(context.pageId).toBe('')
+    expect(context.nodes).toEqual([])
+    expect(context.classes).toEqual([])
+    expect(context.tokens).toEqual({ colors: [], typography: [], spacing: [], fonts: [] })
   })
 })

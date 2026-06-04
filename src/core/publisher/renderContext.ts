@@ -106,4 +106,12 @@ export interface RenderContext {
    * rendered (not just what was classified as dynamic before the walk began).
    */
   holeNodeIds?: Set<string>
+  /**
+   * Editor-only annotation flag. When true, each node's outermost emitted
+   * element gets a `data-node-id="<id>"` attribute so the rendered HTML can be
+   * traced back to the page tree. Default (absent/false) leaves published
+   * output untouched — the clean-HTML product rule holds for every real publish.
+   * Used by the agent read-surface token benchmark.
+   */
+  annotateNodeIds?: boolean
 }

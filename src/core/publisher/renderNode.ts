@@ -30,7 +30,7 @@ import { resolveDynamicProps } from '@core/templates/dynamicBindings'
 import { sanitizeModuleCSS } from './cssCollector'
 import { escapeHtml } from './utils'
 import { escapeProps } from './escapeProps'
-import { injectNodeClassIds, injectNodeInlineStyles } from './classInjection'
+import { injectNodeClassIds, injectNodeId, injectNodeInlineStyles } from './classInjection'
 import { renderVisualComponentRef } from './renderVisualComponentRef'
 import { renderLoop } from './renderLoop'
 import { resolveAutoSizes } from './sizesResolver'
@@ -166,7 +166,8 @@ function renderStandardNode(
   // <body> in publishPage.
   if (node.moduleId === 'base.body') return output.html
   const withClasses = injectNodeClassIds(output.html, node.classIds, ctx.site)
-  return injectNodeInlineStyles(withClasses, node.inlineStyles)
+  const withStyles = injectNodeInlineStyles(withClasses, node.inlineStyles)
+  return ctx.annotateNodeIds ? injectNodeId(withStyles, node.id) : withStyles
 }
 
 /**

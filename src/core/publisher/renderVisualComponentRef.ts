@@ -15,7 +15,7 @@
 import type { Page, PageNode } from '@core/page-tree'
 import { selectVisualComponentById } from '@core/page-tree'
 import { instantiateVCAtRef, type InstantiatedVCNode } from '@core/visualComponents'
-import { injectNodeClassIds, injectNodeInlineStyles } from './classInjection'
+import { injectNodeClassIds, injectNodeId, injectNodeInlineStyles } from './classInjection'
 import { escapeHtml } from './utils'
 import type { RenderContext } from './renderContext'
 
@@ -138,10 +138,17 @@ export function renderVisualComponentRef(
     infiniteLoopIds: ctx.infiniteLoopIds,
     publishVersion: ctx.publishVersion,
     holeNodeIds: ctx.holeNodeIds,
+    // Intentionally NOT propagated: VC-definition nodes are not part of the
+    // page snapshot the agent reads, so they must not be annotated. Only the
+    // page-level ref node id (applied below) lands on the VC's root element.
+    annotateNodeIds: undefined,
   }
 
   // The page-level ref node's classIds + inline styles belong on the VC's root
   // element; the VC's own nodes contribute their classIds via the recursive call.
   const rendered = injectNodeClassIds(renderNode(rootNodeId, syntheticCtx), node.classIds, ctx.site)
-  return injectNodeInlineStyles(rendered, node.inlineStyles)
+  const withStyles = injectNodeInlineStyles(rendered, node.inlineStyles)
+  // Annotate the VC root with the ref node id (the page-tree node the agent can
+  // target) — outermost element only, exactly one data-node-id per element.
+  return ctx.annotateNodeIds ? injectNodeId(withStyles, node.id) : withStyles
 }
