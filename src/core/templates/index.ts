@@ -13,3 +13,4 @@ export {
   resolveTemplateChain,
   type RouteResolutionContext,
 } from './templateMatching'
+export { findOutletIds, assertSingleOutlet, TemplateOutletError } from './templateValidation'
