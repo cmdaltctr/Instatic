@@ -217,6 +217,39 @@ export const HeadingEditor: React.FC<ModuleComponentProps<HeadingProps>> = ({
 - Apply `mcClassName` as the root element's class. Without it the author's CSS class rules don't apply in the canvas.
 - Produce the same DOM structure as `render()` — canvas selection geometry, drop-target detection, and dimension measurement assume parity.
 - `nodeWrapperProps` is `undefined` outside the editor (publisher, plugin preview). Components that check for its presence can render a plain published element when it's absent.
+- **`*Editor.tsx` must only export React components.** Exporting utilities, types, or constants from the editor file breaks React Fast Refresh HMR — Vite can only hot-patch a component file when every export is a component.
+
+### Sharing logic between `index.ts` and `*Editor.tsx`
+
+When both `render()` (in `index.ts`) and the canvas component need the same helper or type, put the shared code in a **sibling module file** — not exported from the editor file, and not duplicated.
+
+```
+src/modules/base/mymod/
+├── index.ts          — registration + render() — imports from ./shared
+├── MyModEditor.tsx   — component-only file — imports from ./shared
+└── shared.ts         — shared helpers + types
+```
+
+```ts
+// shared.ts
+export type MyTag = 'p' | 'h1' | 'h2'
+const VALID = new Set<MyTag>(['p', 'h1', 'h2'])
+export function normalizeMyTag(tag: unknown): MyTag {
+  const v = String(tag || 'p').toLowerCase() as MyTag
+  return VALID.has(v) ? v : 'p'
+}
+
+// MyModEditor.tsx — component-only
+import { normalizeMyTag } from './shared'
+// ...
+
+// index.ts — registration + render
+import { normalizeMyTag } from './shared'
+import { MyModEditor } from './MyModEditor'
+// ...
+```
+
+The canonical example is `src/modules/base/text/`: `tags.ts` holds `normalizeTag` + `TextTag`, imported by both `TextEditor.tsx` and `index.ts`.
 
 ---
 
@@ -264,6 +297,7 @@ The publisher emits a `<script type="importmap">` entry. `getMissingModuleDepend
 | Hardcoded id selectors in CSS (`.my-mod-${nodeId}`)                 | CSS is deduped per `moduleId`. Use `[data-*]` attribute selectors. |
 | Importing from `@admin/...` inside a module                          | Modules are publisher-side. Stay inside `@core/...` and `@ui/...` (icons only). |
 | Omitting `nodeWrapperProps` spread in editor component              | Node becomes unselectable and invisible to the editor.  |
+| Non-component exports from `*Editor.tsx` (utilities, types, constants) | Put shared logic in a sibling module (e.g. `tags.ts`, `shared.ts`). Editor files must stay component-only for React Fast Refresh HMR to work. |
 | Parallel `interface Foo` next to a `FooPropsSchema`                 | Use `type Foo = Static<typeof FooPropsSchema>`.          |
 
 ---
