@@ -156,7 +156,7 @@ There are exactly three exceptions where memoization stays — keep it, and add 
 2. **A `React.memo` re-render bailout on a hot, list-rendered component** (e.g. a recursive per-node canvas renderer). `React.memo` skips re-rendering on equal props — a *different* mechanism from the compiler's within-component memoization — so dropping it on an O(N) critical path is not behavior-preserving without runtime perf validation. Rare; justify in a comment.
 3. **The compiler genuinely cannot compile a function** (escape hatch). Add the `"use no memo"` directive at the top of that function body, or the existing `eslint-disable react-compiler/react-compiler` pattern, and keep the manual memoization it needs.
 
-**Gate:** `react-doctor` (`bun run doctor`) flags violations as `react-doctor/react-compiler-no-manual-memoization`; `eslint-plugin-react-compiler` flags functions the compiler had to bail out on. A new component that ships `useMemo`/`useCallback`/`memo` outside the three exceptions above is drift — remove the memoization.
+**Gate:** `eslint-plugin-react-compiler` (runs in `bun run lint` / CI) is the enforcement gate — it flags both compiler bailouts and `react-compiler/react-compiler` violations. `react-doctor` (`bun run doctor`) also surfaces `react-doctor/react-compiler-no-manual-memoization`, but as a **warning** only (React Compiler rules are downgraded to warn in `react-doctor.config.json`; `bun run doctor` fails only on error-tier Security/Correctness diagnostics). A new component that ships `useMemo`/`useCallback`/`memo` outside the three exceptions above is drift — remove the memoization. Full detail: [`docs/reference/react-compiler.md`](docs/reference/react-compiler.md).
 
 ---
 
