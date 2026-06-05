@@ -10,7 +10,7 @@ The agent runs on a provider-agnostic AI runtime (`server/ai/`) that can drive a
 
 - **Structure via HTML.** `insertHtml` and `replaceNodeHtml` accept semantic HTML strings; the browser executor calls `importHtml` (the same pipeline as the paste-HTML UI) to convert them into first-class, editable `PageNode`s.
 - **Styling via CSS.** The agent emits CSS the same way a human pastes it: a `<style>` block and/or `class=` attributes inside the `insertHtml`/`replaceNodeHtml` payload. The importer (`cssToStyleRules`) classifies every selector — a bare `.foo {}` rule becomes a reusable Selectors-panel class bound to `class="foo"`; any other selector (`.hero a`, `a:hover`, `nav > li`) becomes an ambient rule; `style=` attributes land on the node's inline styles. There is no structured `classes` parameter — the agent never hand-builds classes node-by-node at insert time. `createClass` / `updateClassStyles` / `assignClass` exist for editing styles on **existing** nodes after insertion.
-- **22 tools total.** 5 server-side read tools (resolved server-side from the posted snapshot) + 17 browser-bridged write tools.
+- **26 tools total.** 5 server-side read tools (resolved server-side from the posted snapshot) + 21 browser-bridged write tools.
 - **Two-endpoint bridge.** `POST /admin/api/ai/chat/site` opens an NDJSON stream. When the model calls a write tool, the server emits `toolRequest`; the browser executor applies it to the editor store and POSTs the `AiToolOutput` result to `POST /admin/api/ai/tool-result`.
 - **Provider-agnostic.** The runtime selects a driver (Anthropic, OpenAI, OpenRouter, Ollama) from the conversation's configured credential.
 - **Tools defined with TypeBox** (`server/ai/tools/`). Gated by `ai-tools-typebox-only.test.ts`.
@@ -30,12 +30,17 @@ server/ai/
 │   ├── chat.ts             — POST /admin/api/ai/chat/:scope  (NDJSON stream)
 │   ├── toolResult.ts       — POST /admin/api/ai/tool-result  (bridge POST)
 │   ├── conversations.ts    — CRUD for ai_conversations rows
-│   ├── credentials.ts      — CRUD for ai_credentials rows (encrypted API keys)
+│   ├── credentials.ts      — CRUD for ai_credentials rows (encrypted API keys); auto-seeds defaults on create
 │   ├── defaults.ts         — GET /admin/api/ai/defaults (per-scope defaults)
-│   └── models.ts           — list available models per provider
+│   └── models.ts           — list available models per provider; enriches Anthropic/OpenAI with catalogue prices + context windows
+├── pricing/
+│   ├── index.ts            — resolveCostUsd / getModelCatalogue (6h in-memory cache, DB fallback)
+│   ├── openrouterCatalogue.ts — fetches OpenRouter /api/v1/models; pricingKey() normaliser; ModelCatalogue type
+│   └── store.ts            — durable DB cache in ai_model_pricing (prices + context_window column)
+├── contextTokens.ts        — normalizeContextTokens(): provider-normalised "context used" for the meter
 ├── tools/
 │   ├── site/
-│   │   ├── writeTools.ts      — 17 browser-bridged write tools (TypeBox schemas)
+│   │   ├── writeTools.ts      — 21 browser-bridged write tools (TypeBox schemas)
 │   │   ├── readTools.ts       — 5 server-side read tools
 │   │   ├── render.ts          — server-side page render (`renderAgentPage`) + catalog derivations (`describeAgentModules`, `describeAgentTokens`, `filterTokenFamily`)
 │   │   ├── systemPrompt.ts    — HTML-native static prefix + buildDynamicSuffix
@@ -54,7 +59,7 @@ server/ai/
 │   └── ollama.ts           — Ollama driver: direct POST /v1/chat/completions (no SDK)
 └── runtime/
     ├── runner.ts           — runChat(): drives a driver, emits stream events
-    ├── persister.ts        — ConversationsPersister: messages + usage to DB
+    ├── persister.ts        — ConversationsPersister: messages + usage to DB; writes contextTokens snapshot
     ├── types.ts            — canonical AiStreamEvent / AiMessage / AiTool / ToolContext
     └── transport.ts        — createBridge() / resolveBridgeToolResult()
 
@@ -77,10 +82,15 @@ src/admin/pages/content/agent/
 ├── contentAgentStore.ts        — standalone per-mount Zustand store (AgentSlice only)
 └── contentBridge.ts            — content workspace write-tool executor
 
-src/admin/pages/site/panels/AgentPanel/  — Agent Panel UI
+src/admin/pages/site/panels/AgentPanel/
+├── AgentPanel.tsx          — main panel; resolves active model's contextWindow from the models endpoint
+├── ContextMeter.tsx        — "context used / window" progress indicator (display only)
+└── ContextMeter.module.css
 ```
 
 The Agent Panel owns the credential list load for its header, setup empty state, and model picker. The header always contains a `ConversationHistory` popover (browse and restore past threads), a "New chat" button (`startNewAgentConversation`), a conditional "Clear conversation" button (visible when `agentMessages.length > 0`), a streaming badge, and an "AI settings" shortcut that routes to `/admin/ai`. The AI settings button is always visible in the header, independent of credential state. When no credentials exist, the message area switches from the prompt empty state to a larger setup state with an `/admin/ai` CTA.
+
+The composer area includes a `<ContextMeter>` that shows "context used / window" as a progress bar. `AgentPanel` resolves the active model's `contextWindow` from `GET /admin/api/ai/providers/:id/models?credentialId=…` (the same catalogue-enriched response the picker uses), so the meter appears as soon as a model is selected — before the first turn. The "used" half comes from `agentContextTokens` in the store (see slice state below). The meter is hidden when no context window is known (Ollama, uncatalogued models).
 
 ---
 
@@ -194,13 +204,13 @@ The handler (`server/ai/handlers/chat.ts`):
 {
   bridgeId:  string
   requestId: string
-  result:    AiToolOutput   // { ok: boolean; data?: unknown; error?: string } — from src/core/ai/
+  result:    AiToolOutput   // { ok: boolean; data?: unknown; error?: string; images?: { mimeType, data }[] } — from src/core/ai/
 }
 ```
 
 Requires `ai.tools.write`. Calls `resolveBridgeToolResult(bridgeId, requestId, result)` which resolves the pending tool waiter inside the driver loop so streaming continues. If the bridge is gone (stream already closed), returns 404 and the result is silently dropped.
 
-`AiToolOutput` is the canonical result type shared by both sides of the bridge. Constructors: `aiToolOk(data?)` and `aiToolError(message)` from `@core/ai`.
+`AiToolOutput` is the canonical result type shared by both sides of the bridge. Constructors: `aiToolOk(data?, images?)` and `aiToolError(message)` from `@core/ai`. The optional `images` channel carries base64 attachments (e.g. a `render_snapshot` PNG) that drivers forward as native image blocks or drop with a note — see "Heavy evidence" below.
 
 ---
 
@@ -218,9 +228,9 @@ Resolved server-side from the posted `SiteAgentSnapshot`. No browser round-trip.
 | `list_pages`      | All pages in the site (id, title, slug, active, isHomepage)             |
 | `list_tokens`     | Design tokens: colors (with shades/tints), typography/spacing scale steps, font tokens — each with CSS variable + utility classes; optional `family` filter (`colors`\|`typography`\|`spacing`\|`fonts`) |
 
-### Write tools — 17, browser-bridged
+### Write tools — 21, browser-bridged
 
-All 17 tools carry `execution: 'browser'` in their `AiTool` definition. The server emits `toolRequest`; the browser executor validates input with TypeBox, runs the store action, and POSTs the canonical `AiToolOutput` result back.
+All 21 tools carry `execution: 'browser'` in their `AiTool` definition. The server emits `toolRequest`; the browser executor validates input with TypeBox, runs the store action, and POSTs the canonical `AiToolOutput` result back.
 
 **Structure (HTML-native)**
 
@@ -266,11 +276,30 @@ Styling rides on the `html` payload — there is no separate `classes` parameter
 | `renamePage`    | `{ pageId, title, slug? }`        | none           | Change title/slug; `slug="index"` makes this the homepage  |
 | `duplicatePage` | `{ pageId, title, slug? }`        | `{ pageId }`   | Deep-clone page (all nodes, props, class assignments)      |
 
+**Design system (tokens)**
+
+The agent works **design-system-first**: it establishes or reuses tokens, then references them (`var(--<slug>)`, `--text-*`, `--space-*`, `var(--<font-var>)`) instead of hardcoding hex/px/font-family. Colors and fonts are list-shaped (one entry per token); typography and spacing are scale-shaped (a group config from which the framework generates per-step values). All four are **create-or-update** — keyed by color `slug`, font `variable`, or scale group — so re-runs patch in place. The executor dispatches to the framework/font store actions (`createFrameworkColorToken`, `create/updateFrameworkTypographyGroup`, `create/updateFrameworkSpacingGroup`, `addFont`/`createFontToken`).
+
+| Tool                | Input                                                                 | Success `data`                              | What it does                                          |
+|---------------------|----------------------------------------------------------------------|---------------------------------------------|-------------------------------------------------------|
+| `set_color_tokens`  | `{ tokens: [{ slug, lightValue, category?, darkValue?, darkModeEnabled? }] }` | `{ tokens: [{ slug, ref, action }] }` | Create/update color tokens → `var(--<slug>)` + utilities/variants |
+| `set_font_tokens`   | `{ tokens: [{ name, variable?, fallback?, googleFamily?, variants?, subsets?, familyId? }] }` | `{ tokens: [{ name, variable, ref, installed?, action }] }` | Create/update font tokens. `googleFamily` installs a new web font via `POST /admin/api/cms/fonts/install` then binds the token; `familyId` references an already-installed family; neither = fallback-only. `googleFamily`/`familyId` are mutually exclusive |
+| `set_type_scale`    | `{ groupId?, namingConvention?, steps?, baseScaleIndex?, min?: { fontSize?, scaleRatio? }, max?: {…} }` | `{ groupId, action, namingConvention, generatedVars }` | Configure the typography scale → `--text-*`. Creates the group if none exists, else updates it |
+| `set_spacing_scale` | `{ groupId?, namingConvention?, steps?, baseScaleIndex?, min?: { size?, scaleRatio? }, max?: {…} }` | `{ groupId, action, namingConvention, generatedVars }` | Configure the spacing scale → `--space-*`. Same shape as `set_type_scale` but `min`/`max` carry `size` |
+
 **Capture**
 
 | Tool              | Input                 | Success `data` | What it does                                                     |
 |-------------------|-----------------------|----------------|------------------------------------------------------------------|
-| `render_snapshot` | `{ breakpointId? }`   | `{ snapshot }` | Canvas screenshot + layout data (bounding boxes, overflow warnings, image load status) |
+| `render_snapshot` | `{ breakpointId?, nodeId? }`   | `{ breakpointId, nodeId?, label, width, capturedAt, layout, screenshot }` + optional `images[]` | Inspect the rendered canvas: always returns a layout report (viewport, per-node bounding boxes, overflow / broken-image / invisible warnings); on a vision-capable model a PNG is attached via the tool-output **image channel**. `breakpointId` picks the frame (defaults to active); `nodeId` scopes the capture to that node's subtree — image and report cover only that section, with coordinates relative to its box, and the report carries the same `nodeId`. Omit `nodeId` for the whole page; an unknown `nodeId` returns an `aiToolError` |
+
+### Heavy evidence — image channel + vision gating + elision
+
+`render_snapshot` (and `read_page` / `getNodeHtml`) return large payloads. Three rules keep them from exploding context (a screenshot inlined as base64 JSON text once pushed a single turn past 1M tokens):
+
+1. **Image channel, not text.** `AiToolOutput` carries an optional `images: { mimeType, data }[]` (`src/core/ai/toolOutput.ts`). `render_snapshot` puts the PNG there — never in `data`. The Anthropic driver forwards it as a **native `image` block** inside the `tool_result` (billed at the rendered image's token cost). Text-only tool channels (Ollama / OpenAI-compatible `function_call_output`) **drop** the image and append a one-line `[N screenshot(s) omitted…]` note. The capture caps the screenshot's long edge at `MAX_IMAGE_EDGE` (1568px in `renderEvidence.ts`) — a tall landing page would otherwise exceed Anthropic's hard 8000px-per-dimension limit (400 error), and the model downsizes the long edge to ~1568px anyway.
+2. **Capture is vision-gated.** The chat handler resolves `driver.capabilities(modelId)` into `AiStreamRequest.modelCapabilities`. The shared tool loop injects `captureScreenshot: visionInput` into every `render_snapshot` call, so a non-vision model never pays the html-to-image cost — it gets the layout report only. (The model never sets `captureScreenshot` itself.)
+3. **Stale evidence is elided.** Within one tool loop, only the **most recent** heavy result per tool name (`render_snapshot`, `read_page`, `getNodeHtml`, or anything with an image) is replayed at full fidelity; earlier ones are rewritten to a one-line breadcrumb (`"Earlier <tool> output removed… Call <tool> again…"`). Older snapshots describe page state the model has since mutated, so they carry no value. See `applyHeavyElision` in `server/ai/drivers/http/toolLoop.ts`.
 
 ---
 
@@ -283,7 +312,8 @@ Styling rides on the `html` payload — there is no separate `classes` parameter
 Drivers that support prompt caching (Anthropic) apply `cache_control` to the static prefix automatically; drivers that don't concatenate the three strings. Content is intentionally static across providers — every observable behaviour comes from the tool definitions, not prompt knobs.
 
 **Static prefix** (full text in `server/ai/tools/site/systemPrompt.ts`):
-- Structure as HTML (`insertHtml` / `replaceNodeHtml`); style with CSS in the same payload — a `<style>` block and/or `class=` attributes. The importer classifies selectors, so the agent never hand-builds classes at insert time.
+- **Design system first.** Establish or reuse tokens before/while building (`set_color_tokens`, `set_type_scale`, `set_spacing_scale`, `set_font_tokens`), then reference them in CSS (`var(--<slug>)`, `var(--text-l)`, `var(--space-m)`, `var(--<font-var>)`) instead of raw hex/px/font-family. The dynamic suffix's `Tokens —` line shows what already exists; `(none …)` means no design system yet.
+- Structure as HTML (`insertHtml` / `replaceNodeHtml`); style with CSS in the same payload — a `<style>` block and/or `class=` attributes referencing the design tokens. The importer classifies selectors, so the agent never hand-builds classes at insert time.
 - `<style>` blocks inside imported HTML are parsed: a bare `.foo {}` rule becomes a Selectors-panel class bound to `class="foo"`; any other selector (`.hero a`, `a:hover`, `@media …`) becomes an ambient rule. `style=` attributes land on the node's inline styles. These are applied — not stripped.
 - One `insertHtml` call per logical section (nav, hero, pricing, footer = 4–6 calls); smaller chunks recover better if one fails.
 - Per-breakpoint variation: `@media` queries in the `<style>` block (matched against the site breakpoints), or `breakpointStyles` on `createClass`, keyed by breakpoint ids **verbatim from the dynamic suffix** — never invent ids like `"mobile"` or `"desktop"`.
@@ -297,8 +327,9 @@ Drivers that support prompt caching (Anthropic) apply `cache_control` to the sta
 Page: "My Site" · root: <rootNodeId> · selected: <nodeId|none>
 · active breakpoint: <id> · all breakpoints: [<id>@<width>px, …]
 · Pages: [<id>=<slug> (active), <id>=<slug>, …]
+· Tokens — colors: [primary=…, ink=…]; type --text-*: [xs, s, m, …]; spacing --space-*: […]; fonts: [--font-heading→Inter]
 ```
-The static prefix is cache-friendly (unchanged across prompts for the same provider). The dynamic suffix carries per-request state and is never cached.
+The static prefix is cache-friendly (unchanged across prompts for the same provider). The dynamic suffix carries per-request state and is never cached. The `Tokens —` digest is a compact, always-inlined summary of the site's design tokens (`describeAgentTokens(snap.site)`) so the agent sees the design system every turn without a `list_tokens` round-trip; when no tokens exist it reads `Tokens: (none — no design system yet; establish one first …)`. `list_tokens` remains the on-demand full-detail read (variants, utility classes).
 
 ---
 
@@ -353,6 +384,13 @@ interface AgentSlice {
   agentActiveModelId:        string | null
   /** Conversation summaries for the history popover. */
   agentConversations:        ConversationView[]
+  /**
+   * Provider-normalised total input the model processed on the latest turn,
+   * for the ContextMeter. Null for a fresh conversation (no turns yet); the
+   * meter then shows 0 against the window. Hydrated from `ConversationView.contextTokens`
+   * on loadAgentConversation; updated live from each turn's `usage` event.
+   */
+  agentContextTokens:        number | null
 
   // ── Actions ───────────────────────────────────────────────────────────
   openAgent():                                         void
@@ -370,6 +408,38 @@ interface AgentSlice {
 ```
 
 Conversations and their message history are persisted server-side in `ai_conversations` + `ai_messages`. `loadAgentConversation(id)` rehydrates a past thread into `agentMessages` without re-running the conversation.
+
+---
+
+## Context meter and live model catalogue
+
+### Context meter
+
+The `<ContextMeter>` shows how much of the active model's context window the current conversation has consumed. Two data sources drive it:
+
+- **Window** (`windowTokens` prop from `AgentPanel`): the model's max total tokens, resolved once from `GET /admin/api/ai/providers/:id/models?credentialId=…`. The models endpoint enriches Anthropic and OpenAI models with `contextWindow` from the live OpenRouter catalogue (`server/ai/pricing/`); OpenRouter populates it from its own native fetch. Ollama models and uncatalogued models have no window — the meter hides.
+- **Used** (`agentContextTokens` in the store): the provider-normalised "context used" for the latest turn, computed by `normalizeContextTokens(providerId, usage)` in `server/ai/contextTokens.ts`:
+  - Anthropic reports `input_tokens` excluding cache buckets, so the true total is `promptTokens + cacheReadTokens + cacheCreationTokens`.
+  - OpenAI / OpenRouter / Ollama report `input_tokens` as the full input; `promptTokens` alone is the total.
+
+The chat handler injects `contextTokens` onto the wire `usage` event so the browser updates the meter after each turn. The persister writes the same value to `ai_conversations.context_tokens` (overwritten per turn, not summed), so `loadAgentConversation` can restore the meter on reload.
+
+### Live model catalogue
+
+`server/ai/pricing/` is the single source for per-model prices **and context windows**. It sources from OpenRouter's public `/api/v1/models` endpoint (no key required), which publishes list prices and `context_length` for Anthropic and OpenAI models. The module lifecycle:
+
+- **Cold start**: loads the DB cache from `ai_model_pricing` (durable fallback) and kicks a background refresh. The first turn prices immediately off the last-known data.
+- **No DB cache yet**: blocks once on a live fetch.
+- **Thereafter**: serves from a 6-hour in-memory memo, refreshing in the background past the TTL.
+- A failed refresh is logged and keeps the previous data — never fatal.
+
+`pricingKey(modelId)` normalises a provider's native id (`claude-opus-4-8-20260514`) and the OpenRouter slug (`anthropic/claude-opus-4.8`) to the same key (`claude-opus-4-8`), stripping date suffixes, dots, and provider prefixes. Variant suffixes (`:thinking`, `-fast`) are preserved — they have different pricing.
+
+The `getModelCatalogue(db)` export (used by the models handler for picker enrichment) and `resolveCostUsd(db, providerId, modelId, usage)` (used by the persister) share the same in-memory cache. Two callers, one memo.
+
+### Auto-defaults on credential creation
+
+When `POST /admin/api/ai/credentials` creates a new credential, `seedEmptyDefaults` auto-assigns it as the default for every scope (`site`, `content`, `data`, `plugin`) that has no default yet. The default model is the `tier === 'smartest'` entry from `driver.listModels()`, or the first model if no smartest tier is found. If the model list can't be resolved (offline, bad key), seeding is skipped silently — it never fails the credential creation. Scopes that already point at a credential are left untouched.
 
 ---
 
@@ -417,6 +487,10 @@ Conversations and their message history are persisted server-side in `ai_convers
   - `server/ai/handlers/chat.ts` — `POST /admin/api/ai/chat/site` endpoint
   - `server/ai/handlers/toolResult.ts` — `POST /admin/api/ai/tool-result` endpoint
   - `server/ai/runtime/runner.ts` — `runChat()` driver loop
+  - `server/ai/contextTokens.ts` — `normalizeContextTokens()` — provider-normalised "context used" for the meter
+  - `server/ai/pricing/index.ts` — `resolveCostUsd`, `getModelCatalogue`, `computeCostUsd`
+  - `server/ai/pricing/openrouterCatalogue.ts` — `fetchOpenRouterCatalogue`, `pricingKey`, `ModelCatalogue`
+  - `server/ai/pricing/store.ts` — durable `ai_model_pricing` DB cache
   - `server/ai/runtime/persister.ts` — `ConversationsPersister` interface + `createConversationsPersister()`
   - `server/ai/runtime/types.ts` — canonical `AiStreamEvent`, `AiMessage`, `AiTool`, `ToolContext` types
   - `server/ai/runtime/transport.ts` — `createBridge()` / `resolveBridgeToolResult()`
@@ -431,7 +505,8 @@ Conversations and their message history are persisted server-side in `ai_convers
   - `src/admin/pages/site/agent/types.ts` — `ServerStreamEvent`, `AgentMessage`, `AgentRequestBody`, …
   - `src/admin/pages/site/agent/index.ts` — public barrel
   - `src/admin/pages/content/agent/contentAgentStore.ts` — standalone content-workspace agent store
-  - `src/admin/pages/site/panels/AgentPanel/` — Agent Panel UI
+  - `src/admin/pages/site/panels/AgentPanel/AgentPanel.tsx` — Agent Panel; resolves `contextWindow` for the meter
+  - `src/admin/pages/site/panels/AgentPanel/ContextMeter.tsx` — context used / window progress bar
 - Gate tests:
   - `src/__tests__/architecture/ai-driver-isolation.test.ts`
   - `src/__tests__/architecture/ai-tools-typebox-only.test.ts`

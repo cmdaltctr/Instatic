@@ -39,6 +39,7 @@ Every event has a typed `action` string. The closed union is the source of truth
 | Data            | `data.table.create`, `data.table.update`, `data.table.delete`, `data.row.create`, `data.row.update`, `data.row.delete`, `data.row.publish`, `data.row.schedule`, `data.row.schedule.cancel`, `data.row.status`, `data.row.move`, `data.author.assign` |
 | Publishing      | `publish`                                                                                 |
 | Plugins         | `plugin.install`, `plugin.update`, `plugin.enable`, `plugin.disable`, `plugin.delete`, `plugin.pack.install`, `plugin.settings.update` |
+| AI              | `ai.credential.created`, `ai.credential.updated`, `ai.credential.deleted`, `ai.credential.tested`, `ai.default.updated`, `ai.chat.started`, `ai.chat.completed`, `ai.chat.failed` |
 
 If you add a new action that fits an existing group, append to the union. New groups (e.g. media-related audit) extend the same union.
 
@@ -70,14 +71,17 @@ No nested objects. The constraint keeps audit queries cheap and lets the UI rend
 
 ### Common metadata keys
 
-| Action group   | Common metadata fields                                                       |
-|----------------|------------------------------------------------------------------------------|
-| `login.*`      | `email`, `failureReason?`, `attemptCount?`                                   |
-| `user.*`       | `email`, `displayName`, `roleSlug`                                           |
-| `role.*`       | `slug`, `name`, `capabilities?`                                              |
-| `data.row.*`   | `tableId`, `tableSlug`, `slug`, `status?`, `fromStatus?`, `toStatus?`        |
-| `publish`      | `pageId`, `slug`, `routeBase?`                                               |
-| `plugin.*`     | `pluginId`, `version`, `permissions?`                                        |
+| Action group         | Common metadata fields                                                            |
+|----------------------|-----------------------------------------------------------------------------------|
+| `login.*`            | `email`, `failureReason?`, `attemptCount?`                                        |
+| `user.*`             | `email`, `displayName`, `roleSlug`                                                |
+| `role.*`             | `slug`, `name`, `capabilities?`                                                   |
+| `data.row.*`         | `tableId`, `tableSlug`, `slug`, `status?`, `fromStatus?`, `toStatus?`             |
+| `publish`            | `pageId`, `slug`, `routeBase?`                                                    |
+| `plugin.*`           | `pluginId`, `version`, `permissions?`                                             |
+| `ai.credential.*`    | `providerId`, `authMode`, `displayLabel`; `tested` adds `ok`, `modelCount`, `error?` |
+| `ai.default.updated` | `scope`, `credentialId`, `modelId`, `auto?` (true when seeded at credential create) |
+| `ai.chat.*`          | `scope`, `conversationId`, `providerId`, `modelId`; `completed`/`failed` add `promptTokens`, `completionTokens`, `costUsd?` |
 
 These aren't enforced by the schema (any flat key is valid) — they're conventions to keep the UI consistent.
 
