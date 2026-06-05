@@ -30,10 +30,7 @@ function resetStore() {
 }
 
 function loadTemplateSite() {
-  // The home page carries exactly one base.outlet so it satisfies the
-  // template outlet invariant when converted via the dialog.
-  const homeOutlet = makeNode({ id: 'home-outlet', moduleId: 'base.outlet' })
-  const homeRoot = makeNode({ id: 'root-home', moduleId: 'base.body', children: ['home-outlet'] })
+  const homeRoot = makeNode({ id: 'root-home', moduleId: 'base.body' })
   const templateRoot = makeNode({ id: 'root-template', moduleId: 'base.body' })
   templateRoot.dynamicBindings = {
     text: { source: 'currentEntry', field: 'title' },
@@ -44,7 +41,7 @@ function loadTemplateSite() {
     title: 'Home',
     slug: 'index',
     rootNodeId: 'root-home',
-    nodes: { 'root-home': homeRoot, 'home-outlet': homeOutlet },
+    nodes: { 'root-home': homeRoot },
   })
   const template = makePage({
     id: 'page-template',

@@ -6,7 +6,6 @@ import {
   pageSlugDuplicateError,
   pageSlugError,
 } from '@core/page-tree'
-import { findOutletIds } from '@core/templates'
 import { listCmsDataTables } from '@core/persistence/cmsData'
 import type { DataTable } from '@core/data/schemas'
 import { Button } from '@ui/components/Button'
@@ -94,20 +93,10 @@ export function TemplateSettingsDialog({
   const priorityInvalid = !Number.isFinite(priorityNumber)
   const postTypesEmpty = targetKind === 'postTypes' && selectedSlugs.length === 0
 
-  // A template must contain exactly one base.outlet — content flows into it.
-  // Catch the zero/two-outlet authoring error here rather than at publish time.
-  const outletCount = findOutletIds(page).length
-  const outletError = outletCount === 0
-    ? 'A template needs exactly one Content Outlet — add one from the block list.'
-    : outletCount > 1
-      ? 'A template can only have one Content Outlet — remove the extra one.'
-      : null
-
   const saveDisabled = !trimmedTitle
     || Boolean(slugValidation)
     || priorityInvalid
     || postTypesEmpty
-    || Boolean(outletError)
 
   useEffect(() => {
     requestAnimationFrame(() => inputRef.current?.select())
@@ -235,10 +224,6 @@ export function TemplateSettingsDialog({
             invalid={priorityInvalid}
           />
         </div>
-
-        {outletError && (
-          <p role="alert" className={dialogStyles.errorText}>{outletError}</p>
-        )}
       </form>
     </Dialog>
   )

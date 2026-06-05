@@ -9,14 +9,12 @@ afterEach(cleanup)
 const node = (id: string, moduleId: string, children: string[] = []) =>
   ({ id, moduleId, props: {}, breakpointOverrides: {}, children })
 
-const pageWith = (outletCount: number): Page => {
-  const outletIds = Array.from({ length: outletCount }, (_, i) => `o${i}`)
-  const nodes: Record<string, unknown> = {
-    body: node('body', 'base.body', outletIds),
-  }
-  for (const id of outletIds) nodes[id] = node(id, 'base.outlet')
-  return { id: 'p1', slug: 'tpl', title: 'Tpl', rootNodeId: 'body', nodes } as unknown as Page
-}
+// A plain page with no base.outlet — a template can still be saved from it; the
+// outlet is added later in the editor. The dialog does NOT gate on outlets.
+const plainPage = (): Page => ({
+  id: 'p1', slug: 'tpl', title: 'Tpl', rootNodeId: 'body',
+  nodes: { body: node('body', 'base.body') },
+} as unknown as Page)
 
 function submit() {
   const form = document.getElementById('template-settings-form') as HTMLFormElement
@@ -24,16 +22,21 @@ function submit() {
 }
 
 describe('TemplateSettingsDialog', () => {
-  it('saves an everywhere target with no conditions key', () => {
+  it('saves an everywhere target with no conditions key (no outlet required)', () => {
     let saved: TemplateSettingsPayload | null = null
     render(
       <TemplateSettingsDialog
-        page={pageWith(1)}
-        pages={[pageWith(1)]}
+        page={plainPage()}
+        pages={[plainPage()]}
         onCancel={() => {}}
         onSave={(p) => { saved = p }}
       />,
     )
+    // No outlet on the page, but Save is enabled — no guard.
+    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+    expect(save.disabled).toBe(false)
+    expect(screen.queryByRole('alert')).toBeNull()
+
     submit()
     expect(saved).not.toBeNull()
     expect(saved!.template.target).toEqual({ kind: 'everywhere' })
@@ -44,8 +47,8 @@ describe('TemplateSettingsDialog', () => {
     let saved: TemplateSettingsPayload | null = null
     render(
       <TemplateSettingsDialog
-        page={pageWith(1)}
-        pages={[pageWith(1)]}
+        page={plainPage()}
+        pages={[plainPage()]}
         onCancel={() => {}}
         onSave={(p) => { saved = p }}
       />,
@@ -66,22 +69,5 @@ describe('TemplateSettingsDialog', () => {
     submit()
     expect(saved).not.toBeNull()
     expect(saved!.template.target).toEqual({ kind: 'postTypes', tableSlugs: ['posts'] })
-  })
-
-  it('blocks save and shows an alert when the tree has zero outlets', () => {
-    let saved: TemplateSettingsPayload | null = null
-    render(
-      <TemplateSettingsDialog
-        page={pageWith(0)}
-        pages={[pageWith(0)]}
-        onCancel={() => {}}
-        onSave={(p) => { saved = p }}
-      />,
-    )
-    expect(screen.getByRole('alert').textContent).toMatch(/Content Outlet/i)
-    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
-    expect(save.disabled).toBe(true)
-    submit()
-    expect(saved).toBeNull()
   })
 })

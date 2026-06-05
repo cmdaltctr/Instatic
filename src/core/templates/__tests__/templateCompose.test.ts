@@ -54,15 +54,26 @@ describe('composeTemplateChain', () => {
     expect(merged.nodes[middle.children[0]].moduleId).toBe('base.text') // original heading underneath
   })
 
-  it('throws when a template has zero or two outlets', () => {
+  it('skips an outlet-less template (page renders unwrapped, no throw)', () => {
     const noOutlet = layout()
     noOutlet.nodes.L_body = body('L_body', ['L_header', 'L_footer'])
     delete (noOutlet.nodes as Record<string, unknown>).L_outlet
-    expect(() => composeTemplateChain([noOutlet], { kind: 'page', page: aboutPage() })).toThrow()
+    // Unfinished template with no outlet → it simply doesn't apply.
+    const merged = composeTemplateChain([noOutlet], { kind: 'page', page: aboutPage() })
+    expect(merged.rootNodeId).toBe('A_body')
+    expect(Object.keys(merged.nodes)).toEqual(['A_body', 'A_heading'])
+  })
+
+  it('uses the first outlet when a template has two (no throw)', () => {
     const twoOutlets = layout()
     twoOutlets.nodes.L_body = body('L_body', ['L_header', 'L_outlet', 'L_outlet2'])
     twoOutlets.nodes.L_outlet2 = node('L_outlet2', 'base.outlet')
-    expect(() => composeTemplateChain([twoOutlets], { kind: 'page', page: aboutPage() })).toThrow()
+    const merged = composeTemplateChain([twoOutlets], { kind: 'page', page: aboutPage() })
+    const root = merged.nodes[merged.rootNodeId]
+    // First outlet (index 1) replaced by the page heading; the second outlet
+    // survives and will render empty.
+    expect(merged.nodes[root.children[1]].moduleId).toBe('base.text')
+    expect(Object.values(merged.nodes).filter((n) => n.moduleId === 'base.outlet')).toHaveLength(1)
   })
 
   it('keeps the innermost outlet for an entry terminal', () => {

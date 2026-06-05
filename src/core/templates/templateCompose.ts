@@ -1,5 +1,4 @@
 import type { Page, PageNode } from '@core/page-tree'
-import { assertSingleOutlet } from './templateValidation'
 
 export type TerminalContent =
   | { kind: 'page'; page: Page }
@@ -7,12 +6,23 @@ export type TerminalContent =
 
 type Nodes = Record<string, PageNode>
 
-/** The single base.outlet id, or throw TemplateOutletError on zero/two. */
-function requireOutletId(nodes: Nodes): string {
-  const ids: string[] = []
-  for (const id in nodes) if (nodes[id].moduleId === 'base.outlet') ids.push(id)
-  assertSingleOutlet(ids) // throws TemplateOutletError unless exactly one
-  return ids[0]
+/**
+ * The first base.outlet id in a tree, or null when there is none.
+ *
+ * The composer is deliberately forgiving: a template with NO outlet is an
+ * unfinished template (the author's business, not a hard error) and is simply
+ * skipped; a template with MORE THAN ONE outlet uses the first and leaves the
+ * rest to render empty. Nothing here throws — an unfinished template never
+ * breaks publishing.
+ */
+function firstOutletId(nodes: Nodes): string | null {
+  for (const id in nodes) if (nodes[id].moduleId === 'base.outlet') return id
+  return null
+}
+
+/** Whether a template tree contains at least one base.outlet to host content. */
+function hasOutlet(page: Page): boolean {
+  return firstOutletId(page.nodes) !== null
 }
 
 function hasMeaningfulBodyProps(node: PageNode): boolean {
@@ -68,9 +78,13 @@ function contentRootIds(nodes: Nodes, rootId: string, prefix: string): string[] 
   return [containerId]
 }
 
-/** Replace the single base.outlet in `host` with `inner`'s content nodes. */
+/**
+ * Replace the first base.outlet in `host` with `inner`'s content nodes. The
+ * host is guaranteed (by the caller) to contain at least one outlet; extra
+ * outlets are left untouched and render empty.
+ */
 function spliceIntoOutlet(host: Nodes, hostRoot: string, inner: Nodes, innerRoot: string, prefix: string): { nodes: Nodes; rootId: string } {
-  const outletId = requireOutletId(host) // throws on zero/two outlets
+  const outletId = firstOutletId(host)!
   const at = locate(host, outletId)
   const rekeyed = rekey(inner, innerRoot, prefix)
   const merged: Nodes = { ...host, ...rekeyed.nodes }
@@ -90,16 +104,28 @@ function spliceIntoOutlet(host: Nodes, hostRoot: string, inner: Nodes, innerRoot
 
 /**
  * Merge an ordered (outer→inner) template chain + terminal into one Page.
- * See plan Phase 3 for the splice contract.
+ *
+ * Templates with no `base.outlet` cannot host content, so they are an
+ * unfinished/no-op template and are skipped — never an error. With every
+ * outlet-less template filtered out:
+ *  - page terminal, empty effective chain → the page renders as-is;
+ *  - entry terminal, empty effective chain → the innermost template renders as
+ *    chrome only (no body) until the author adds an outlet.
  */
 export function composeTemplateChain(chain: Page[], terminal: TerminalContent): Page {
-  if (chain.length === 0) {
+  const effective = chain.filter(hasOutlet)
+
+  if (effective.length === 0) {
     if (terminal.kind === 'page') return terminal.page
-    throw new Error('composeTemplateChain: entry terminal requires at least one template')
+    // entry terminal with no usable outlet anywhere: render the innermost
+    // matched template as-is (chrome without a body). `chain` is non-empty here
+    // because the renderer 404s an entry route with no matching template.
+    const t = chain[chain.length - 1]
+    return { id: t.id, slug: t.slug, title: t.title, rootNodeId: t.rootNodeId, nodes: { ...t.nodes } }
   }
 
-  // Build the merged tree from the INNERMOST template outward.
-  const innermost = chain[chain.length - 1]
+  // Build the merged tree from the INNERMOST effective template outward.
+  const innermost = effective[effective.length - 1]
   let acc: { nodes: Nodes; rootId: string } = { nodes: { ...innermost.nodes }, rootId: innermost.rootNodeId }
 
   // Innermost terminal handling.
@@ -109,8 +135,8 @@ export function composeTemplateChain(chain: Page[], terminal: TerminalContent): 
   // entry terminal: leave the innermost outlet in place (renders currentEntry.body).
 
   // Wrap with each outer template, inner-most-but-one first.
-  for (let i = chain.length - 2; i >= 0; i--) {
-    const outer = chain[i]
+  for (let i = effective.length - 2; i >= 0; i--) {
+    const outer = effective[i]
     acc = spliceIntoOutlet({ ...outer.nodes }, outer.rootNodeId, acc.nodes, acc.rootId, `t${i}_`)
   }
 
