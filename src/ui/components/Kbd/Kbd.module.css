@@ -6,6 +6,12 @@
  * reference). Replaces the three divergent `.kbd` / `.keycap` rules that used
  * to live in Spotlight, HelpKeybindingsList, and ModuleInserterDialog.
  *
+ * Visual: a sculpted, top-lit dark mechanical keycap. The face is a vertical
+ * gradient; the box-shadow stack fakes a raised cap with real thickness —
+ * top highlight, concave inner shadow, a solid bottom edge, and a soft drop
+ * shadow. Pressing the key (hover lifts, :active depresses) collapses that
+ * depth for a tactile feel.
+ *
  * All colors from design tokens — no hardcoded values.
  */
 
@@ -13,22 +19,65 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border: 1px solid var(--editor-border);
+    min-width: 19px;
+    height: 19px;
+    padding: 0 6px;
+    border: 1px solid var(--kbd-border);
     border-radius: var(--editor-radius-sm);
-    background: var(--editor-surface-3);
-    color: var(--editor-text-secondary);
+    background: linear-gradient(
+        var(--kbd-face-top),
+        var(--kbd-face-bottom)
+    );
+    box-shadow:
+        inset 0 1px 0 var(--kbd-highlight),
+        inset 0 -1px 1px var(--kbd-inner-shadow),
+        0 1px 0 var(--kbd-edge),
+        0 1px 2px var(--kbd-drop);
+    color: var(--kbd-text);
     font-family: var(--font-mono);
     font-size: 11px;
+    font-weight: 500;
     line-height: 1;
     white-space: nowrap;
+    transform: translateZ(0);
+    transition:
+        transform 70ms ease,
+        box-shadow 70ms ease,
+        background 70ms ease;
+}
+
+/* Hover — the cap face brightens by one surface step. */
+.kbd:hover {
+    background: linear-gradient(
+        var(--kbd-face-top-hover),
+        var(--kbd-face-bottom-hover)
+    );
+}
+
+/* Press — the cap depresses and its depth shadow collapses. */
+.kbd:active {
+    transform: translateY(1px);
+    box-shadow:
+        inset 0 1px 0 var(--kbd-highlight),
+        inset 0 -1px 1px var(--kbd-inner-shadow),
+        0 0 0 var(--kbd-edge),
+        0 0 1px var(--kbd-drop);
 }
 
 /* Sequence wrapper — groups the keycaps of a single shortcut. */
 .sequence {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kbd {
+        transition: none;
+    }
+
+    .kbd:hover,
+    .kbd:active {
+        transform: none;
+    }
 }

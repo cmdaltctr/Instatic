@@ -199,6 +199,24 @@
     /* ─── Inline code block surface (used by the Code primitive) ─────────── */
     --code-bg: rgba(0, 0, 0, 0.3);
 
+    /* ─── Keycap (Kbd primitive) ─────────────────────────────────────────── */
+    /* A lightly-sculpted keycap that lives inside the achromatic surface ramp:
+       the face is a restrained vertical gradient sitting one step above the
+       row it rests on, the border is the standard editor border, and the
+       depth comes from low-alpha achromatic shadows matching the house
+       panel/tooltip vocabulary (a top highlight, a soft concave shadow, a
+       1px bottom edge, and a small drop). Depth affordance, not skeuomorphism. */
+    --kbd-face-top: #434343; /* between surface-3 and surface-4 */
+    --kbd-face-bottom: #2f2f2f; /* just below surface-3 */
+    --kbd-face-top-hover: #4d4d4d;
+    --kbd-face-bottom-hover: #363636;
+    --kbd-border: var(--editor-border); /* achromatic, matches the rest of the UI */
+    --kbd-text: var(--editor-text-secondary); /* same register as surrounding labels */
+    --kbd-highlight: rgba(255, 255, 255, 0.06); /* top inner highlight */
+    --kbd-inner-shadow: rgba(0, 0, 0, 0.22); /* soft concave bottom inner shadow */
+    --kbd-edge: rgba(0, 0, 0, 0.3); /* 1px bottom edge — the key's thickness */
+    --kbd-drop: rgba(0, 0, 0, 0.28); /* small drop shadow beneath the cap */
+
     /* ─── Editor Inputs ──────── */
     --input-bg: transparent;
     --input-bg-focus: trasparent;
