@@ -148,11 +148,19 @@ These do the boundary validation — handlers and modules read through them rath
 | File                                             | Owns                                                                  |
 |--------------------------------------------------|-----------------------------------------------------------------------|
 | `server/repositories/data/tables.ts`             | CRUD on `data_tables`: list (system tables first: pages → posts → components, then custom by `created_at`), get, create, update, delete (system-protected) |
-| `server/repositories/data/rows.ts`               | CRUD on `data_rows`: list, get, create, update, soft-delete, restore  |
+| `server/repositories/data/rows/read.ts`          | Hydrated read queries: `listDataRows`, `getDataRow`, `getDataRowBySlug`, `listDataAuthorOptions` |
+| `server/repositories/data/rows/mutations.ts`     | Single-row writes: create, save draft, soft-delete, move to table, update status / author |
+| `server/repositories/data/rows/bulk.ts`          | Transactional batch writes: `createDataRowMany`, `saveDataRowDraftMany`, `softDeleteDataRowMany` |
+| `server/repositories/data/rows/filter.ts`        | Operator-object filter querying with pagination (`listDataRowsWithFilter`) — used by the plugin content surface |
+| `server/repositories/data/rows/search.ts`        | Cross-table slug search (`searchDataRows`) — used by the spotlight content provider |
+| `server/repositories/data/rows/schedule.ts`      | Scheduled-publish lifecycle: schedule, cancel, list due rows         |
+| `server/repositories/data/rows/import.ts`        | Bundle-import upserts (id-preserving): `upsertDataRow`, `insertDataRowIfAbsent`, `replaceDataRow` |
+| `server/repositories/data/rows/mapper.ts`        | Internal: hydrated SELECT builder + `DataRowRow → DataRow` mapper (not part of the public barrel) |
+| `server/repositories/data/rows/index.ts`         | Barrel for the `rows/` directory                                     |
 | `server/repositories/data/publish.ts`            | Publish / unpublish / schedule a row; write `data_row_versions`       |
 | `server/repositories/data/templateSeeding.ts`    | Seed default entry template for new postType tables                   |
-| `server/repositories/data/shared.ts`             | Shared row helpers (status normalization, audit fields)               |
-| `server/repositories/data/index.ts`              | Barrel                                                                |
+| `server/repositories/data/shared.ts`             | Shared helpers: `userRefAt` (user-ref join extraction), `toIso` / `toIsoOrNull` (date coercion), `UserJoinColumns` |
+| `server/repositories/data/index.ts`              | Barrel for the whole `data/` directory                               |
 
 All repository functions are dialect-naive ANSI SQL. JSON columns end in `_json`; the SQLite adapter auto-parses on read. See [docs/reference/database-dialects.md](../reference/database-dialects.md).
 
@@ -334,7 +342,7 @@ Events are emitted from `server/publish/contentEvents.ts` — admin CMS handlers
   - `src/core/data/fields.ts` — field normalization, built-in field detection
   - `src/core/data/pageFromRow.ts` — Page ↔ row
   - `src/core/data/componentFromRow.ts` — VC ↔ row
-  - `server/repositories/data/` — `tables.ts`, `rows.ts`, `publish.ts`, `templateSeeding.ts`
+  - `server/repositories/data/` — `tables.ts`, `rows/` (split by responsibility), `publish.ts`, `templateSeeding.ts`, `shared.ts`
   - `server/handlers/cms/data/` — generic data endpoints
   - `server/handlers/cms/pages.ts`, `components.ts` — typed endpoints for the system tables
   - `server/publish/publishScheduler.ts` — scheduled-publish tick
