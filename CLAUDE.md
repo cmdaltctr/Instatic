@@ -201,7 +201,7 @@ Every untyped boundary uses TypeBox. Inside the boundary, code trusts the parsed
 - `catch (err) {}` — silently swallowing. If genuinely safe, name it (`catch (_err)`) and add a one-line comment.
 - `console.log` in production code. Use `console.error` / `console.warn` with a `[<module>]` prefix, or remove the log.
 - Re-throwing a wrapped `Error` that loses the original stack. Use `new Error(message, { cause: err })`.
-- `as Foo` at a JSON / HTTP / `JSON.parse` boundary. Use a TypeBox schema instead. Gated by `boundary-validation.test.ts` (rules 1–4 cover `res.json() as`, `JSON.parse as`, raw `fetch()`, and raw `req.json()`).
+- `as Foo` at a JSON / HTTP / `JSON.parse` boundary. Use a TypeBox schema instead. Gated by `boundary-validation.test.ts` (rules 1–5: `res.json() as`, `JSON.parse as`, raw `fetch()`, raw `req.json()`, and `body.field as DeepType` after `readEnvelope`/`parseJsonResponse` — embed the field's TypeBox schema in the envelope instead; allowlist interface-only deep types with a `§5.x` entry).
 - Importing `zod` anywhere. It is banned repo-wide: the AI drivers hit each provider's REST API directly and pass TypeBox schemas through as JSON Schema, so there is no longer a typebox→zod adapter. Gated by `ai-driver-isolation.test.ts`.
 
 ---

@@ -312,6 +312,7 @@ Common boundaries already wrapped — extend the same pattern when you add a new
 | Pattern                                                       | Use instead                                                     |
 |---------------------------------------------------------------|-----------------------------------------------------------------|
 | `await res.json() as Foo`                                     | `apiRequest(path, { schema })` (client) or `readEnvelope(res, FooSchema, msg)` (held `Response`) — `parseJsonResponse` only for `@core/http` internals / XHR / server-side |
+| `body.field as DeepType` after `readEnvelope` / `parseJsonResponse` | Reference `DeepType`'s TypeBox schema in the envelope (e.g. `{ font: FontEntrySchema }`); the parsed value is already correctly typed — no cast needed. For interface-only deep types without a schema, add a `§5.x` allowlist entry in `boundary-validation.test.ts`. |
 | `JSON.parse(raw) as Foo`                                      | `safeParseJson(raw, FooSchema)` / `parseJsonWithFallback`       |
 | Hand-rolled `interface Foo` next to a `FooSchema`             | `type Foo = Static<typeof FooSchema>`                            |
 | Importing `zod` anywhere                                      | TypeBox everywhere — `zod` is banned repo-wide and has been removed from `package.json`. Gated by `ai-driver-isolation.test.ts`. |
@@ -338,5 +339,5 @@ Common boundaries already wrapped — extend the same pattern when you add a new
   - `server/http.ts` — `readValidatedBody`, `jsonResponse`, `badRequest`
   - `server/ai/drivers/` — direct provider HTTP drivers; tools are declared with their TypeBox `inputSchema` passed through as JSON Schema (no Zod)
 - Gate tests:
-  - `src/__tests__/architecture/boundary-validation.test.ts` — enforces the four HTTP / JSON-parse boundary rules (no `res.json() as`, no `JSON.parse as`, no raw `fetch(` in admin, no raw `req.json(` in server handlers)
+  - `src/__tests__/architecture/boundary-validation.test.ts` — enforces five boundary rules: (1) no `res.json() as` in persistence or admin; (2) no `JSON.parse as` in persistence; (3) no raw `fetch(` in admin; (4) no raw `req.json(` in server handlers; (5) no `body.field as DeepType` after `readEnvelope`/`parseJsonResponse` in persistence — embed the field's TypeBox schema in the envelope instead; allowlist interface-only deep types with `§5.x`
   - `src/__tests__/architecture/ai-driver-isolation.test.ts` — enforces provider-SDK and `zod` isolation: `@anthropic-ai/sdk`, `@anthropic-ai/claude-agent-sdk`, `@openai/agents`, `@openrouter/agent`, `@modelcontextprotocol/sdk`, and `zod` are all banned repo-wide
