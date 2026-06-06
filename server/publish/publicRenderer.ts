@@ -5,9 +5,11 @@ import { publishPage } from '@core/publisher'
 import { buildRouteFrame } from '@core/templates/contextFrames'
 import { buildSiteCssBundle } from './siteCssBundle'
 import { resolveTemplateChain, composeTemplateChain } from '@core/templates'
+import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { prefetchLoopData, publishedDataRowToLoopItem } from './loopPrefetch'
 import { prefetchMediaAssets } from './mediaPrefetch'
-import { getPublishVersion } from './renderCache'
+import { getPublishVersion } from './publishState'
+import type { Page } from '@core/page-tree'
 import type { PublishedDataRow } from '@core/data/schemas'
 import type { DbClient } from '../db/client'
 import type { PublishedPageSnapshot } from '../repositories/publish'
@@ -53,6 +55,39 @@ export interface RenderPublishedSnapshotContext {
   publishVersion?: number
 }
 
+/**
+ * Shared render tail for both public paths. Given an already-resolved,
+ * composed `merged` tree and its seed `templateContext`, this owns the
+ * identical CSS-bundle build + loop/media prefetch + `publishPage` call +
+ * publish-version stamping. The two public functions differ only in how they
+ * resolve the chain and seed the context, plus which `pageId`/`slug` they
+ * report — so any new `publishPage` option threads through here once.
+ */
+async function renderMergedTemplate(
+  merged: Page,
+  snapshot: PublishedPageSnapshot,
+  templateContext: TemplateRenderDataContext | undefined,
+  ctx: RenderPublishedSnapshotContext,
+): Promise<string> {
+  const cssBundle = buildSiteCssBundle(snapshot.site, registry, merged)
+  const [loopData, mediaAssets] = await Promise.all([
+    prefetchLoopData(merged, snapshot.site, ctx.db, ctx.url),
+    prefetchMediaAssets(merged, snapshot.site, registry, ctx.db),
+  ])
+  return publishPage(merged, snapshot.site, registry, {
+    templateContext,
+    runtimeAssets: snapshot.runtimeAssets,
+    runtimePackageImportmap: snapshot.runtimePackageImportmap,
+    cssEmission: 'external',
+    cssBundle,
+    cssAssetBaseUrl: CSS_ASSET_BASE_URL,
+    loopData,
+    mediaAssets,
+    loopEndpointBaseUrl: LOOP_ENDPOINT_BASE_URL,
+    publishVersion: ctx.publishVersion ?? getPublishVersion(),
+  }).html
+}
+
 export async function renderPublishedSnapshot(
   snapshot: PublishedPageSnapshot,
   ctx: RenderPublishedSnapshotContext,
@@ -65,29 +100,15 @@ export async function renderPublishedSnapshot(
   const chain = resolveTemplateChain(snapshot.site, { kind: 'page' })
   const merged = composeTemplateChain(chain, { kind: 'page', page })
 
-  const cssBundle = buildSiteCssBundle(snapshot.site, registry, merged)
-  const [loopData, mediaAssets] = await Promise.all([
-    prefetchLoopData(merged, snapshot.site, ctx.db, ctx.url),
-    prefetchMediaAssets(merged, snapshot.site, registry, ctx.db),
-  ])
-  const html = publishPage(merged, snapshot.site, registry, {
-    runtimeAssets: snapshot.runtimeAssets,
-    runtimePackageImportmap: snapshot.runtimePackageImportmap,
-    cssEmission: 'external',
-    cssBundle,
-    cssAssetBaseUrl: CSS_ASSET_BASE_URL,
-    loopData,
-    mediaAssets,
-    loopEndpointBaseUrl: LOOP_ENDPOINT_BASE_URL,
-    publishVersion: ctx.publishVersion ?? getPublishVersion(),
-    // Seed route frame from the actual request URL (when available) so
-    // `{route.slug}` / `{route.path}` bindings resolve to live values.
-    // publishPage falls back to the page permalink if no templateContext
-    // is provided.
-    templateContext: ctx.url
-      ? { entryStack: [], route: buildRouteFrame(ctx.url.toString()) }
-      : undefined,
-  }).html
+  // Seed route frame from the actual request URL (when available) so
+  // `{route.slug}` / `{route.path}` bindings resolve to live values.
+  // publishPage falls back to the page permalink if no templateContext
+  // is provided.
+  const templateContext: TemplateRenderDataContext | undefined = ctx.url
+    ? { entryStack: [], route: buildRouteFrame(ctx.url.toString()) }
+    : undefined
+
+  const html = await renderMergedTemplate(merged, snapshot, templateContext, ctx)
   return { html, pageId: snapshot.pageRowId, slug: page.slug, siteId: snapshot.site.id }
 }
 
@@ -102,30 +123,15 @@ export async function renderPublishedDataRowTemplate(
   if (chain.length === 0) return null // no entry template → 404 (unchanged behaviour)
   const merged = composeTemplateChain(chain, { kind: 'entry' })
 
-  const cssBundle = buildSiteCssBundle(snapshot.site, registry, merged)
-  const [loopData, mediaAssets] = await Promise.all([
-    prefetchLoopData(merged, snapshot.site, ctx.db, ctx.url),
-    prefetchMediaAssets(merged, snapshot.site, registry, ctx.db),
-  ])
-  const html = publishPage(merged, snapshot.site, registry, {
-    // Seed the entry stack with the published row + route frame from
-    // the request URL. Loop interceptors push/pop iteration items on
-    // top of this stack; nodes outside any loop resolve their
-    // `currentEntry` bindings against this seed. page/site/viewer
-    // frames are filled by `publishPage` from the document.
-    templateContext: {
-      entryStack: [publishedDataRowToLoopItem(row)],
-      ...(ctx.url ? { route: buildRouteFrame(ctx.url.toString()) } : {}),
-    },
-    runtimeAssets: snapshot.runtimeAssets,
-    runtimePackageImportmap: snapshot.runtimePackageImportmap,
-    cssEmission: 'external',
-    cssBundle,
-    cssAssetBaseUrl: CSS_ASSET_BASE_URL,
-    loopData,
-    mediaAssets,
-    loopEndpointBaseUrl: LOOP_ENDPOINT_BASE_URL,
-    publishVersion: ctx.publishVersion ?? getPublishVersion(),
-  }).html
+  // Seed the entry stack with the published row + route frame from the request
+  // URL. Loop interceptors push/pop iteration items on top of this stack;
+  // nodes outside any loop resolve their `currentEntry` bindings against this
+  // seed. page/site/viewer frames are filled by `publishPage` from the document.
+  const templateContext: TemplateRenderDataContext = {
+    entryStack: [publishedDataRowToLoopItem(row)],
+    ...(ctx.url ? { route: buildRouteFrame(ctx.url.toString()) } : {}),
+  }
+
+  const html = await renderMergedTemplate(merged, snapshot, templateContext, ctx)
   return { html, pageId: merged.id, slug: merged.slug, siteId: snapshot.site.id }
 }

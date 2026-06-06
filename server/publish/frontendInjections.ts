@@ -31,6 +31,7 @@ import type { DbClient } from '../db/client'
 import { listInstalledPlugins, type InstalledPluginResult } from '../repositories/plugins'
 import { mediaStorageRegistry } from '@core/plugins/mediaStorageRegistry'
 import { listElectedAdapters } from '../repositories/mediaStorageAdapters'
+import { addCspSources, rewriteCspMeta, setCspDirective } from '@core/publisher'
 import type {
   FrontendAsset,
   FrontendAssetPlacement,
@@ -334,11 +335,9 @@ export function injectFrontendAssets(
       : `${next}\n${block}`
   }
 
-  if (PLACEMENT_ORDER.some((p) => injections.tags[p].length > 0)) {
-    next = relaxCspForPlan(next, injections)
-  }
-  if (injections.mediaCspOrigins.length > 0) {
-    next = appendMediaAdapterCspOrigins(next, injections.mediaCspOrigins)
+  const hasTagWork = PLACEMENT_ORDER.some((p) => injections.tags[p].length > 0)
+  if (hasTagWork || injections.mediaCspOrigins.length > 0) {
+    next = relaxCspForPlan(next, injections, hasTagWork)
   }
   return next
 }
@@ -347,71 +346,60 @@ export function injectFrontendAssets(
 // CSP rewriting
 // ---------------------------------------------------------------------------
 
-const CSP_META_PATTERN = /<meta http-equiv="Content-Security-Policy"\s+content="([^"]*)"\s*\/?>/i
-
-function relaxCspForPlan(html: string, plan: FrontendInjections): string {
-  return html.replace(CSP_META_PATTERN, (full, content: string) => {
-    let next = content
-
-    // Script: the published page's default CSP is `script-src 'none'`
-    // (publisher emits clean HTML — visitor pages should run zero
-    // host-supplied JS). Relaxation tiers:
-    //   • External `<script src=…>` from `frontend.assets[]`        → `'self'`
-    //     (sources live under `/uploads/plugins/<id>/<version>/…`,
-    //     same origin as the page itself)
-    //   • Inline `<script>` from `frontend.assets[]: 'script-inline'` → also adds
-    //     `'unsafe-inline'` on top
-    //   • Worker spawn from any plugin script → relax `worker-src`
-    //     to `'self' blob:`
-    if (plan.hasExternalScript || plan.hasInlineScript) {
-      const sources = plan.hasInlineScript
-        ? `'self' 'unsafe-inline'`
-        : `'self'`
-      next = next.replace(/script-src [^;]*;/i, `script-src ${sources};`)
-      next = next.replace(/worker-src [^;]*;/i, `worker-src 'self' blob:;`)
-    }
-
-    // Style: relax to `'unsafe-inline'` only when an inline style is in
-    // the plan.
-    if (plan.hasInlineStyle) {
-      next = next.replace(/style-src [^;]*;/i, `style-src 'self' 'unsafe-inline';`)
-    }
-
-    // Connect: append per-plugin `networkAllowedHosts`, plus the standard
-    // `https:` for plugin frontend code that lazily-loads images. Only
-    // bother when the plan touched the page.
-    if (plan.networkAllowedHosts.length > 0) {
-      next = appendOrSetCspDirective(next, 'connect-src', ["'self'", ...toCspHostSources(plan.networkAllowedHosts)])
-      next = appendOrSetCspDirective(next, 'img-src', ["'self'", 'data:', 'https:'])
-    }
-
-    return full.replace(content, next)
-  })
-}
-
 /**
- * Append CSP origins declared by elected media storage adapters. Runs
- * regardless of whether any frontend plugin tags were injected — a site can
- * use an external storage backend without any frontend.assets plugin being
- * active. The directive sources extend `'self'` so the host-relative
- * defaults (`/uploads/*`, `/_instatic/*`) keep working.
+ * Merge every CSP relaxation this plan needs into the page policy in a single
+ * deterministic pass. The CSP is modelled as data (`CspPlan`): we parse the
+ * emitted `<meta>` once, mutate directive source sets, and re-serialize once
+ * (`rewriteCspMeta`) — no per-directive regex surgery, no second pass, and the
+ * output is byte-identical for identical inputs because `serializeCsp` sorts.
+ *
+ * `hasTags` gates the plugin-tag relaxations (script / style / connect) so a
+ * media-only plan touches only the media directives — preserving the original
+ * two-function gating.
  */
-function appendMediaAdapterCspOrigins(
-  html: string,
-  origins: ReadonlyArray<{ directive: 'img-src' | 'media-src' | 'connect-src'; origin: string }>,
-): string {
-  const byDirective = new Map<'img-src' | 'media-src' | 'connect-src', Set<string>>()
-  for (const entry of origins) {
-    const bucket = byDirective.get(entry.directive) ?? new Set<string>()
-    bucket.add(`https://${entry.origin}`)
-    byDirective.set(entry.directive, bucket)
-  }
-  return html.replace(CSP_META_PATTERN, (full, content: string) => {
-    let nextCsp = content
-    for (const [directive, sources] of byDirective) {
-      nextCsp = appendOrSetCspDirective(nextCsp, directive, ["'self'", ...sources])
+function relaxCspForPlan(html: string, plan: FrontendInjections, hasTags: boolean): string {
+  return rewriteCspMeta(html, (csp) => {
+    if (hasTags) {
+      // Script: the published page's default CSP is `script-src 'none'`
+      // (publisher emits clean HTML — visitor pages should run zero
+      // host-supplied JS). Relaxation tiers:
+      //   • External `<script src=…>` from `frontend.assets[]`        → `'self'`
+      //     (sources live under `/uploads/plugins/<id>/<version>/…`,
+      //     same origin as the page itself)
+      //   • Inline `<script>` from `frontend.assets[]: 'script-inline'` → also
+      //     adds `'unsafe-inline'` on top
+      //   • Worker spawn from any plugin script → relax `worker-src`
+      //     to `'self' blob:`
+      if (plan.hasExternalScript || plan.hasInlineScript) {
+        setCspDirective(
+          csp,
+          'script-src',
+          plan.hasInlineScript ? ["'self'", "'unsafe-inline'"] : ["'self'"],
+        )
+        setCspDirective(csp, 'worker-src', ["'self'", 'blob:'])
+      }
+
+      // Style: relax to `'unsafe-inline'` only when an inline style is present.
+      if (plan.hasInlineStyle) {
+        setCspDirective(csp, 'style-src', ["'self'", "'unsafe-inline'"])
+      }
+
+      // Connect: union per-plugin `networkAllowedHosts`, plus the standard
+      // `https:` for plugin frontend code that lazily-loads images.
+      if (plan.networkAllowedHosts.length > 0) {
+        addCspSources(csp, 'connect-src', ["'self'", ...toCspHostSources(plan.networkAllowedHosts)])
+        addCspSources(csp, 'img-src', ["'self'", 'data:', 'https:'])
+      }
     }
-    return full.replace(content, nextCsp)
+
+    // Media: union the origins declared by elected media storage adapters.
+    // Runs regardless of whether any frontend plugin tag was injected — a site
+    // can use an external storage backend without any frontend.assets plugin
+    // being active. Extending `'self'` keeps the host-relative defaults
+    // (`/uploads/*`, `/_instatic/*`) working.
+    for (const { directive, origin } of plan.mediaCspOrigins) {
+      addCspSources(csp, directive, ["'self'", `https://${origin}`])
+    }
   })
 }
 
@@ -423,25 +411,6 @@ function appendMediaAdapterCspOrigins(
  */
 function toCspHostSources(hosts: string[]): string[] {
   return hosts.map((host) => `https://${host}`)
-}
-
-/**
- * Replace the named CSP directive's source list (if present) or append a
- * new directive at the end. Idempotent on identical inputs.
- */
-function appendOrSetCspDirective(policy: string, directive: string, sources: string[]): string {
-  const sourceSet = new Set(sources)
-  const sourcesValue = [...sourceSet].join(' ')
-  const pattern = new RegExp(`${directive}\\s+[^;]*;`, 'i')
-  if (pattern.test(policy)) {
-    return policy.replace(pattern, (existing) => {
-      const existingValue = existing.replace(new RegExp(`^${directive}\\s+`, 'i'), '').replace(/;\s*$/, '')
-      for (const part of existingValue.split(/\s+/).filter(Boolean)) sourceSet.add(part)
-      return `${directive} ${[...sourceSet].join(' ')};`
-    })
-  }
-  const trimmed = policy.trim().replace(/;\s*$/, '')
-  return `${trimmed}; ${directive} ${sourcesValue};`
 }
 
 /**

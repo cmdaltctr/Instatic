@@ -29,7 +29,7 @@ import {
 } from '../../publish/publicRenderer'
 import { applyPublishedHtmlPipeline } from '../../publish/publishedHtmlPipeline'
 import { removeArtefactInPlace, updateArtefactInPlace } from '../../publish/staticArtefact'
-import { bumpPublishVersion, getPublishVersion, withPublishLock } from '../../publish/renderCache'
+import { bumpPublishVersion, getPublishVersion, withPublishLock } from '../../publish/publishState'
 
 // ---------------------------------------------------------------------------
 // Internal row shapes

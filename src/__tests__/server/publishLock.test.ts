@@ -3,8 +3,8 @@ import {
   getPublishVersion,
   bumpPublishVersion,
   withPublishLock,
-  resetForTests,
-} from '../../../server/publish/renderCache'
+  resetPublishStateForTests,
+} from '../../../server/publish/publishState'
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -16,7 +16,7 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * each publish under withPublishLock serializes the read/bake/bump window.
  */
 describe('publish version allocation', () => {
-  beforeEach(() => resetForTests())
+  beforeEach(() => resetPublishStateForTests())
 
   // Simulate a publish: read the version, bake (yield), then bump. Returns the
   // delta between the bumped value and the value read at the start.

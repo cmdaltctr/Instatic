@@ -15,11 +15,8 @@ import { beforeEach, describe, expect, it } from 'bun:test'
 import type { DbClient, DbResult } from '../../../server/db'
 import type { PublishedPageSnapshot } from '../../../server/repositories/publish'
 import { renderPublicResolution } from '../../../server/publish/publicRouter'
-import {
-  bumpPublishVersion,
-  getStats,
-  resetForTests,
-} from '../../../server/publish/renderCache'
+import { getStats, resetForTests } from '../../../server/publish/renderCache'
+import { bumpPublishVersion } from '../../../server/publish/publishState'
 
 // ---------------------------------------------------------------------------
 // Minimal snapshot fixture

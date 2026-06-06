@@ -39,7 +39,8 @@ import { renderNode, type RenderConfig, type RenderAccumulators } from '@core/pu
 import { buildPageFrame, buildRouteFrame, buildSiteFrame } from '@core/templates/contextFrames'
 import { getLatestPublishedSiteSnapshot } from '../../repositories/publish'
 import { prefetchLoopData } from '../../publish/loopPrefetch'
-import { getOrRender, getPublishVersion } from '../../publish/renderCache'
+import { getOrRender } from '../../publish/renderCache'
+import { createVersionedSingleFlight, getPublishVersion } from '../../publish/publishState'
 import { HOLE_RUNTIME_JS } from '../../publish/holeRuntime'
 
 const HOLE_RUNTIME_PATH = '/_instatic/hole-runtime.js'
@@ -73,53 +74,32 @@ export interface HoleHandlerContext {
 // pages for the node — was the per-fragment cost flagged in the architecture
 // review. Instead we memoise the snapshot for the current publish version and
 // build a `nodeId → page` index once, so request-time lookup is O(1) and warm
-// requests do zero DB I/O. Lazy invalidation: a version change (set by
-// `bumpPublishVersion`) misses the cache and reloads. No explicit eviction
-// hook needed — `getPublishVersion()` is the single source of truth.
+// requests do zero DB I/O. The version-keyed single-flight primitive from
+// `publishState` owns the memo + the concurrent-load dedup + the test reset, so
+// this endpoint carries no bespoke module-level cache state of its own — a
+// version change simply misses and reloads against the fresh snapshot.
 // ---------------------------------------------------------------------------
 
-interface SnapshotCacheEntry {
-  version: number
+interface HoleSnapshot {
   site: SiteDocument
   nodeIndex: Map<string, Page>
 }
 
-let snapshotCache: SnapshotCacheEntry | null = null
-let snapshotInFlight: Promise<SnapshotCacheEntry | null> | null = null
+const snapshotCache = createVersionedSingleFlight<HoleSnapshot>()
 
-async function loadSnapshotForVersion(
-  db: DbClient,
-  version: number,
-): Promise<SnapshotCacheEntry | null> {
-  if (snapshotCache && snapshotCache.version === version) return snapshotCache
-  // Single-flight: concurrent cold requests at the same version share one load.
-  if (snapshotInFlight) return snapshotInFlight
-
-  snapshotInFlight = (async () => {
-    try {
-      const snapshot = await getLatestPublishedSiteSnapshot(db)
-      if (!snapshot) return null
-      const nodeIndex = new Map<string, Page>()
-      for (const page of snapshot.site.pages) {
-        for (const nodeId of Object.keys(page.nodes)) {
-          // First page wins on the (extremely unlikely) duplicate node id.
-          if (!nodeIndex.has(nodeId)) nodeIndex.set(nodeId, page)
-        }
+function loadSnapshotForVersion(db: DbClient, version: number): Promise<HoleSnapshot | null> {
+  return snapshotCache.get(version, async () => {
+    const snapshot = await getLatestPublishedSiteSnapshot(db)
+    if (!snapshot) return null
+    const nodeIndex = new Map<string, Page>()
+    for (const page of snapshot.site.pages) {
+      for (const nodeId of Object.keys(page.nodes)) {
+        // First page wins on the (extremely unlikely) duplicate node id.
+        if (!nodeIndex.has(nodeId)) nodeIndex.set(nodeId, page)
       }
-      const entry: SnapshotCacheEntry = { version, site: snapshot.site, nodeIndex }
-      snapshotCache = entry
-      return entry
-    } finally {
-      snapshotInFlight = null
     }
-  })()
-  return snapshotInFlight
-}
-
-/** Reset the snapshot cache. Tests only. */
-export function resetHoleSnapshotCacheForTests(): void {
-  snapshotCache = null
-  snapshotInFlight = null
+    return { site: snapshot.site, nodeIndex }
+  })
 }
 
 // ---------------------------------------------------------------------------

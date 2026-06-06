@@ -19,6 +19,18 @@ export type {
 
 export { escapeProps } from './escapeProps'
 
+export {
+  addCspSources,
+  createBaseCspPlan,
+  cspMetaTag,
+  emptyCspPlan,
+  parseCspContent,
+  rewriteCspMeta,
+  serializeCsp,
+  setCspDirective,
+} from './cspPlan'
+export type { CspPlan } from './cspPlan'
+
 export { escapeHtml, isSafeUrl, safeUrl, sanitiseCssValue } from './utils'
 
 export {

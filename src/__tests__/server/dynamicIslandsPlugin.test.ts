@@ -21,8 +21,9 @@
 import { beforeEach, afterEach, describe, expect, it } from 'bun:test'
 import { Value } from '@sinclair/typebox/value'
 import type { DbClient, DbResult } from '../../../server/db'
-import { handleHoleRequest, resetHoleSnapshotCacheForTests } from '../../../server/handlers/cms/hole'
-import { resetForTests, getPublishVersion } from '../../../server/publish/renderCache'
+import { handleHoleRequest } from '../../../server/handlers/cms/hole'
+import { resetForTests } from '../../../server/publish/renderCache'
+import { getPublishVersion } from '../../../server/publish/publishState'
 import { LoopSourceDescriptorSchema } from '../../../server/plugins/protocol/schemas/loops'
 import { registry } from '../../core/module-engine/registry'
 import { loopSourceRegistry } from '../../core/loops/registry'
@@ -176,8 +177,9 @@ function makeFakeDb(
 }
 
 beforeEach(() => {
+  // `resetForTests` also clears the hole endpoint's version-keyed snapshot memo
+  // via `resetPublishStateForTests` — no bespoke hole reset hook needed.
   resetForTests()
-  resetHoleSnapshotCacheForTests()
   liveCalls = 0
   visitorCalls = 0
   registry.registerOrReplace(

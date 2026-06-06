@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import type { DbClient, DbResult } from '../../../server/db'
 import type { PublishedPageSnapshot } from '../../../server/repositories/publish'
-import { renderPublishedSnapshot } from '../../../server/publish/publicRenderer'
+import {
+  renderPublishedSnapshot,
+  renderPublishedDataRowTemplate,
+} from '../../../server/publish/publicRenderer'
+import type { PublishedDataRow } from '@core/data/schemas'
 import { handleServerRequest } from '../../../server/router'
 
 function snapshot(text: string): PublishedPageSnapshot {
@@ -99,6 +103,49 @@ describe('public rendering', () => {
     expect(html).toContain('<!DOCTYPE html>')
     expect(html).toContain('Visible to public')
     expect(html).toContain('<title>Public Site</title>')
+  })
+
+  // Guards the page-wrapper's identity reporting after the shared
+  // `renderMergedTemplate` extraction: pageId/slug come from the page row,
+  // not the merged tree.
+  it('reports pageId and slug from the page row for the snapshot path', async () => {
+    const snap = snapshot('Identity')
+    const out = await renderPublishedSnapshot(snap, { db: makeFakeDb(snap) })
+    expect(out.pageId).toBe('page_home')
+    expect(out.slug).toBe('index')
+    expect(out.siteId).toBe('project_1')
+  })
+
+  // Guards the data-row-wrapper's unique early-return branch: no entry template
+  // in the chain → null (404 upstream). This branch is the only behaviour that
+  // differs from the shared render tail.
+  it('returns null from the data-row-template path when no entry template exists', async () => {
+    const snap = snapshot('No template')
+    const row: PublishedDataRow = {
+      id: 'ver_1',
+      rowId: 'row_1',
+      tableId: 'tbl_posts',
+      tableSlug: 'posts',
+      tableKind: 'posts',
+      tableRouteBase: '/blog',
+      versionNumber: 1,
+      cells: { title: 'Hello' },
+      slug: 'hello',
+      featuredMediaId: null,
+      featuredMediaPath: null,
+      authorUserId: null,
+      authorName: null,
+      authorRoleSlug: null,
+      authorRoleName: null,
+      publishedByUserId: null,
+      publishedByName: null,
+      publishedByRoleSlug: null,
+      publishedByRoleName: null,
+      publishedAt: '2024-01-01T00:00:00.000Z',
+      createdAt: '2024-01-01T00:00:00.000Z',
+    }
+    const result = await renderPublishedDataRowTemplate(snap, row, { db: makeFakeDb(snap) })
+    expect(result).toBeNull()
   })
 
   it('injects stored runtime asset manifests when rendering a published snapshot', async () => {

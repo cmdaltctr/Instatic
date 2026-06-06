@@ -25,7 +25,13 @@
  * mid-render (bumping the version) means the rendered HTML reflects a
  * superseded snapshot, so it is discarded rather than cached as current —
  * the next request re-renders against the fresh snapshot.
+ *
+ * The publish version, publish lock, and the version-keyed single-flight
+ * primitive live in `publishState.ts` — this module is purely the LRU and
+ * reads the version from there for its staleness check.
  */
+
+import { getPublishVersion, resetPublishStateForTests } from './publishState'
 
 export interface RenderCacheKey {
   urlPath: string
@@ -52,7 +58,6 @@ let maxEntries: number = (() => {
   return Number.isFinite(n) && n > 0 ? n : 1000
 })()
 
-let publishVersion = 0
 let hits = 0
 let misses = 0
 
@@ -70,51 +75,6 @@ function cacheKey(key: RenderCacheKey): string {
 // Public API
 // ---------------------------------------------------------------------------
 
-/**
- * Increment the publish version. All existing cache entries become stale and
- * are evicted lazily on the next read attempt for their key.
- *
- * Call after every publish commit (full publish, per-row publish, unpublish).
- */
-export function bumpPublishVersion(): number {
-  return ++publishVersion
-}
-
-// ---------------------------------------------------------------------------
-// Publish serialization
-// ---------------------------------------------------------------------------
-
-let publishChain: Promise<unknown> = Promise.resolve()
-
-/**
- * Run a publish operation under a single in-process lock so no two publishes'
- * read-version → bake → bump-version windows overlap (ISS-038). Without this,
- * two concurrent publishes both read version N, stamp every `<instatic-hole>`
- * shell with N+1, then each bump independently to N+2 — leaving baked shells
- * permanently mis-stamped (the hole endpoint serves them as stale). The lock
- * also serializes the two-slot artefact swap. JS is single-threaded, so a
- * promise-chain serializer is sufficient.
- */
-export function withPublishLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = (): Promise<T> => fn()
-  const result = publishChain.then(run, run)
-  publishChain = result.then(
-    () => undefined,
-    () => undefined,
-  )
-  return result
-}
-
-/**
- * Return the current publish version. Used by Layer C hole placeholders
- * (`data-instatic-version`) and the hole endpoint to detect stale requests.
- * A `?v=` value on the hole endpoint that doesn't match this returns a
- * lightweight stale fragment rather than rendering the full subtree.
- */
-export function getPublishVersion(): number {
-  return publishVersion
-}
-
 /** Return current cache statistics. Useful for observability and tests. */
 export function getStats(): { hits: number; misses: number; size: number } {
   return { hits, misses, size: map.size }
@@ -123,15 +83,17 @@ export function getStats(): { hits: number; misses: number; size: number } {
 /**
  * Reset all cache state. For use in tests only.
  *
- * Clears the LRU map, the in-flight map, hit/miss counters, and resets
- * publishVersion to 0.
+ * Clears the LRU map, the in-flight map, and hit/miss counters, then delegates
+ * to `resetPublishStateForTests()` so the publish version, the publish lock,
+ * and every version-keyed single-flight memo reset together — one call gives a
+ * test a fully clean slate.
  */
 export function resetForTests(): void {
   map.clear()
   inFlight.clear()
   hits = 0
   misses = 0
-  publishVersion = 0
+  resetPublishStateForTests()
 }
 
 /**
@@ -162,10 +124,11 @@ export async function getOrRender(
   factory: () => Promise<CachedResponse | null>,
 ): Promise<CachedResponse | null> {
   const k = cacheKey(key)
+  const currentVersion = getPublishVersion()
 
   // LRU lookup — valid only when publishVersion matches.
   const existing = map.get(k)
-  if (existing !== undefined && existing.publishVersion === publishVersion) {
+  if (existing !== undefined && existing.publishVersion === currentVersion) {
     // LRU promotion: delete + re-set moves the entry to most-recent position.
     map.delete(k)
     map.set(k, existing)
@@ -187,7 +150,7 @@ export async function getOrRender(
   // snapshot that was current now; if a publish bumps the version while the
   // render is in flight, the result is stale and must NOT be cached as the new
   // version (that would serve old HTML as current until the next publish).
-  const versionAtStart = publishVersion
+  const versionAtStart = currentVersion
 
   // Start a new factory and register it as in-flight.
   const promise: Promise<CachedResponse | null> = (async () => {
@@ -196,7 +159,7 @@ export async function getOrRender(
       // Only cache when a publish did NOT happen mid-render. A version change
       // means `result` reflects a now-superseded snapshot — drop it and let the
       // next request re-render against the fresh snapshot.
-      if (result !== null && publishVersion === versionAtStart) {
+      if (result !== null && getPublishVersion() === versionAtStart) {
         // Remove any stale entry for this key so the new one lands at the
         // most-recent (tail) position in the Map's insertion order.
         map.delete(k)

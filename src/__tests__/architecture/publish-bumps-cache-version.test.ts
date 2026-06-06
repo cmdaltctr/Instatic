@@ -1,7 +1,7 @@
 /**
  * Architecture gate: every publish/unpublish entry point in
  * `server/repositories/` calls `bumpPublishVersion()` and imports it from
- * the render cache module.
+ * the publish-state module.
  *
  * Covered files:
  *   - server/repositories/publish.ts            (publishDraftSite)
@@ -22,13 +22,13 @@ function read(relative: string): string {
 }
 
 /**
- * The relative import path from `file` to the renderCache module.
- * Asserted so that moving the cache module would break this gate.
+ * The relative import path from `file` to the publish-state module.
+ * Asserted so that moving the publish-state module would break this gate.
  */
 const EXPECTED_IMPORT_PATHS: Record<string, string> = {
-  'server/repositories/publish.ts': "'../publish/renderCache'",
-  'server/repositories/data/publish.ts': "'../../publish/renderCache'",
-  'server/repositories/data/rows/mutations.ts': "'../../../publish/renderCache'",
+  'server/repositories/publish.ts': "'../publish/publishState'",
+  'server/repositories/data/publish.ts': "'../../publish/publishState'",
+  'server/repositories/data/rows/mutations.ts': "'../../../publish/publishState'",
 }
 
 const FILES_UNDER_TEST = Object.keys(EXPECTED_IMPORT_PATHS)
@@ -40,10 +40,10 @@ describe('publish-bumps-cache-version', () => {
       expect(src).toContain('bumpPublishVersion()')
     })
 
-    it(`${file} imports bumpPublishVersion from the render cache module`, () => {
+    it(`${file} imports bumpPublishVersion from the publish-state module`, () => {
       const src = read(file)
       const expectedPath = EXPECTED_IMPORT_PATHS[file]
-      // The import must name renderCache as the source and include bumpPublishVersion.
+      // The import must name publishState as the source and include bumpPublishVersion.
       const hasImport =
         src.includes(`from ${expectedPath}`) &&
         src.includes('bumpPublishVersion')

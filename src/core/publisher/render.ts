@@ -37,6 +37,7 @@ import { PUBLISHER_RESET_CSS } from './reset'
 import { buildSiteFrameworkCss } from './frameworkCss'
 import type { SiteCssBundle } from './siteCssBundle'
 import { escapeHtml, isSafeUrl } from './utils'
+import { createBaseCspPlan, cspMetaTag } from './cspPlan'
 import type { PublishedPageRuntimeAssets } from '@core/site-runtime/schemas'
 import { hasPublishedRuntimeScripts, scriptTagsForRuntimeAssets } from '@core/site-runtime'
 import { renderNode } from './renderNode'
@@ -137,10 +138,10 @@ export interface PublishPageOptions {
    */
   runtimePackageImportmap?: PublishedRuntimePackageImportmap
   /**
-   * Monotonic publish version from `server/publish/renderCache.ts`.
+   * Monotonic publish version from `server/publish/publishState.ts`.
    * Stamped into every `<instatic-hole data-instatic-version>` attribute so the hole
    * runtime can detect stale placeholders after a re-publish. Pass
-   * `getPublishVersion()` from `renderCache.ts` at the call site — this
+   * `getPublishVersion()` from `publishState.ts` at the call site — this
    * keeps `src/core/publisher/` free of imports from `server/`.
    * Defaults to `0` when omitted (holes will always get a stale response
    * on first fetch, which is safe — the next page load sees the real version).
@@ -390,25 +391,20 @@ function buildRuntimeAssetsBlock(
 /**
  * Build the Content-Security-Policy `<meta>` tag (Constraint #227).
  *
+ * The policy is modelled as a `CspPlan` (see `./cspPlan`) and serialized with
+ * deterministic ordering, so the same inputs always emit a byte-identical tag.
  * `script-src` defaults to `'none'`; if any script tag is on the page it
- * relaxes to `'self'` (runtime cache URLs live under the same origin).
- * The inline importmap additionally needs its base64 SHA-256 listed so
- * strict CSP doesn't reject it.
+ * relaxes to `'self'` (runtime cache URLs live under the same origin). The
+ * inline importmap additionally needs its base64 SHA-256 listed so strict CSP
+ * doesn't reject it. The server-side injection pipeline merges plugin / media /
+ * form-runtime sources into this same plan downstream.
  */
 function buildContentSecurityPolicy(
   anyScriptTag: boolean,
   importmap: PublishedRuntimePackageImportmap | undefined,
 ): string {
-  const scriptSourceParts: string[] = [anyScriptTag ? "'self'" : "'none'"]
-  if (importmap) scriptSourceParts.push(`'sha256-${importmap.sha256}'`)
-  const scriptSource = scriptSourceParts.join(' ')
-  const workerSource = anyScriptTag ? "'self' blob:" : "'none'"
-  return (
-    `\n  <meta http-equiv="Content-Security-Policy"` +
-    ` content="default-src 'self'; script-src ${scriptSource};` +
-    ` style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;` +
-    ` frame-src 'none'; worker-src ${workerSource};">`
-  )
+  const plan = createBaseCspPlan({ anyScriptTag, importmapSha: importmap?.sha256 })
+  return `\n  ${cspMetaTag(plan)}`
 }
 
 /**

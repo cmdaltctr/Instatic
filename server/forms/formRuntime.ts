@@ -1,8 +1,8 @@
 import { issuePublicFormPageToken } from './challenge'
+import { addCspSources, rewriteCspMeta } from '@core/publisher'
 
 export const FORM_RUNTIME_PATH = '/_instatic/form-runtime.js'
 
-const CSP_META_PATTERN = /<meta http-equiv="Content-Security-Policy"\s+content="([^"]*)"\s*\/?>/i
 const CMS_FORM_PATTERN = /<form\b(?=[^>]*\bdata-instatic-form-mode=(["'])cms\1)(?=[^>]*\bdata-instatic-form-id=(["'])[^"']+\2)[^>]*>/i
 const CMS_FORM_TAG_PATTERN = /<form\b(?=[^>]*\bdata-instatic-form-mode=(["'])cms\1)(?=[^>]*\bdata-instatic-form-id=(["'])[^"']+\2)[^>]*>/gi
 
@@ -253,9 +253,11 @@ export function serveFormRuntimeAsset(): Response {
 }
 
 function relaxScriptCsp(html: string): string {
-  return html.replace(CSP_META_PATTERN, (full, content: string) => {
-    return full.replace(content, appendOrSetCspDirective(content, 'script-src', ["'self'"]))
-  })
+  // The native-form runtime is an external `<script src>` from this origin, so
+  // it only needs `script-src 'self'`. Merge it into the page policy as data so
+  // the result stays deterministically ordered alongside any plugin / media
+  // relaxations applied earlier in the pipeline.
+  return rewriteCspMeta(html, (csp) => addCspSources(csp, 'script-src', ["'self'"]))
 }
 
 function stampFormPageTokens(html: string, pageId: string): string {
@@ -272,22 +274,6 @@ function attrValue(tag: string, name: string): string {
   const pattern = new RegExp(`\\b${name}=(["'])(.*?)\\1`, 'i')
   const match = tag.match(pattern)
   return match?.[2] ?? ''
-}
-
-function appendOrSetCspDirective(policy: string, directive: string, sources: string[]): string {
-  const pattern = new RegExp(`${directive}\\s+[^;]*;`, 'i')
-  if (!pattern.test(policy)) {
-    const trimmed = policy.trim().replace(/;\s*$/, '')
-    return `${trimmed}; ${directive} ${sources.join(' ')};`
-  }
-  return policy.replace(pattern, (existing) => {
-    const existingValue = existing
-      .replace(new RegExp(`^${directive}\\s+`, 'i'), '')
-      .replace(/;\s*$/, '')
-    const sourceSet = new Set(existingValue.split(/\s+/).filter((part) => part && part !== "'none'"))
-    for (const source of sources) sourceSet.add(source)
-    return `${directive} ${[...sourceSet].join(' ')};`
-  })
 }
 
 function escapeAttr(value: string): string {

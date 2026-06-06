@@ -45,7 +45,8 @@ src/core/publisher/
 server/publish/
 ├── publicRouter.ts                 — gateway: Layer A disk fast-path → Layer B LRU → live resolver
 ├── staticArtefact.ts               — two-slot symlink swap + read/write/purge artefacts (Layer A); all URL-derived paths are validated by `resolveArtefactPath` (URL-decode + `..`-rejection + containment check after `path.join`)
-├── renderCache.ts                  — in-memory LRU + publishVersion bump + single-flight (Layer B)
+├── renderCache.ts                  — in-memory LRU (Layer B); reads publishVersion from publishState
+├── publishState.ts                 — publishVersion (bump/get) + withPublishLock + createVersionedSingleFlight
 ├── holeRuntime.ts                  — Layer C client runtime; exports runInstaticHoleRuntime (TS source) + HOLE_RUNTIME_JS (IIFE-serialized, ~668 B)
 ├── publicRenderer.ts               — renderPublishedSnapshot, renderPublishedDataRowTemplate
 ├── publishedHtmlPipeline.ts        — post-process (sanitize + plugin filters + injections)
@@ -295,14 +296,13 @@ Plugins inject at four anchors. The order matters — see [docs/features/plugin-
 
 ### CSP
 
-The CSP `<meta>` tag is built dynamically based on what the page contains:
+The CSP is modelled as **data**, not a string assembled with regex. `src/core/publisher/cspPlan.ts` owns one `CspPlan` (`Map<directive, Set<source>>`) and the deterministic `serializeCsp` (directives sorted by name, sources sorted within each directive). Every stage contributes to the same plan:
 
-- Always: `default-src 'self'`, restricted script sources, restricted style sources
-- Add `worker-src 'self' blob:` if any module uses workers
-- Add `connect-src` entries from plugin `network.outbound` allowlists
-- Add font / image hosts derived from referenced URLs
+- `createBaseCspPlan` (in `render.ts`) emits the base policy: `default-src 'self'`, restricted `script-src` (`'none'` → `'self'` + importmap `sha256` once any script tag is present), `style-src 'self' 'unsafe-inline'`, `img-src 'self' data: https:`, `frame-src 'none'`, and `worker-src` (`'none'` → `'self' blob:`).
+- The server injection pipeline (`server/publish/frontendInjections.ts`) merges plugin `frontend.assets[]` relaxations + elected media-adapter origins into the plan in **one** pass via `rewriteCspMeta` — no second regex pass, no per-directive `RegExp`.
+- The native-form runtime (`server/forms/formRuntime.ts`) merges `script-src 'self'` through the same `rewriteCspMeta` helper.
 
-Editing the CSP manually is **not** safe — it's a derived value. Edit the source list and re-emit.
+Because `serializeCsp` sorts, the same plugins + adapters always emit a **byte-identical** policy across runs (gated by `cspPlan.test.ts`) — important for content-hashing and stable tests. Editing the emitted CSP string manually is **not** safe — it's a derived value. Mutate the plan (`setCspDirective` to replace, `addCspSources` to union) and re-serialize.
 
 ---
 
@@ -314,9 +314,10 @@ Editing the CSP manually is **not** safe — it's a derived value. Edit the sour
 |-------------------------------------------------|---------------------------------------------------------------------|
 | `server/publish/publicRouter.ts`                | Gateway: Layer A disk fast-path → Layer B LRU → live `resolvePublicRoute` + `renderPublicResolution`. |
 | `server/publish/staticArtefact.ts`              | Two-slot symlink swap (`swapSlot`), per-file atomic writes (`writeArtefact`, `updateArtefactInPlace`), and reads (`readArtefact`). Layer A. |
-| `server/publish/renderCache.ts`                 | In-memory LRU keyed by `(urlPath, canonicalQuery)`, entries versioned. `getOrRender` (single-flight) + `bumpPublishVersion`. Version captured at render start — a publish landing mid-render discards the result rather than caching stale HTML. Layer B. |
+| `server/publish/renderCache.ts`                 | In-memory LRU keyed by `(urlPath, canonicalQuery)`, entries versioned. `getOrRender` (single-flight). Reads the version from `publishState`; version captured at render start — a publish landing mid-render discards the result rather than caching stale HTML. Layer B. |
+| `server/publish/publishState.ts`                | Publish-time process state: `publishVersion` (`bumpPublishVersion`/`getPublishVersion`), `withPublishLock` (ISS-038 publish serializer), and `createVersionedSingleFlight` — the generalized version-keyed single-flight memo the hole endpoint reuses. Repositories import the version + lock from here (not from the cache). |
 | `server/publish/holeRuntime.ts`                 | Exports `runInstaticHoleRuntime` (the TypeScript source of the Layer C runtime) and `HOLE_RUNTIME_JS` (IIFE-serialized string, ~668 B, served to browsers). Tests call `runInstaticHoleRuntime()` directly to avoid dynamic eval. |
-| `server/publish/publicRenderer.ts`              | `renderPublishedSnapshot`, `renderPublishedDataRowTemplate`. Calls `publishPage`. |
+| `server/publish/publicRenderer.ts`              | `renderPublishedSnapshot`, `renderPublishedDataRowTemplate` — thin wrappers (resolve + compose the template chain, seed the context) over one shared `renderMergedTemplate` (CSS bundle + loop/media prefetch + `publishPage` + publish-version stamping). |
 | `server/publish/publishedHtmlPipeline.ts`       | Post-process: DOMPurify the final HTML, run plugin `publish.html` filter, splice in declarative tags from plugin manifests, inject runtime assets. Runs at publish time only — never per-request. |
 | `server/publish/siteCssBundle.ts`               | Hash the three CSS strings, write `uploads/css/...` files.          |
 | `server/publish/republish.ts`                   | Bulk re-publish on settings change (touches every page).            |

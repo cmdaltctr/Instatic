@@ -16,12 +16,12 @@
 import { beforeEach, describe, expect, it } from 'bun:test'
 import {
   __setMaxEntriesForTests,
-  bumpPublishVersion,
   getOrRender,
   getStats,
   resetForTests,
 } from '../../../server/publish/renderCache'
 import type { CachedResponse, RenderCacheKey } from '../../../server/publish/renderCache'
+import { bumpPublishVersion } from '../../../server/publish/publishState'
 
 function makeKey(urlPath: string, queryString = ''): RenderCacheKey {
   return { urlPath, queryString }

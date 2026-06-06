@@ -18,14 +18,10 @@ import type { DbClient, DbResult } from '../../../server/db'
 import {
   handleHoleRequest,
   isHoleRuntimeAssetPath,
-  resetHoleSnapshotCacheForTests,
   serveHoleRuntimeAsset,
 } from '../../../server/handlers/cms/hole'
-import {
-  bumpPublishVersion,
-  getPublishVersion,
-  resetForTests,
-} from '../../../server/publish/renderCache'
+import { resetForTests } from '../../../server/publish/renderCache'
+import { bumpPublishVersion, getPublishVersion } from '../../../server/publish/publishState'
 import { HOLE_RUNTIME_JS } from '../../../server/publish/holeRuntime'
 import { makeModule } from '../publisher/helpers'
 import { registry } from '../../core/module-engine/registry'
@@ -111,14 +107,45 @@ function makeFakeDb(snapshot: ReturnType<typeof makeSnapshot> | null): DbClient 
   return handle as DbClient
 }
 
+/**
+ * Fake DB that counts snapshot loads and yields a microtask before resolving,
+ * so concurrent hole requests overlap and exercise the version-keyed
+ * single-flight in `publishState`. `count()` reports how many times the
+ * published-snapshot query actually hit the DB.
+ */
+function makeCountingDb(snapshot: ReturnType<typeof makeSnapshot>): {
+  db: DbClient
+  count: () => number
+} {
+  let loads = 0
+  const handle = async <Row extends Record<string, unknown> = Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ..._values: unknown[]
+  ): Promise<DbResult<Row>> => {
+    const sql = strings.reduce<string>((acc, str, i) => (i === 0 ? str : `${acc}$${i}${str}`), '')
+    const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase()
+    if (normalized.includes('select data_row_versions.snapshot_json')) {
+      loads++
+      await Promise.resolve() // let other in-flight callers join before resolving
+      return { rows: [{ snapshot_json: snapshot } as Row], rowCount: 1 }
+    }
+    return { rows: [], rowCount: 0 }
+  }
+  handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
+    cb(handle as unknown as DbClient)
+  return { db: handle as DbClient, count: () => loads }
+}
+
 // ---------------------------------------------------------------------------
 // Setup — register minimal test modules in the singleton registry
 // (the hole handler uses the singleton registry to look up module renderers)
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  // `resetForTests` clears the LRU and delegates to `resetPublishStateForTests`,
+  // which resets the publish version AND every version-keyed single-flight memo
+  // — including the hole endpoint's snapshot cache. No bespoke hole reset hook.
   resetForTests()
-  resetHoleSnapshotCacheForTests()
 
   // Register test-specific module IDs using registerOrReplace so these tests
   // never conflict with base module registrations in other test files.
@@ -317,5 +344,44 @@ describe('handleHoleRequest — successful render', () => {
 
     const body = await res.text()
     expect(body).toContain('instatic-hole-stale')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// handleHoleRequest — version-keyed single-flight (no bespoke reset hook)
+// ---------------------------------------------------------------------------
+
+describe('handleHoleRequest — snapshot single-flight', () => {
+  it('loads the published snapshot once for concurrent requests at the same version', async () => {
+    const { db, count } = makeCountingDb(makeSnapshot())
+    const currentVersion = getPublishVersion()
+    const url = new URL(`http://localhost/_instatic/hole/text-node?v=${currentVersion}`)
+
+    // Fire several concurrent requests for the same (nodeId, version). The
+    // version-keyed single-flight memo must collapse them into one DB load.
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => handleHoleRequest(new Request(url), url, { db })),
+    )
+
+    for (const res of results) {
+      expect(res.status).toBe(200)
+      expect(await res.text()).toContain('Hello from hole')
+    }
+    expect(count()).toBe(1)
+  })
+
+  it('reloads after a version bump (memo is version-keyed)', async () => {
+    const { db, count } = makeCountingDb(makeSnapshot())
+
+    const v0 = getPublishVersion()
+    const url0 = new URL(`http://localhost/_instatic/hole/text-node?v=${v0}`)
+    await handleHoleRequest(new Request(url0), url0, { db })
+    expect(count()).toBe(1)
+
+    bumpPublishVersion()
+    const v1 = getPublishVersion()
+    const url1 = new URL(`http://localhost/_instatic/hole/text-node?v=${v1}`)
+    await handleHoleRequest(new Request(url1), url1, { db })
+    expect(count()).toBe(2)
   })
 })

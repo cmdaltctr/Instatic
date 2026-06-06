@@ -36,7 +36,7 @@ import { isTemplatePage } from '@core/templates'
 import { applyPublishedHtmlPipeline } from '../publish/publishedHtmlPipeline'
 import { prepareInactiveSlot, writeArtefact, writeStaticAsset, swapSlot } from '../publish/staticArtefact'
 import { buildSiteCssBundle } from '../publish/siteCssBundle'
-import { bumpPublishVersion, getPublishVersion, withPublishLock } from '../publish/renderCache'
+import { bumpPublishVersion, getPublishVersion, withPublishLock } from '../publish/publishState'
 
 // ---------------------------------------------------------------------------
 // Types

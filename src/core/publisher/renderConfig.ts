@@ -103,7 +103,7 @@ export interface RenderConfig {
    * Monotonic publish version stamped into every `<instatic-hole data-instatic-version>`
    * attribute. The hole runtime sends this value back as `?v=` on each
    * fetch; the hole endpoint returns a stale fragment when the version
-   * no longer matches the current `publishVersion` in `renderCache.ts`.
+   * no longer matches the current `publishVersion` in `publishState.ts`.
    * Defaults to `0` when not provided (holes will immediately receive
    * a stale response on the first request after a publish, which is
    * safe — the next page load picks up the new version).
