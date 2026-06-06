@@ -12,7 +12,7 @@
 
 .columns {
     display: grid;
-    grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr);
+    grid-template-columns: minmax(360px, 1.1fr) minmax(280px, 0.9fr);
     height: min(68vh, 640px);
     min-height: 480px;
     background: var(--editor-surface);
@@ -27,7 +27,7 @@
     background: var(--editor-surface);
 }
 
-.previewColumn {
+.editorColumn {
     border-right: 1px solid var(--editor-border);
 }
 
@@ -127,7 +127,7 @@
         height: min(74vh, 680px);
     }
 
-    .previewColumn {
+    .editorColumn {
         min-height: 190px;
         border-right: 0;
         border-bottom: 1px solid var(--editor-border);

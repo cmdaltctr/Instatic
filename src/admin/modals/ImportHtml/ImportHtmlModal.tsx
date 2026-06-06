@@ -307,28 +307,14 @@ export function ImportHtmlModal() {
       }
     >
       <div className={styles.columns}>
-        <section className={styles.previewColumn} aria-label="Tree preview">
+        <section className={styles.editorColumn} aria-label="HTML source">
           <div className={styles.columnHeader}>
-            <h3 className={styles.columnTitle}>Tree preview</h3>
+            <h3 className={styles.columnTitle}>HTML</h3>
             {errorMsg && (
               <div className={styles.errorAlert} role="alert">
                 {errorMsg}
               </div>
             )}
-          </div>
-          <div className={styles.previewScroll}>
-            <FragmentPreview
-              result={result}
-              showIcon={showIcon}
-              showTag={showTag}
-              showClasses={showClasses}
-            />
-          </div>
-        </section>
-
-        <section className={styles.editorColumn} aria-label="HTML source">
-          <div className={styles.columnHeader}>
-            <h3 className={styles.columnTitle}>HTML</h3>
           </div>
           <div
             className={styles.codeEditor}
@@ -346,6 +332,20 @@ export function ImportHtmlModal() {
                 }}
               />
             </Suspense>
+          </div>
+        </section>
+
+        <section className={styles.previewColumn} aria-label="Tree preview">
+          <div className={styles.columnHeader}>
+            <h3 className={styles.columnTitle}>Tree preview</h3>
+          </div>
+          <div className={styles.previewScroll}>
+            <FragmentPreview
+              result={result}
+              showIcon={showIcon}
+              showTag={showTag}
+              showClasses={showClasses}
+            />
           </div>
         </section>
       </div>
