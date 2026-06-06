@@ -202,8 +202,8 @@ export async function handlePluginsRoutes(
   const user = await requireCapability(req, db, policy.capability)
   if (user instanceof Response) return user
   if (policy.stepUp) {
-    const stepUp = await requireStepUp(req, db)
-    if (stepUp instanceof Response) return stepUp
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
   }
 
   if (pathname === '/admin/api/cms/plugins') {

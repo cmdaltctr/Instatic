@@ -1,17 +1,31 @@
-import type { DbClient } from '../db/client'
-import { rowToUser, type AuthUser } from '../repositories/users'
-import type { UserRow } from '../types'
+import { placeholder, type DbClient } from '../db/client'
+import { rowToUser, USER_JOINED_COLUMNS, type AuthUser, type JoinedUserRow } from '../repositories/users'
 import { deriveDeviceLabel } from './deviceLabel'
 
 const SESSION_IDLE_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 30
 
-interface SessionUserRow extends UserRow {
-  role_slug: string
-  role_name: string
-  role_description: string
-  role_is_system: boolean | number
-  role_capabilities_json: unknown
-  avatar_public_path: string | null
+/**
+ * Debounce window for the per-request `last_seen_at` touch. Every authenticated
+ * request used to fire an unconditional `update sessions set last_seen_at` —
+ * a WAL-serialized write on SQLite, a hot-row lock on Postgres. The session
+ * idle timeout is 30 days, so letting `last_seen_at` drift up to 30s stale is
+ * functionally irrelevant; the in-memory tracker below collapses the write to
+ * at most one per session per window.
+ */
+const LAST_SEEN_TOUCH_DEBOUNCE_MS = 30_000
+
+/**
+ * Hard cap on the tracker map so a long-running process that rotates through
+ * many session hashes can't leak memory. When exceeded the map is cleared
+ * wholesale — the only cost is one redundant `last_seen_at` write per active
+ * session right after the reset.
+ */
+const LAST_SEEN_TRACKER_MAX_ENTRIES = 10_000
+
+/** idHash -> epoch ms of the last `last_seen_at` write we issued for it. */
+const lastSeenTouchedAt = new Map<string, number>()
+
+interface SessionUserRow extends JoinedUserRow {
   session_mfa_passed_at: Date | string | null
 }
 
@@ -75,47 +89,25 @@ async function findSessionUserRow(
 ): Promise<SessionUserRow | null> {
   const idleCutoff = sessionIdleCutoff(now)
   const currentTime = new Date(now)
-  const { rows } = await db<SessionUserRow>`
-    select users.id,
-           users.email,
-           users.email_normalized,
-           users.display_name,
-           users.password_hash,
-           users.status,
-           users.role_id,
-           users.last_login_at,
-           users.failed_login_count,
-           users.locked_until,
-           users.avatar_media_id,
-           users.password_updated_at,
-           users.mfa_enabled,
-           users.mfa_enabled_at,
-           users.mfa_totp_secret,
-           users.mfa_recovery_code_hashes_json,
-           users.step_up_auth_mode,
-           users.step_up_window_minutes,
-           users.created_at,
-           users.updated_at,
-           users.deleted_at,
-           sessions.mfa_passed_at as session_mfa_passed_at,
-           roles.slug as role_slug,
-           roles.name as role_name,
-           roles.description as role_description,
-           roles.is_system as role_is_system,
-           roles.capabilities_json as role_capabilities_json,
-           media_assets.public_path as avatar_public_path
-    from sessions
-    join users on users.id = sessions.user_id
-    join roles on roles.id = users.role_id
-    left join media_assets on media_assets.id = users.avatar_media_id
-    where sessions.id_hash = ${idHash}
-      and sessions.revoked_at is null
-      and sessions.expires_at > ${currentTime}
-      and sessions.last_seen_at > ${idleCutoff}
-      and users.status = ${'active'}
-      and users.deleted_at is null
-    limit 1
-  `
+  // Joins through `sessions`, so it can't reuse the `queryUsers` FROM clause —
+  // but it splices the same `USER_JOINED_COLUMNS` constant so the hydrated user
+  // column list still lives in exactly one place.
+  const { rows } = await db.unsafe<SessionUserRow>(
+    `select ${USER_JOINED_COLUMNS},
+            sessions.mfa_passed_at as session_mfa_passed_at
+     from sessions
+     join users on users.id = sessions.user_id
+     join roles on roles.id = users.role_id
+     left join media_assets on media_assets.id = users.avatar_media_id
+     where sessions.id_hash = ${placeholder(db.dialect, 1)}
+       and sessions.revoked_at is null
+       and sessions.expires_at > ${placeholder(db.dialect, 2)}
+       and sessions.last_seen_at > ${placeholder(db.dialect, 3)}
+       and users.status = ${placeholder(db.dialect, 4)}
+       and users.deleted_at is null
+     limit 1`,
+    [idHash, currentTime, idleCutoff, 'active'],
+  )
   return rows[0] ?? null
 }
 
@@ -129,12 +121,27 @@ export async function findUserBySessionHash(
   const user = rowToUser(row)
   if (user.mfaEnabled && row.session_mfa_passed_at == null) return null
 
+  await touchSessionLastSeen(db, idHash, now)
+  return user
+}
+
+/**
+ * Update `sessions.last_seen_at` for an authenticated request, debounced to at
+ * most once per `LAST_SEEN_TOUCH_DEBOUNCE_MS` per session. The first touch for
+ * a hash always writes; subsequent touches inside the window are skipped. See
+ * `LAST_SEEN_TOUCH_DEBOUNCE_MS` for why the staleness is harmless.
+ */
+async function touchSessionLastSeen(db: DbClient, idHash: string, now: number): Promise<void> {
+  const lastTouched = lastSeenTouchedAt.get(idHash)
+  if (lastTouched !== undefined && now - lastTouched < LAST_SEEN_TOUCH_DEBOUNCE_MS) return
+
+  if (lastSeenTouchedAt.size >= LAST_SEEN_TRACKER_MAX_ENTRIES) lastSeenTouchedAt.clear()
+  lastSeenTouchedAt.set(idHash, now)
   await db`
     update sessions
     set last_seen_at = current_timestamp
     where id_hash = ${idHash}
   `
-  return user
 }
 
 export async function sessionRequiresMfa(db: DbClient, idHash: string): Promise<boolean> {

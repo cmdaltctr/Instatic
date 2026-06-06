@@ -237,6 +237,21 @@ findUserBySessionHash(db, hash)
     └─→ row OK              → AuthUser { id, email, capabilities, ... }
 ```
 
+`findUserBySessionHash` hydrates the `AuthUser` with a single `from sessions …
+join users …` SELECT (the column list lives once in `USER_JOINED_COLUMNS`,
+shared with the `users` repository). It then touches `sessions.last_seen_at`,
+but that write is **debounced** to at most once per session per ~30s via an
+in-memory tracker — the idle timeout is 30 days, so up-to-30s staleness is
+irrelevant, and the hot per-request write (WAL-serialized on SQLite, a hot-row
+lock on Postgres) is gone.
+
+**Resolve the session once per request.** A handler calls exactly one of
+`requireAuthenticatedUser` / `requireCapability` / `requireAnyCapability` to get
+its `AuthUser`, then reuses that value for any further checks. Additional
+capability checks in the same handler use the pure `userHasCapability(user, …)`
+predicate rather than calling another guard, and the step-up gate takes the
+already-resolved user (see below). No handler should hydrate the session twice.
+
 ### The capability gate
 
 ```ts
@@ -249,7 +264,19 @@ if (user instanceof Response) return user   // 401 or 403 already encoded
 
 ### Step-up auth
 
-Sensitive actions (delete user, revoke another device, sign out all devices) call `requireStepUp(req, db)`. Step-up is required by default with a 15-minute window, can be configured per user from Account -> Security, and can be disabled per user. The expiry lives on the session row as `step_up_expires_at` and is refreshed by `POST /admin/api/cms/auth/step-up`.
+Sensitive actions (delete user, revoke another device, sign out all devices) gate on `requireStepUp(req, db, user, options?)`. It takes the **already-resolved `AuthUser`** — it does NOT re-authenticate — and returns `Response | null`: a 401 `{ error: 'step_up_required' }` when the window is stale, or `null` to proceed. The canonical pattern is therefore:
+
+```ts
+const user = await requireCapability(req, db, 'users.manage')
+if (user instanceof Response) return user
+const stepUp = await requireStepUp(req, db, user)
+if (stepUp) return stepUp
+// ... re-authenticated, proceed with `user`
+```
+
+This is what keeps a capability-gated sensitive write to one session lookup: the capability guard hydrates the session once, and `requireStepUp` only reads `step_up_expires_at` for that session. (Handlers with no preceding capability guard — e.g. the `/me/*` security routes — call `requireAuthenticatedUser` first to obtain `user`.)
+
+Step-up is required by default with a 15-minute window, can be configured per user from Account -> Security, and can be disabled per user. The expiry lives on the session row as `step_up_expires_at` and is refreshed by `POST /admin/api/cms/auth/step-up`.
 
 ---
 

@@ -37,8 +37,8 @@ export async function handlePublishRoutes(
     const user = await requireCapability(req, db, 'pages.publish')
     if (user instanceof Response) return user
     if (req.method !== 'POST') return methodNotAllowed()
-    const stepUp = await requireStepUp(req, db)
-    if (stepUp instanceof Response) return stepUp
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
 
     const result = await publishDraftSite(db, user.id, options.uploadsDir)
     await createAuditEvent(db, {

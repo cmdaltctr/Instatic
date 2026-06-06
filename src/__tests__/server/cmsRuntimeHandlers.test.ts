@@ -54,6 +54,12 @@ function makeFakeDb(): DbClient {
     throw new Error(`Unhandled SQL: ${sql}`)
   }
 
+  handle.unsafe = async <Row = Record<string, unknown>>(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<DbResult<Row>> =>
+    handle<Row>(sql.split(/\$\d+|\?/) as unknown as TemplateStringsArray, ...params)
+
   handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
     cb(handle as unknown as DbClient)
 

@@ -105,8 +105,8 @@ async function handleUsersCollection(
   }
 
   if (req.method === 'POST') {
-    const stepUp = await requireStepUp(req, db)
-    if (stepUp instanceof Response) return stepUp
+    const stepUp = await requireStepUp(req, db, actor)
+    if (stepUp) return stepUp
 
     const body = await readValidatedBody(req, UserCreateBodySchema)
     if (!body) return badRequest('Invalid user payload')
@@ -146,8 +146,8 @@ async function handleUserPatch(
   actor: AuthUser,
   userId: string,
 ): Promise<Response> {
-  const stepUp = await requireStepUp(req, db)
-  if (stepUp instanceof Response) return stepUp
+  const stepUp = await requireStepUp(req, db, actor)
+  if (stepUp) return stepUp
 
   const body = await readValidatedBody(req, UserPatchBodySchema)
   if (!body) return badRequest('Invalid user payload')
@@ -252,8 +252,8 @@ async function handleUserDelete(
   // Step-up gate — deleting another user is one of the highest-blast-radius
   // actions in the admin. Capability check (`users.manage`) already ran;
   // this enforces a fresh password re-entry on top.
-  const stepUp = await requireStepUp(req, db)
-  if (stepUp instanceof Response) return stepUp
+  const stepUp = await requireStepUp(req, db, actor)
+  if (stepUp) return stepUp
 
   const target = await findUserById(db, userId)
   if (!target) return userNotFound()

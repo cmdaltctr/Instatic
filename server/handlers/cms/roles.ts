@@ -53,8 +53,8 @@ export async function handleRolesRoutes(req: Request, db: DbClient): Promise<Res
     if (req.method === 'POST') {
       const actor = await requireCapability(req, db, 'roles.manage')
       if (actor instanceof Response) return actor
-      const stepUp = await requireStepUp(req, db)
-      if (stepUp instanceof Response) return stepUp
+      const stepUp = await requireStepUp(req, db, actor)
+      if (stepUp) return stepUp
       const body = await readValidatedBody(req, RoleCreateBodySchema)
       if (!body) return badRequest('Invalid role payload')
       try {
@@ -89,8 +89,8 @@ export async function handleRolesRoutes(req: Request, db: DbClient): Promise<Res
     const roleId = decodeURIComponent(roleItemMatch[1])
 
     if (req.method === 'PATCH') {
-      const stepUp = await requireStepUp(req, db)
-      if (stepUp instanceof Response) return stepUp
+      const stepUp = await requireStepUp(req, db, actor)
+      if (stepUp) return stepUp
       const body = await readValidatedBody(req, RolePatchBodySchema)
       if (!body) return badRequest('Invalid role payload')
       try {
@@ -116,8 +116,8 @@ export async function handleRolesRoutes(req: Request, db: DbClient): Promise<Res
     }
 
     if (req.method === 'DELETE') {
-      const stepUp = await requireStepUp(req, db)
-      if (stepUp instanceof Response) return stepUp
+      const stepUp = await requireStepUp(req, db, actor)
+      if (stepUp) return stepUp
       try {
         const deletedRole = await deleteCustomRole(db, roleId)
         if (!deletedRole) return jsonResponse({ error: 'Role not found' }, { status: 404 })

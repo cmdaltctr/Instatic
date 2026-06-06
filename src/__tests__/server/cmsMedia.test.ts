@@ -238,7 +238,14 @@ function makeFakeDb() {
     throw new Error(`Unhandled SQL: ${sql}`)
   }
 
-  handle.unsafe = async () => ({ rows: [], rowCount: 0 })
+  // users + sessions repositories issue their hydrating SELECTs through
+  // db.unsafe(rawSql, params); re-dispatch them through the tagged-template
+  // matcher by splitting the raw SQL on its positional placeholders.
+  handle.unsafe = async <Row = Record<string, unknown>>(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<DbResult<Row>> =>
+    handle<Row>(sql.split(/\$\d+|\?/) as unknown as TemplateStringsArray, ...params)
   handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
     cb(handle as unknown as DbClient)
 

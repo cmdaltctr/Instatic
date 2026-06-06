@@ -194,7 +194,10 @@ function makeFakeDb() {
       )
       return { rows: matched as Row[], rowCount: matched.length }
     }
-    throw new Error(`Unhandled unsafe SQL: ${sql}`)
+    // users + sessions repositories also issue their hydrating SELECTs through
+    // db.unsafe(); re-dispatch those through the tagged-template matcher by
+    // splitting the raw SQL on its positional placeholders.
+    return handle<Row>(sql.split(/\$\d+|\?/) as unknown as TemplateStringsArray, ...(params ?? []))
   }
 
   return Object.assign(handle as DbClient, {

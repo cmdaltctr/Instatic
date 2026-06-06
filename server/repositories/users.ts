@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { nanoid } from 'nanoid'
-import type { DbClient } from '../db/client'
+import { placeholder, type DbClient } from '../db/client'
 import { isoDateOrNull } from '@core/utils/isoDate'
 import { normalizeCapabilities, type CoreCapability } from '../auth/capabilities'
 import {
@@ -52,13 +52,72 @@ export interface AuthUser extends CmsUser {
   mfaRecoveryCodeHashes: string[]
 }
 
-interface JoinedUserRow extends UserRow {
+export interface JoinedUserRow extends UserRow {
   role_slug: string
   role_name: string
   role_description: string
   role_is_system: boolean | number
   role_capabilities_json: unknown
   avatar_public_path: string | null
+}
+
+/**
+ * The full user + role + avatar column list, defined exactly once. Every read
+ * that hydrates an `AuthUser` (the three lookups below plus the session-cookie
+ * lookup in `server/auth/sessions.ts`) splices this into a `db.unsafe()` SELECT
+ * so the 18 user columns, 5 role columns, and avatar join column live in a
+ * single place. Pair it with the shared `from users join roles …` clause via
+ * `queryUsers`, or — when the FROM differs (the session lookup joins through
+ * `sessions`) — splice the constant directly.
+ */
+export const USER_JOINED_COLUMNS = `users.id,
+       users.email,
+       users.email_normalized,
+       users.display_name,
+       users.password_hash,
+       users.status,
+       users.role_id,
+       users.last_login_at,
+       users.failed_login_count,
+       users.locked_until,
+       users.avatar_media_id,
+       users.password_updated_at,
+       users.mfa_enabled,
+       users.mfa_enabled_at,
+       users.mfa_totp_secret,
+       users.mfa_recovery_code_hashes_json,
+       users.step_up_auth_mode,
+       users.step_up_window_minutes,
+       users.created_at,
+       users.updated_at,
+       users.deleted_at,
+       roles.slug as role_slug,
+       roles.name as role_name,
+       roles.description as role_description,
+       roles.is_system as role_is_system,
+       roles.capabilities_json as role_capabilities_json,
+       media_assets.public_path as avatar_public_path`
+
+/**
+ * Run a `select <USER_JOINED_COLUMNS> from users join roles …` with a
+ * caller-supplied trailing clause (WHERE / ORDER / LIMIT). The `clause` must
+ * use dialect-aware placeholders from `placeholder(db.dialect, n)` for its
+ * bound parameters so the same SQL runs on Postgres and SQLite.
+ */
+async function queryUsers(
+  db: DbClient,
+  clause: string,
+  params: unknown[] = [],
+): Promise<JoinedUserRow[]> {
+  const { rows } = await db.unsafe<JoinedUserRow>(
+    `select ${USER_JOINED_COLUMNS}
+     from users
+     join roles on roles.id = users.role_id
+     left join media_assets on media_assets.id = users.avatar_media_id
+     ${clause}`,
+    params,
+  )
+  return rows
 }
 
 const RecoveryCodeHashSchema = Type.String()
@@ -158,118 +217,28 @@ export function toPublicUser(user: AuthUser): CmsUser {
 }
 
 export async function listUsers(db: DbClient): Promise<CmsUser[]> {
-  const { rows } = await db<JoinedUserRow>`
-    select users.id,
-           users.email,
-           users.email_normalized,
-           users.display_name,
-           users.password_hash,
-           users.status,
-           users.role_id,
-           users.last_login_at,
-           users.failed_login_count,
-           users.locked_until,
-           users.avatar_media_id,
-           users.password_updated_at,
-           users.mfa_enabled,
-           users.mfa_enabled_at,
-           users.mfa_totp_secret,
-           users.mfa_recovery_code_hashes_json,
-           users.step_up_auth_mode,
-           users.step_up_window_minutes,
-           users.created_at,
-           users.updated_at,
-           users.deleted_at,
-           roles.slug as role_slug,
-           roles.name as role_name,
-           roles.description as role_description,
-           roles.is_system as role_is_system,
-           roles.capabilities_json as role_capabilities_json,
-           media_assets.public_path as avatar_public_path
-    from users
-    join roles on roles.id = users.role_id
-    left join media_assets on media_assets.id = users.avatar_media_id
-    where users.deleted_at is null
-    order by users.created_at asc
-  `
+  const rows = await queryUsers(
+    db,
+    'where users.deleted_at is null order by users.created_at asc',
+  )
   return rows.map((row) => toPublicUser(rowToUser(row)))
 }
 
 export async function findUserById(db: DbClient, userId: string): Promise<AuthUser | null> {
-  const { rows } = await db<JoinedUserRow>`
-    select users.id,
-           users.email,
-           users.email_normalized,
-           users.display_name,
-           users.password_hash,
-           users.status,
-           users.role_id,
-           users.last_login_at,
-           users.failed_login_count,
-           users.locked_until,
-           users.avatar_media_id,
-           users.password_updated_at,
-           users.mfa_enabled,
-           users.mfa_enabled_at,
-           users.mfa_totp_secret,
-           users.mfa_recovery_code_hashes_json,
-           users.step_up_auth_mode,
-           users.step_up_window_minutes,
-           users.created_at,
-           users.updated_at,
-           users.deleted_at,
-           roles.slug as role_slug,
-           roles.name as role_name,
-           roles.description as role_description,
-           roles.is_system as role_is_system,
-           roles.capabilities_json as role_capabilities_json,
-           media_assets.public_path as avatar_public_path
-    from users
-    join roles on roles.id = users.role_id
-    left join media_assets on media_assets.id = users.avatar_media_id
-    where users.id = ${userId}
-      and users.deleted_at is null
-    limit 1
-  `
+  const rows = await queryUsers(
+    db,
+    `where users.id = ${placeholder(db.dialect, 1)} and users.deleted_at is null limit 1`,
+    [userId],
+  )
   return rows[0] ? rowToUser(rows[0]) : null
 }
 
 export async function findUserByEmail(db: DbClient, email: string): Promise<AuthUser | null> {
-  const { rows } = await db<JoinedUserRow>`
-    select users.id,
-           users.email,
-           users.email_normalized,
-           users.display_name,
-           users.password_hash,
-           users.status,
-           users.role_id,
-           users.last_login_at,
-           users.failed_login_count,
-           users.locked_until,
-           users.avatar_media_id,
-           users.password_updated_at,
-           users.mfa_enabled,
-           users.mfa_enabled_at,
-           users.mfa_totp_secret,
-           users.mfa_recovery_code_hashes_json,
-           users.step_up_auth_mode,
-           users.step_up_window_minutes,
-           users.created_at,
-           users.updated_at,
-           users.deleted_at,
-           roles.slug as role_slug,
-           roles.name as role_name,
-           roles.description as role_description,
-           roles.is_system as role_is_system,
-           roles.capabilities_json as role_capabilities_json,
-           media_assets.public_path as avatar_public_path
-    from users
-    join roles on roles.id = users.role_id
-    left join media_assets on media_assets.id = users.avatar_media_id
-    where users.email_normalized = ${normalizeEmail(email)}
-      and users.deleted_at is null
-    limit 1
-  `
+  const rows = await queryUsers(
+    db,
+    `where users.email_normalized = ${placeholder(db.dialect, 1)} and users.deleted_at is null limit 1`,
+    [normalizeEmail(email)],
+  )
   return rows[0] ? rowToUser(rows[0]) : null
 }
 

@@ -154,8 +154,8 @@ async function handleTablesCollection(req: Request, db: DbClient): Promise<Respo
   if (user instanceof Response) return user
 
   if (req.method === 'POST') {
-    const stepUp = await requireStepUp(req, db)
-    if (stepUp instanceof Response) return stepUp
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
   }
 
   if (req.method === 'GET') {
@@ -230,8 +230,8 @@ async function handleTableItem(
   // table changes / breaks every public URL under its route base.
   const user = await requireDataTablesManager(req, db)
   if (user instanceof Response) return user
-  const stepUp = await requireStepUp(req, db)
-  if (stepUp instanceof Response) return stepUp
+  const stepUp = await requireStepUp(req, db, user)
+  if (stepUp) return stepUp
 
   if (req.method === 'PATCH') {
     const body = await readValidatedBody(req, TablePatchBodySchema)

@@ -99,8 +99,10 @@ export async function handleMeRoutes(
 
   if (url.pathname === `${CMS_API_PREFIX}/me/password`) {
     if (req.method !== 'PATCH') return methodNotAllowed()
-    const user = await requireStepUp(req, db)
+    const user = await requireAuthenticatedUser(req, db)
     if (user instanceof Response) return user
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
     const body = await readValidatedBody(req, ChangePasswordBodySchema)
     if (!body) return badRequest('Password must be at least 12 characters')
     if (await verifyPassword(body.newPassword, user.passwordHash)) {
@@ -124,8 +126,10 @@ export async function handleMeRoutes(
 
   if (url.pathname === `${CMS_API_PREFIX}/me/mfa/totp/start`) {
     if (req.method !== 'POST') return methodNotAllowed()
-    const user = await requireStepUp(req, db)
+    const user = await requireAuthenticatedUser(req, db)
     if (user instanceof Response) return user
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
     const secret = generateTotpSecret()
     return jsonResponse({
       secret,
@@ -139,8 +143,10 @@ export async function handleMeRoutes(
 
   if (url.pathname === `${CMS_API_PREFIX}/me/mfa/totp/enable`) {
     if (req.method !== 'POST') return methodNotAllowed()
-    const user = await requireStepUp(req, db)
+    const user = await requireAuthenticatedUser(req, db)
     if (user instanceof Response) return user
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
     const body = await readValidatedBody(req, EnableTotpBodySchema)
     if (!body) return badRequest('Invalid MFA setup request')
 
@@ -176,8 +182,10 @@ export async function handleMeRoutes(
 
   if (url.pathname === `${CMS_API_PREFIX}/me/mfa/totp`) {
     if (req.method !== 'DELETE') return methodNotAllowed()
-    const user = await requireStepUp(req, db)
+    const user = await requireAuthenticatedUser(req, db)
     if (user instanceof Response) return user
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
     const updated = await disableUserTotpMfa(db, user.id)
     if (!updated) return jsonResponse({ error: 'User not found' }, { status: 404 })
     await createAuditEvent(db, {
@@ -193,8 +201,10 @@ export async function handleMeRoutes(
 
   if (url.pathname === `${CMS_API_PREFIX}/me/mfa/recovery-codes`) {
     if (req.method !== 'POST') return methodNotAllowed()
-    const user = await requireStepUp(req, db)
+    const user = await requireAuthenticatedUser(req, db)
     if (user instanceof Response) return user
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
     if (!user.mfaEnabled) return badRequest('Enable MFA before generating recovery codes')
     const recovery = newRecoveryCodeSet()
     const updated = await replaceUserRecoveryCodeHashes(db, user.id, recovery.hashes)
@@ -212,8 +222,10 @@ export async function handleMeRoutes(
 
   if (url.pathname === `${CMS_API_PREFIX}/me/security/step-up`) {
     if (req.method !== 'PATCH') return methodNotAllowed()
-    const user = await requireStepUp(req, db, { policy: 'always' })
+    const user = await requireAuthenticatedUser(req, db)
     if (user instanceof Response) return user
+    const stepUp = await requireStepUp(req, db, user, { policy: 'always' })
+    if (stepUp) return stepUp
     const body = await readValidatedBody(req, UpdateStepUpPolicyBodySchema)
     if (!body) return badRequest('Invalid step-up settings')
     const updated = await updateUserStepUpPolicy(db, user.id, {

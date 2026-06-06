@@ -50,8 +50,10 @@ export async function handleRevokeSession(
   db: DbClient,
   params: RouteParams,
 ): Promise<Response> {
-  const user = await requireStepUp(req, db)
+  const user = await requireAuthenticatedUser(req, db)
   if (user instanceof Response) return user
+  const stepUp = await requireStepUp(req, db, user)
+  if (stepUp) return stepUp
   const targetHash = params.id
   if (!targetHash) return jsonResponse({ error: 'Invalid session id' }, { status: 400 })
   const currentSessionHash = await getSessionHash(req)
@@ -81,8 +83,10 @@ export async function handleRevokeSession(
  * highest-blast-radius session action we expose.
  */
 export async function handleLogoutAll(req: Request, db: DbClient): Promise<Response> {
-  const user = await requireStepUp(req, db)
+  const user = await requireAuthenticatedUser(req, db)
   if (user instanceof Response) return user
+  const stepUp = await requireStepUp(req, db, user)
+  if (stepUp) return stepUp
   const currentSessionHash = await getSessionHash(req)
   const revokedCount = await revokeAllOtherSessions(db, user.id, currentSessionHash)
   await createAuditEvent(db, {

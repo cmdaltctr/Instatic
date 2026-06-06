@@ -83,14 +83,23 @@ export async function requireAnyCapability(
 }
 
 /**
- * Returns the authenticated user when their current session is inside a
- * fresh step-up window; otherwise returns a 401 response with the structured
- * body `{ error: 'step_up_required' }` so the client can open the StepUp
- * dialog and retry.
+ * Step-up gate for an ALREADY-AUTHENTICATED request. Returns `null` when the
+ * caller's session is inside a fresh step-up window (the action may proceed),
+ * or a 401 response with the structured body `{ error: 'step_up_required' }`
+ * so the client can open the StepUp dialog and retry.
  *
- * The handler pattern is identical to `requireCapability`: callers
- * `await requireStepUp(req, db)`, `if (user instanceof Response) return user`,
- * then proceed knowing the action has been re-authenticated.
+ * The caller passes the `AuthUser` it already resolved (via
+ * `requireAuthenticatedUser` / `requireCapability`). This guard does NOT
+ * re-authenticate — that is the whole point: capability-gated sensitive
+ * handlers resolve the session exactly once and hand the user here, instead of
+ * paying a second full session lookup (+ `last_seen_at` write) per request.
+ *
+ * Handler pattern:
+ *   const user = await requireCapability(req, db, 'users.manage')
+ *   if (user instanceof Response) return user
+ *   const stepUp = await requireStepUp(req, db, user)
+ *   if (stepUp) return stepUp
+ *   // …proceed, knowing the action has been re-authenticated.
  *
  * Exposed in addition to `requireCapability` (rather than baked in) because
  * not every capability-gated action is sensitive — listing users is gated
@@ -99,12 +108,11 @@ export async function requireAnyCapability(
 export async function requireStepUp(
   req: Request,
   db: DbClient,
+  user: AuthUser,
   options: RequireStepUpOptions = {},
-): Promise<AuthUser | Response> {
-  const user = await requireAuthenticatedUser(req, db)
-  if (user instanceof Response) return user
+): Promise<Response | null> {
   if ((options.policy ?? 'user') === 'user' && user.stepUpAuthMode === 'disabled') {
-    return user
+    return null
   }
   const idHash = await getSessionHash(req)
   if (!idHash) {
@@ -114,5 +122,5 @@ export async function requireStepUp(
   if (!expiresAt || expiresAt.getTime() <= Date.now()) {
     return jsonResponse({ error: 'step_up_required' }, { status: 401 })
   }
-  return user
+  return null
 }

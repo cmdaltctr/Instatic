@@ -98,6 +98,8 @@ findUserBySessionHash(db, hash)
     └─→ row, active → AuthUser { id, email, capabilities, ... }
 ```
 
+One hydrating SELECT (`USER_JOINED_COLUMNS`, shared with the `users` repository) builds the `AuthUser`. The follow-up `sessions.last_seen_at` touch is **debounced** to at most once per session per ~30s (in-memory tracker) — the idle timeout is 30 days, so the staleness is irrelevant and the per-request write is no longer a hot path. A handler resolves the session exactly once per request and reuses that `AuthUser`; it never calls a second guard that re-hydrates it.
+
 Sessions rotate (the raw token changes, the row stays) on a cadence to limit blast radius of a leaked cookie — `rotateSessionToken(...)` is called by the cookie-touching paths.
 
 ### Logout
@@ -214,35 +216,37 @@ if (user instanceof Response) return user
 // AuthUser has at least one of: site.structure.edit, site.content.edit, site.style.edit
 ```
 
-### `requireStepUp(req, db)`
+### `requireStepUp(req, db, user, options?)`
 
-Gates sensitive actions on the user's step-up policy.
+Gates sensitive actions on the user's step-up policy. It takes the **already-resolved `AuthUser`** (no re-authentication) and returns `Response | null`: a 401 when the step-up window is stale, `null` to proceed.
 
 ```ts
-const user = await requireStepUp(req, db)
+const user = await requireCapability(req, db, 'users.manage')
 if (user instanceof Response) return user
+const stepUp = await requireStepUp(req, db, user)
+if (stepUp) return stepUp
 // User has either disabled step-up, or has re-entered their password inside
-// their configured step-up window.
+// their configured step-up window — and the session was resolved only once.
 ```
 
 ---
 
 ## Step-up auth
 
-Sensitive actions (delete user, revoke another device, sign out all devices, change owner email, regenerate MFA) call `requireStepUp(req, db)` in `server/auth/authz.ts`. When `users.step_up_auth_mode = 'required'`, the current session must have `sessions.step_up_expires_at > now()`. The default policy is required with a 15-minute window; Account -> Security can change the mode to `disabled` or set `users.step_up_window_minutes` to 5, 15, 30, or 60.
+Sensitive actions (delete user, revoke another device, sign out all devices, change owner email, regenerate MFA) call `requireStepUp(req, db, user)` in `server/auth/authz.ts`, passing the user the handler already resolved. When `users.step_up_auth_mode = 'required'`, the current session must have `sessions.step_up_expires_at > now()`. The default policy is required with a 15-minute window; Account -> Security can change the mode to `disabled` or set `users.step_up_window_minutes` to 5, 15, 30, or 60.
 
-The Account -> Security policy endpoint (`PATCH /admin/api/cms/me/security/step-up`) calls `requireStepUp(req, db, { policy: 'always' })`, so changing the policy itself still requires a fresh password even when normal sensitive-action step-up is disabled.
+The Account -> Security policy endpoint (`PATCH /admin/api/cms/me/security/step-up`) calls `requireStepUp(req, db, user, { policy: 'always' })`, so changing the policy itself still requires a fresh password even when normal sensitive-action step-up is disabled.
 
 ```text
 User clicks "Delete user X"
     │
     ▼
-Handler calls requireStepUp(req, db)
+Handler calls requireStepUp(req, db, user)   // user already resolved
     │
     ├─→ user.stepUpAuthMode = disabled
-    │       → proceed
+    │       → return null (proceed)
     ├─→ check sessions.step_up_expires_at > now()
-    │       → yes: proceed
+    │       → yes: return null (proceed)
     │       → no:  return 401 { error: 'step_up_required' }
     │
     ▼
@@ -403,11 +407,13 @@ export async function handleSubscribersRoutes(req: Request, db: DbClient): Promi
 
 ### Gate a sensitive action
 
-Use `requireStepUp` instead of `requireCapability`:
+Resolve the user with `requireCapability` (or `requireAuthenticatedUser`), then add `requireStepUp` on top — it reuses the resolved user, so no second session lookup:
 
 ```ts
-const user = await requireStepUp(req, db)
+const user = await requireCapability(req, db, 'users.manage')
 if (user instanceof Response) return user
+const stepUp = await requireStepUp(req, db, user)
+if (stepUp) return stepUp
 ```
 
 The client sees `401 { error: 'step_up_required' }` and pops the StepUp dialog; on success it retries the action.

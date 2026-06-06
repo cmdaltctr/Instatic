@@ -385,6 +385,16 @@ function makeFakeDb() {
     throw new Error(`Unhandled SQL: ${sql}`)
   }
 
+  // Repositories that splice shared column lists (users + sessions) issue their
+  // SELECTs through db.unsafe(rawSql, params). Re-dispatch those through the
+  // same tagged-template matcher by splitting the raw SQL on its positional
+  // placeholders ($1.. or ?) so `values` lines up with `params`.
+  handle.unsafe = async <Row = Record<string, unknown>>(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<DbResult<Row>> =>
+    handle<Row>(sql.split(/\$\d+|\?/) as unknown as TemplateStringsArray, ...params)
+
   handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
     cb(handle as unknown as DbClient)
 

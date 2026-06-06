@@ -31,7 +31,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { assertPathWithin } from '../../util/pathWithin'
 import type { DbClient } from '../../db/client'
-import { requireCapability, requireStepUp } from '../../auth/authz'
+import { requireCapability, requireStepUp, userHasCapability } from '../../auth/authz'
 import { saveDraftSite } from '../../repositories/site'
 import {
   listDataTables,
@@ -90,10 +90,11 @@ export async function handleImportRoute(
   // with `data.import` but no content rights can still merge-add but not
   // wipe) AND step-up (mirrors users.ts delete / publish.ts publish).
   if (strategy === 'replace') {
-    const manage = await requireCapability(req, db, 'content.manage')
-    if (manage instanceof Response) return manage
-    const stepUp = await requireStepUp(req, db)
-    if (stepUp instanceof Response) return stepUp
+    if (!userHasCapability(user, 'content.manage')) {
+      return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+    }
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
   }
 
   // Parse and validate the bundle body
@@ -106,8 +107,9 @@ export async function handleImportRoute(
   // `site.structure.edit` — replacing the shell is a structural site edit
   // even when the import strategy is merge-overwrite.
   if (bundle.site) {
-    const siteEdit = await requireCapability(req, db, 'site.structure.edit')
-    if (siteEdit instanceof Response) return siteEdit
+    if (!userHasCapability(user, 'site.structure.edit')) {
+      return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+    }
   }
 
   // ---------------------------------------------------------------------------
