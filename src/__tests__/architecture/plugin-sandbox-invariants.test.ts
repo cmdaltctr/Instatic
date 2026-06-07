@@ -66,8 +66,16 @@ describe('plugin sandbox invariants', () => {
 
   it('modulePackVm.ts sandboxes module packs through QuickJS', async () => {
     const source = await read('server/plugins/modulePackVm.ts')
-    expect(source).toContain("from 'quickjs-emscripten'")
+    // Sandboxing now rides the SHARED QuickJS infrastructure (one WASM
+    // singleton + one deadline guard + one ESM shim) rather than a private
+    // copy: getWasmModule/createContext from ./quickjs/vm, the deadline-guarded
+    // eval from ./quickjs/eval. We assert the actual sandbox PROPERTIES are
+    // enforced here, which is stronger than matching the raw import specifier.
+    expect(source).toContain("from './quickjs/vm'") // shared QuickJS WASM singleton
     expect(source).toContain('newContext')
+    expect(source).toContain('setMemoryLimit') // heap ceiling enforced
+    expect(source).toContain('setMaxStackSize') // stack ceiling enforced
+    expect(source).toContain('withSyncDeadline') // wall-clock interrupt guard
     // No raw dynamic import of plugin bundles in actual code lines.
     // (Comments may mention historical context — strip them before scanning.)
     const codeOnly = stripCommentsAndStrings(source)
