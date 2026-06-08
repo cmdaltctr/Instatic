@@ -216,6 +216,17 @@ different `userStyles` content (and hash). This mirrors how scripts are scoped
 per page; the shared `assetScopeAppliesToPage` helper decides targeting for
 both.
 
+Because `framework` is built by walking **every** page's node tree to harvest
+module CSS — O(all nodes across the whole site), not the rendered page — the
+published-snapshot renderer uses `buildPublishedSiteCssBundle`, which memoises
+the three page-invariant files by `publishVersion`. The all-pages walk then runs
+**once per publish** instead of once per render, so a Layer-B cache miss or a
+background republish no longer repays it per page. `userStyles` is still rebuilt
+per call (page-scoped). `bumpPublishVersion()` invalidates the memo, so a content
+change can never serve stale framework/style CSS. Callers that pass draft or
+arbitrary sites at the live version (preview, AI render, the CSS-route fallback)
+keep using the un-memoised `buildSiteCssBundle`.
+
 ### CSS dedup via `CssCollector`
 
 ```ts

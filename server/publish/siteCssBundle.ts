@@ -8,17 +8,24 @@
  *
  * This file lives under `server/cms/` because it depends on `node:crypto` for
  * content hashing — that import is unavailable in the editor's app build, so
- * the implementation is server-only. The published-page renderer
- * (`publicRenderer.ts`) and the CSS route handler (`router.ts`) call it on
- * every request.
+ * the implementation is server-only.
  *
- * Why rebuild on every request?
- * - Bundles are tiny (kB) and the build is microseconds (deduped by moduleId).
- * - Browsers / CDNs cache the response for a year (`immutable`), so the
- *   route handler only fires for the FIRST visitor of a given hash.
- * - When the site's hash changes (a class was edited, the framework was
- *   reconfigured), HTML pages re-render with the new `<link href>` referencing
- *   the new filename, and visitors fetch the new bundle exactly once.
+ * Two entry points, two cost profiles:
+ *
+ * - `buildSiteCssBundle` rebuilds all four files from scratch. The `framework`
+ *   file requires walking EVERY page's node tree (`collectAllModuleCss`) to
+ *   harvest module CSS — work that scales with whole-site size, not the
+ *   rendered page. Callers that pass draft / arbitrary sites at the live
+ *   publish version (preview, AI render, the CSS-route fallback) use this:
+ *   memoising across them would cross-contaminate unpublished content.
+ *
+ * - `buildPublishedSiteCssBundle` is the hot path for the published-snapshot
+ *   renderer (`publicRenderer.ts`). There the site is fixed for a given publish
+ *   version, so the three page-invariant files (reset / framework / style) are
+ *   memoised by `publishVersion` and reused across every render at that
+ *   version — the expensive all-pages walk runs once per publish, not once per
+ *   request. Only `userStyles` (page-scoped) is rebuilt per call. The memo is
+ *   invalidated automatically by `bumpPublishVersion()`.
  */
 
 import { createHash } from 'node:crypto'
@@ -38,6 +45,13 @@ import type {
   SiteCssBundle,
   SiteCssBundleId,
 } from '@core/publisher'
+import { getPublishVersion, registerVersionedCacheReset } from './publishState'
+
+/**
+ * The three page-invariant bundle files: they depend only on `site` + registry,
+ * never on the page being rendered. `userStyles` is excluded — it is page-scoped.
+ */
+type PageInvariantBundles = Pick<SiteCssBundle, 'reset' | 'framework' | 'style'>
 
 /**
  * Build the four site CSS files from a `SiteDocument`.
@@ -50,8 +64,9 @@ import type {
  * stylesheet (authoring/export view).
  *
  * Determinism + content-hashed filenames mean two calls with the same inputs
- * always return identical filenames — safe to call on every request without
- * memoisation.
+ * always return identical filenames. This rebuilds all four files every call;
+ * the published-render hot path uses `buildPublishedSiteCssBundle` instead,
+ * which memoises the page-invariant trio by publish version.
  */
 export function buildSiteCssBundle(
   site: SiteDocument,
@@ -59,11 +74,69 @@ export function buildSiteCssBundle(
   page?: Page,
 ): SiteCssBundle {
   return {
+    ...computePageInvariantBundles(site, registry),
+    userStyles: makeBundleFile('userStyles', collectUserStylesheetCss(site, page)),
+  }
+}
+
+/**
+ * Published-render variant of `buildSiteCssBundle`. Memoises the three
+ * page-invariant files (reset / framework / style) by `publishVersion`, so the
+ * O(all-pages) module-CSS walk runs once per publish instead of once per
+ * render. Only `userStyles` is rebuilt per call (it is page-scoped).
+ *
+ * Safe ONLY for the published-snapshot render path, where `site` is fixed for a
+ * given publish version. Callers that pass draft / arbitrary sites at the live
+ * version (preview, AI render, CSS-route fallback) must use `buildSiteCssBundle`
+ * — sharing one version-keyed cache across them would serve stale CSS.
+ */
+export function buildPublishedSiteCssBundle(
+  site: SiteDocument,
+  registry: IModuleRegistry,
+  page?: Page,
+): SiteCssBundle {
+  return {
+    ...memoizedPageInvariantBundles(site, registry),
+    userStyles: makeBundleFile('userStyles', collectUserStylesheetCss(site, page)),
+  }
+}
+
+/** Build the three page-invariant bundle files from scratch. */
+function computePageInvariantBundles(
+  site: SiteDocument,
+  registry: IModuleRegistry,
+): PageInvariantBundles {
+  return {
     reset: makeBundleFile('reset', PUBLISHER_RESET_CSS),
     framework: makeBundleFile('framework', buildFrameworkCss(site, registry)),
     style: makeBundleFile('style', collectClassCSS(site)),
-    userStyles: makeBundleFile('userStyles', collectUserStylesheetCss(site, page)),
   }
+}
+
+// Page-invariant bundle memo, keyed by publish version. A bump invalidates it
+// (the next read sees a new version → recompute), so a content change can never
+// serve stale framework/style CSS. Registered with the shared test-reset hook.
+let pageInvariantCache: { version: number; bundles: PageInvariantBundles } | null = null
+registerVersionedCacheReset(() => {
+  pageInvariantCache = null
+})
+
+/**
+ * Return the page-invariant bundles for the current publish version, computing
+ * them once per version and reusing the cached files on every later render at
+ * that version.
+ */
+function memoizedPageInvariantBundles(
+  site: SiteDocument,
+  registry: IModuleRegistry,
+): PageInvariantBundles {
+  const version = getPublishVersion()
+  if (pageInvariantCache && pageInvariantCache.version === version) {
+    return pageInvariantCache.bundles
+  }
+  const bundles = computePageInvariantBundles(site, registry)
+  pageInvariantCache = { version, bundles }
+  return bundles
 }
 
 /**

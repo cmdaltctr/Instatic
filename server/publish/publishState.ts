@@ -98,6 +98,19 @@ export interface VersionedSingleFlight<T> {
 const versionedCacheResets: Array<() => void> = []
 
 /**
+ * Register a reset callback with the shared test-reset list so
+ * `resetPublishStateForTests()` clears this cache too.
+ *
+ * `createVersionedSingleFlight` uses this for its own reset. Version-keyed
+ * caches that are NOT single-flights — e.g. the synchronous page-invariant
+ * CSS-bundle memo in `siteCssBundle.ts` — register here directly so they share
+ * the one reset hook instead of exporting a bespoke one.
+ */
+export function registerVersionedCacheReset(reset: () => void): void {
+  versionedCacheResets.push(reset)
+}
+
+/**
  * Create a generalized version-keyed single-flight memo. See
  * `VersionedSingleFlight` for the contract. Each memo registers its reset with
  * the shared test-reset list, so `resetPublishStateForTests()` clears it.
@@ -110,7 +123,7 @@ export function createVersionedSingleFlight<T>(): VersionedSingleFlight<T> {
     cache = null
     inFlight = null
   }
-  versionedCacheResets.push(reset)
+  registerVersionedCacheReset(reset)
 
   return {
     get(version, load) {

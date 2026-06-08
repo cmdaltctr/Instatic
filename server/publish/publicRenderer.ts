@@ -3,7 +3,7 @@ import '@core/loops/sources'
 import { registry } from '@core/module-engine'
 import { publishPage } from '@core/publisher'
 import { buildRouteFrame } from '@core/templates/contextFrames'
-import { buildSiteCssBundle } from './siteCssBundle'
+import { buildPublishedSiteCssBundle } from './siteCssBundle'
 import { resolveTemplateChain, composeTemplateChain } from '@core/templates'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { prefetchLoopData, publishedDataRowToLoopItem } from './loopPrefetch'
@@ -69,7 +69,7 @@ async function renderMergedTemplate(
   templateContext: TemplateRenderDataContext | undefined,
   ctx: RenderPublishedSnapshotContext,
 ): Promise<string> {
-  const cssBundle = buildSiteCssBundle(snapshot.site, registry, merged)
+  const cssBundle = buildPublishedSiteCssBundle(snapshot.site, registry, merged)
   const [loopData, mediaAssets] = await Promise.all([
     prefetchLoopData(merged, snapshot.site, ctx.db, ctx.url),
     prefetchMediaAssets(merged, snapshot.site, registry, ctx.db),
