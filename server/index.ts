@@ -3,7 +3,7 @@ import { runMigrations } from './db/runMigrations'
 import { syncSystemRoles } from './repositories/roles'
 import { backfillDefaultEntryTemplates } from './repositories/data'
 import { readServerConfig } from './config'
-import { DEV_ORIGIN_ALLOWLIST, stampSocketIp } from './auth/security'
+import { DEV_ORIGIN_ALLOWLIST, configureTrustedProxyCidrs, stampSocketIp } from './auth/security'
 import { startConversationPurgeTick } from './ai/boot'
 
 await import('./richtextSanitizer')
@@ -12,6 +12,7 @@ const { activateInstalledServerPlugins } = await import('./plugins/runtime')
 const { mediaStorageRegistry } = await import('@core/plugins/mediaStorageRegistry')
 
 const config = readServerConfig()
+configureTrustedProxyCidrs(config.trustedProxyCidrs)
 const { db, migrations } = createDbClient(config.databaseUrl)
 await runMigrations(db, migrations)
 // System role sync runs after migrations on every boot — the Owner row's

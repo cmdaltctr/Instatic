@@ -17,6 +17,7 @@ import {
   verifyPassword,
 } from '../../../server/auth/tokens'
 import { loginPerIpRateLimit, loginRateLimit, mfaRateLimit } from '../../../server/auth/rateLimit'
+import { stampSocketIp } from '../../../server/auth/security'
 import { findUserByEmail } from '../../../server/repositories/users'
 import { createTestDb } from '../helpers/createTestDb'
 
@@ -72,17 +73,13 @@ async function login(
   db: DbClient,
   password = PASSWORD,
 ): Promise<{ cookie: string; body: Record<string, unknown> }> {
-  const res = await handleCmsRequest(
-    new Request('http://localhost/admin/api/cms/login', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-forwarded-for': IP,
-      },
-      body: JSON.stringify({ email: EMAIL, password }),
-    }),
-    db,
-  )
+  const req = new Request('http://localhost/admin/api/cms/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: EMAIL, password }),
+  })
+  stampSocketIp(req, IP)
+  const res = await handleCmsRequest(req, db)
   expect(res.status).toBe(200)
   const setCookie = res.headers.get('set-cookie') ?? ''
   const cookie = setCookie.split(';')[0]

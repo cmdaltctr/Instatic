@@ -93,6 +93,8 @@ describe('self-host docker config', () => {
 
     expect(env).toContain('POSTGRES_PASSWORD=')
     expect(env).toContain('INSTATIC_SECRET_KEY=')
+    expect(env).toContain('TRUSTED_PROXY_CIDRS=')
     expect(compose).toContain('INSTATIC_SECRET_KEY:')
+    expect(compose).toContain('TRUSTED_PROXY_CIDRS:')
   })
 })

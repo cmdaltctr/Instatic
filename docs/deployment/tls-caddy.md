@@ -57,6 +57,7 @@ The first request to `https://cms.example.com` triggers cert issuance (takes a f
 - Auto-provisions a Let's Encrypt certificate for `${DOMAIN}` on first request.
 - Reverse-proxies all traffic to `app:3001` over the internal Docker network.
 - **Removes the `app` host port mapping** (`!reset []`) so the only public-facing port is Caddy. The CMS is no longer reachable on `:3001` from outside; only Caddy can reach it via the docker network.
+- Sets `TRUSTED_PROXY_CIDRS` to the Docker bridge range by default so login rate limits and audit logs use the real client IP from Caddy's `X-Forwarded-For`. If you run Caddy on a custom Docker network, override `TRUSTED_PROXY_CIDRS` with that network's CIDR.
 
 ## Verifying
 

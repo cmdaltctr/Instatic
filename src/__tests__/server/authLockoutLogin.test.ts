@@ -13,6 +13,7 @@ import { listAuditEvents } from '../../../server/repositories/audit'
 import { listLoginAttemptsForUser, listLoginAttemptsForIp } from '../../../server/repositories/loginAttempts'
 import { LOCKOUT_THRESHOLD, LOCKOUT_INITIAL_MS } from '../../../server/auth/lockout'
 import { loginPerIpRateLimit, loginRateLimit } from '../../../server/auth/rateLimit'
+import { stampSocketIp } from '../../../server/auth/security'
 import { createTestDb } from '../helpers/createTestDb'
 
 const PASSWORD = 'long-enough-password'
@@ -41,15 +42,13 @@ async function login(db: DbClient, opts: LoginOptions = {}): Promise<Response> {
   const password = opts.password ?? PASSWORD
   const ip = opts.ip ?? '203.0.113.10'
   const headers = new Headers({ 'content-type': 'application/json' })
-  if (ip) headers.set('x-forwarded-for', ip)
-  return handleCmsRequest(
-    new Request('http://localhost/admin/api/cms/login', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ email, password }),
-    }),
-    db,
-  )
+  const req = new Request('http://localhost/admin/api/cms/login', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ email, password }),
+  })
+  if (ip) stampSocketIp(req, ip)
+  return handleCmsRequest(req, db)
 }
 
 function resetLimitersFor(email: string, ip: string): void {

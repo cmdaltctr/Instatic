@@ -8,6 +8,7 @@ import {
   verifyAndConsumePublicFormChallenge,
 } from '../../../server/forms/challenge'
 import { publicFormPerFormRateLimit, publicFormPerIpRateLimit } from '../../../server/forms/rateLimit'
+import { stampSocketIp } from '../../../server/auth/security'
 import { createFakeDb } from './dbTestFake'
 import type { PublishedPageSnapshot } from '../../../server/repositories/publish'
 
@@ -26,7 +27,7 @@ function makeRequest(
   })
   req.headers.set('origin', origin)
   req.headers.set('sec-fetch-site', 'same-origin')
-  if (ip) req.headers.set('x-forwarded-for', ip)
+  if (ip) stampSocketIp(req, ip)
   return req
 }
 

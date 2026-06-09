@@ -3,6 +3,7 @@ import { handleCmsRequest } from '../../../server/handlers/cms'
 import type { DbClient, DbResult } from '../../../server/db'
 import { SESSION_COOKIE_NAME } from '../../../server/auth/tokens'
 import { loginRateLimit } from '../../../server/auth/rateLimit'
+import { stampSocketIp } from '../../../server/auth/security'
 
 function makeFakeDb() {
   const site: Record<string, unknown>[] = []
@@ -480,11 +481,13 @@ describe('CMS handlers', () => {
       body: JSON.stringify({ siteName: 'Example', email: 'owner@example.com', password: 'long-enough-password' }),
       headers: { 'content-type': 'application/json' },
     }), db)
-    const res = await handleCmsRequest(new Request('http://localhost/admin/api/cms/login', {
+    const loginReq = new Request('http://localhost/admin/api/cms/login', {
       method: 'POST',
       body: JSON.stringify({ email: 'owner@example.com', password: 'long-enough-password' }),
-      headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.77' },
-    }), db)
+      headers: { 'content-type': 'application/json' },
+    })
+    stampSocketIp(loginReq, '203.0.113.77')
+    const res = await handleCmsRequest(loginReq, db)
     expect(res.status).toBe(200)
     const cookie = res.headers.get('set-cookie') ?? ''
     expect(cookie).toContain(`${SESSION_COOKIE_NAME}=`)
@@ -797,15 +800,13 @@ describe('CMS handlers', () => {
      * applies. Mutating headers after Request construction works in both
      * environments, so we use that path here.
      */
-    function loginRequest(email: string, password: string, xff: string, origin?: string): Request {
+    function loginRequest(email: string, password: string, ip: string, origin?: string): Request {
       const req = new Request('http://localhost/admin/api/cms/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
-        headers: {
-          'content-type': 'application/json',
-          'x-forwarded-for': xff,
-        },
+        headers: { 'content-type': 'application/json' },
       })
+      stampSocketIp(req, ip)
       if (origin) req.headers.set('origin', origin)
       return req
     }

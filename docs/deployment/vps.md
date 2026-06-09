@@ -211,13 +211,14 @@ DATABASE_URL=sqlite:./data/cms.db \
   STATIC_DIR=./dist \
   UPLOADS_DIR=./uploads \
   INSTATIC_SECRET_KEY=replace-with-output-of-generate-secret-key \
+  TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128 \
   PORT=3001 \
   bun run server/index.ts
 ```
 
 Replace `DATABASE_URL` with a Postgres connection string for Postgres mode. `STATIC_DIR` must point at the built admin SPA (`dist/` after `bun run build`).
 
-Wrap the command in a process supervisor (systemd, pm2, supervisord) for auto-restart on crash and on server boot. Put an HTTPS-capable reverse proxy (Caddy, Nginx, Cloudflare Tunnel) in front for TLS.
+Wrap the command in a process supervisor (systemd, pm2, supervisord) for auto-restart on crash and on server boot. Put an HTTPS-capable reverse proxy (Caddy, Nginx, Cloudflare Tunnel) in front for TLS. Set `TRUSTED_PROXY_CIDRS` only to the socket peers that can reach the Bun process as trusted proxies; leave it empty if the app is directly exposed.
 
 ## Data Safety
 

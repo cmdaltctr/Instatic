@@ -18,6 +18,7 @@ import {
   sessionExpiry,
 } from '../../../server/auth/tokens'
 import { loginPerIpRateLimit, loginRateLimit, mfaRateLimit } from '../../../server/auth/rateLimit'
+import { stampSocketIp } from '../../../server/auth/security'
 import { STEP_UP_DEFAULT_WINDOW_MS } from '../../../server/auth/stepUpPolicy'
 import { createTestDb } from '../helpers/createTestDb'
 import { createHmac } from 'node:crypto'
@@ -70,17 +71,13 @@ async function setup(db: DbClient): Promise<void> {
 }
 
 async function login(db: DbClient): Promise<string> {
-  const res = await handleCmsRequest(
-    new Request('http://localhost/admin/api/cms/login', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-forwarded-for': IP,
-      },
-      body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-    }),
-    db,
-  )
+  const req = new Request('http://localhost/admin/api/cms/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+  })
+  stampSocketIp(req, IP)
+  const res = await handleCmsRequest(req, db)
   expect(res.status).toBe(200)
   const setCookie = res.headers.get('set-cookie') ?? ''
   return setCookie.split(';')[0]
@@ -530,17 +527,13 @@ describe('Step-up auth', () => {
     expect(createUserRes.status).toBe(201)
     const created = await createUserRes.json() as { user: { id: string } }
 
-    const targetLogin = await handleCmsRequest(
-      new Request('http://localhost/admin/api/cms/login', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-forwarded-for': IP,
-        },
-        body: JSON.stringify({ email: 'reset-target@example.com', password: PASSWORD }),
-      }),
-      db,
-    )
+    const targetLoginReq = new Request('http://localhost/admin/api/cms/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'reset-target@example.com', password: PASSWORD }),
+    })
+    stampSocketIp(targetLoginReq, IP)
+    const targetLogin = await handleCmsRequest(targetLoginReq, db)
     expect(targetLogin.status).toBe(200)
     const targetCookie = (targetLogin.headers.get('set-cookie') ?? '').split(';')[0]
     expect(targetCookie.startsWith(`${SESSION_COOKIE_NAME}=`)).toBe(true)

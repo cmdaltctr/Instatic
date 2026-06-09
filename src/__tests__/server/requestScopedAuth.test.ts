@@ -21,6 +21,7 @@ import { handleCmsRequest } from '../../../server/handlers/cms'
 import { findUserBySessionHash } from '../../../server/auth/sessions'
 import { SESSION_COOKIE_NAME, hashSessionToken } from '../../../server/auth/tokens'
 import { loginPerIpRateLimit, loginRateLimit, mfaRateLimit } from '../../../server/auth/rateLimit'
+import { stampSocketIp } from '../../../server/auth/security'
 import { createTestDb } from '../helpers/createTestDb'
 
 const PASSWORD = 'long-enough-password'
@@ -77,14 +78,13 @@ async function setup(db: DbClient): Promise<void> {
 }
 
 async function login(db: DbClient): Promise<string> {
-  const res = await handleCmsRequest(
-    new Request('http://localhost/admin/api/cms/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-forwarded-for': IP },
-      body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-    }),
-    db,
-  )
+  const req = new Request('http://localhost/admin/api/cms/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+  })
+  stampSocketIp(req, IP)
+  const res = await handleCmsRequest(req, db)
   expect(res.status).toBe(200)
   return (res.headers.get('set-cookie') ?? '').split(';')[0]
 }

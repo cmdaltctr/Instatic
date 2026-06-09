@@ -18,6 +18,7 @@ import {
   sessionExpiry,
 } from '../../../server/auth/tokens'
 import { loginPerIpRateLimit, loginRateLimit } from '../../../server/auth/rateLimit'
+import { stampSocketIp } from '../../../server/auth/security'
 import { createTestDb } from '../helpers/createTestDb'
 
 const PASSWORD = 'long-enough-password'
@@ -49,18 +50,16 @@ async function setup(db: DbClient): Promise<void> {
 }
 
 async function login(db: DbClient, ip = '203.0.113.10', ua = 'Mozilla/5.0 Chrome/120 Safari/537.36'): Promise<string> {
-  const res = await handleCmsRequest(
-    new Request('http://localhost/admin/api/cms/login', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-forwarded-for': ip,
-        'user-agent': ua,
-      },
-      body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-    }),
-    db,
-  )
+  const req = new Request('http://localhost/admin/api/cms/login', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'user-agent': ua,
+    },
+    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+  })
+  stampSocketIp(req, ip)
+  const res = await handleCmsRequest(req, db)
   expect(res.status).toBe(200)
   const setCookie = res.headers.get('set-cookie') ?? ''
   const cookieValue = setCookie.split(';')[0]

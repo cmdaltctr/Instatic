@@ -299,7 +299,7 @@ From now on, login is two-step: password → `pending_mfa` session → TOTP code
 
 ### Rate-limiting
 
-`mfaRateLimit` — per-IP bucket (10 attempts / 10 minutes). The key is `clientIp(req) ?? 'unknown'`. Hitting the limit returns 429.
+`mfaRateLimit` — per-IP bucket (10 attempts / 10 minutes). The key is `clientIp(req) ?? 'unknown'`. `clientIp(req)` uses the socket peer by default and trusts `X-Forwarded-For` only when that peer matches `TRUSTED_PROXY_CIDRS`. Hitting the limit returns 429.
 
 In addition, failed codes feed the per-account lockout counter (see [Lockout](#lockout)). A correct code submitted after the account is locked is still rejected — the lockout check runs before code verification.
 
@@ -478,7 +478,7 @@ if (userHasAnyCapability(user, SITE_WRITE_CAPABILITIES)) { /* … */ }
   - `server/auth/mfa.ts` — TOTP + recovery codes
   - `server/auth/lockout.ts` — exponential backoff
   - `server/auth/rateLimit.ts` — `loginRateLimit`, `mfaRateLimit`
-  - `server/auth/security.ts` — `originAllowed`, `DEV_ORIGIN_ALLOWLIST`, IP stamping
+  - `server/auth/security.ts` — `originAllowed`, `DEV_ORIGIN_ALLOWLIST`, trusted-proxy IP attribution, IP stamping
   - `server/repositories/sessions.ts`, `server/repositories/users.ts`, `server/repositories/roles.ts`, `server/repositories/loginAttempts.ts`
   - `server/handlers/cms/auth.ts`, `me.ts`, `users.ts`, `roles.ts`
 - Gate tests:

@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'bun:test'
+import { afterEach, describe, expect, it } from 'bun:test'
 import {
   DEV_ORIGIN_ALLOWLIST,
+  configureTrustedProxyCidrs,
   expectedOrigin,
   isStateChangingMethod,
   originAllowed,
   clientIp,
+  resetTrustedProxyCidrs,
   stampSocketIp,
 } from '../../../server/auth/security'
 
@@ -23,6 +25,10 @@ function makeReq(url: string, init: { method?: string; headers?: Record<string, 
   }
   return req
 }
+
+afterEach(() => {
+  resetTrustedProxyCidrs()
+})
 
 describe('isStateChangingMethod', () => {
   it.each([
@@ -133,11 +139,13 @@ describe('originAllowed', () => {
 })
 
 describe('clientIp', () => {
-  it('reads the first entry of X-Forwarded-For (client → proxy chain)', () => {
+  it('reads the nearest untrusted XFF entry when the socket peer is trusted', () => {
+    configureTrustedProxyCidrs(['10.0.0.0/8'])
     const req = makeReq('http://app:3001/admin/api/cms/login', {
       method: 'POST',
       headers: { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' },
     })
+    stampSocketIp(req, '10.0.0.99')
     expect(clientIp(req)).toBe('203.0.113.7')
   })
 
@@ -147,10 +155,12 @@ describe('clientIp', () => {
   })
 
   it('trims whitespace around XFF entries', () => {
+    configureTrustedProxyCidrs(['10.0.0.0/8'])
     const req = makeReq('http://app:3001/admin/api/cms/login', {
       method: 'POST',
       headers: { 'x-forwarded-for': '  192.0.2.5  , 10.0.0.1' },
     })
+    stampSocketIp(req, '10.0.0.99')
     expect(clientIp(req)).toBe('192.0.2.5')
   })
 
@@ -160,13 +170,33 @@ describe('clientIp', () => {
     expect(clientIp(req)).toBe('127.0.0.1')
   })
 
-  it('prefers XFF over the socket-IP stamp (proxy is authoritative)', () => {
+  it('uses XFF over the socket-IP stamp only when the socket peer is trusted', () => {
+    configureTrustedProxyCidrs(['10.0.0.0/8'])
     const req = makeReq('http://app:3001/admin/api/cms/login', {
       method: 'POST',
       headers: { 'x-forwarded-for': '203.0.113.7' },
     })
     stampSocketIp(req, '10.0.0.99')
     expect(clientIp(req)).toBe('203.0.113.7')
+  })
+
+  it('ignores a spoofed leftmost XFF entry preserved by a trusted proxy', () => {
+    configureTrustedProxyCidrs(['10.0.0.0/8'])
+    const req = makeReq('http://app:3001/admin/api/cms/login', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '198.51.100.200, 203.0.113.7' },
+    })
+    stampSocketIp(req, '10.0.0.99')
+    expect(clientIp(req)).toBe('203.0.113.7')
+  })
+
+  it('ignores spoofed XFF from an untrusted direct client', () => {
+    const req = makeReq('http://localhost:3001/admin/api/cms/login', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '203.0.113.7' },
+    })
+    stampSocketIp(req, '198.51.100.9')
+    expect(clientIp(req)).toBe('198.51.100.9')
   })
 })
 

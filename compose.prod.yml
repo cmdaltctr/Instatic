@@ -30,6 +30,7 @@ services:
       UPLOADS_DIR: /app/uploads
       STATIC_DIR: /app/dist
       INSTATIC_SECRET_KEY: ${INSTATIC_SECRET_KEY:-}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
     volumes:
       - uploads:/app/uploads
     depends_on:

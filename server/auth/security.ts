@@ -8,17 +8,21 @@
  *                                that Caddy sets in compose.tls.yml.
  *   - `originAllowed`          — true when the request's Origin matches the
  *                                expected origin, or is on the dev allowlist.
- *   - `clientIp`               — the forwarded client IP from the proxy, or
- *                                the socket peer address stamped by the
- *                                Bun.serve fetch boundary.
+ *   - `clientIp`               — the nearest untrusted client IP from a
+ *                                trusted proxy chain, or the socket peer
+ *                                address stamped by the Bun.serve boundary.
  *   - `stampSocketIp`          — called once at the Bun.serve boundary; strips
  *                                any inbound spoof of the synthetic header
  *                                and stamps the real socket peer address so
  *                                `clientIp` has a non-proxy fallback.
+ *   - `configureTrustedProxyCidrs`
+ *                              — boot-time allowlist for proxy socket peers
+ *                                whose forwarding headers may be trusted.
  *
  * Used by handlers.ts for CSRF defense-in-depth and by the login endpoint
  * for rate limiting.
  */
+import { isIP } from 'node:net'
 
 /** Extra origins allowed by the Origin check (set via env in dev/test). */
 export const DEV_ORIGIN_ALLOWLIST: string[] = [
@@ -78,6 +82,165 @@ export function originAllowed(req: Request): boolean {
  */
 const BUN_SOCKET_IP_HEADER = 'x-bun-socket-ip'
 
+interface ParsedIpAddress {
+  family: 4 | 6
+  value: bigint
+}
+
+interface TrustedProxyRange {
+  raw: string
+  family: 4 | 6
+  base: bigint
+  prefixBits: number
+  totalBits: number
+}
+
+let trustedProxyRanges: TrustedProxyRange[] = []
+
+export function configureTrustedProxyCidrs(entries: readonly string[]): void {
+  trustedProxyRanges = entries.map(parseTrustedProxyRange)
+}
+
+export function resetTrustedProxyCidrs(): void {
+  trustedProxyRanges = []
+}
+
+function normalizeIpLiteral(raw: string): string {
+  const trimmed = raw.trim()
+  const unbracketed = trimmed.startsWith('[') && trimmed.endsWith(']')
+    ? trimmed.slice(1, -1)
+    : trimmed
+  const withoutZone = unbracketed.split('%', 1)[0] ?? unbracketed
+  const lower = withoutZone.toLowerCase()
+
+  const dotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(lower)
+  if (dotted?.[1]) return dotted[1]
+
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(lower)
+  if (hex?.[1] && hex[2]) {
+    const hi = parseInt(hex[1], 16)
+    const lo = parseInt(hex[2], 16)
+    return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`
+  }
+
+  return lower
+}
+
+function parseIpv4ToBigInt(ip: string): bigint | null {
+  const parts = ip.split('.')
+  if (parts.length !== 4) return null
+  let value = 0
+  for (const part of parts) {
+    if (!/^\d+$/.test(part)) return null
+    const byte = Number(part)
+    if (!Number.isInteger(byte) || byte < 0 || byte > 255) return null
+    value = value * 256 + byte
+  }
+  return BigInt(value)
+}
+
+function parseIpv6Part(part: string): number[] | null {
+  if (!part) return []
+  const out: number[] = []
+  const tokens = part.split(':')
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    if (!token) return null
+    if (token.includes('.')) {
+      if (i !== tokens.length - 1) return null
+      const ipv4 = parseIpv4ToBigInt(token)
+      if (ipv4 === null) return null
+      out.push(Number((ipv4 >> 16n) & 0xffffn), Number(ipv4 & 0xffffn))
+      continue
+    }
+    if (!/^[0-9a-f]{1,4}$/i.test(token)) return null
+    out.push(parseInt(token, 16))
+  }
+  return out
+}
+
+function parseIpv6ToBigInt(ip: string): bigint | null {
+  const chunks = ip.split('::')
+  if (chunks.length > 2) return null
+
+  const head = parseIpv6Part(chunks[0] ?? '')
+  const tail = chunks.length === 2 ? parseIpv6Part(chunks[1] ?? '') : []
+  if (!head || !tail) return null
+
+  if (chunks.length === 1) {
+    if (head.length !== 8) return null
+    return hextetsToBigInt(head)
+  }
+
+  const missing = 8 - head.length - tail.length
+  if (missing < 1) return null
+  return hextetsToBigInt([...head, ...Array(missing).fill(0), ...tail])
+}
+
+function hextetsToBigInt(hextets: readonly number[]): bigint | null {
+  if (hextets.length !== 8) return null
+  let value = 0n
+  for (const hextet of hextets) {
+    if (!Number.isInteger(hextet) || hextet < 0 || hextet > 0xffff) return null
+    value = (value << 16n) + BigInt(hextet)
+  }
+  return value
+}
+
+function parseIpAddress(raw: string): ParsedIpAddress | null {
+  const normalized = normalizeIpLiteral(raw)
+  const family = isIP(normalized)
+  if (family === 4) {
+    const value = parseIpv4ToBigInt(normalized)
+    return value === null ? null : { family, value }
+  }
+  if (family === 6) {
+    const value = parseIpv6ToBigInt(normalized)
+    return value === null ? null : { family, value }
+  }
+  return null
+}
+
+function maskAddress(value: bigint, prefixBits: number, totalBits: number): bigint {
+  if (prefixBits === 0) return 0n
+  const hostBits = BigInt(totalBits - prefixBits)
+  return (value >> hostBits) << hostBits
+}
+
+function parseTrustedProxyRange(rawEntry: string): TrustedProxyRange {
+  const entry = rawEntry.trim()
+  if (!entry) throw new Error('Trusted proxy CIDR cannot be empty')
+
+  const parts = entry.split('/')
+  if (parts.length > 2) throw new Error(`Invalid trusted proxy CIDR "${entry}"`)
+  const parsed = parseIpAddress(parts[0] ?? '')
+  if (!parsed) throw new Error(`Invalid trusted proxy address "${entry}"`)
+
+  const totalBits = parsed.family === 4 ? 32 : 128
+  const prefixBits = parts[1] === undefined ? totalBits : Number(parts[1])
+  if (!Number.isInteger(prefixBits) || prefixBits < 0 || prefixBits > totalBits) {
+    throw new Error(`Invalid trusted proxy CIDR prefix "${entry}"`)
+  }
+
+  return {
+    raw: entry,
+    family: parsed.family,
+    base: maskAddress(parsed.value, prefixBits, totalBits),
+    prefixBits,
+    totalBits,
+  }
+}
+
+function trustedProxyRangeContains(range: TrustedProxyRange, rawIp: string): boolean {
+  const parsed = parseIpAddress(rawIp)
+  if (!parsed || parsed.family !== range.family) return false
+  return maskAddress(parsed.value, range.prefixBits, range.totalBits) === range.base
+}
+
+function isTrustedProxyPeer(rawIp: string): boolean {
+  return trustedProxyRanges.some((range) => trustedProxyRangeContains(range, rawIp))
+}
+
 /**
  * Called once per request at the `Bun.serve` fetch boundary, before any
  * handler logic runs. Strips any inbound copy of the synthetic header
@@ -96,24 +259,28 @@ export function stampSocketIp(req: Request, address: string | null): void {
 /**
  * Best-effort client IP.
  *
- *   1. `X-Forwarded-For` (set by Caddy / any reverse proxy) wins — this is
- *      the only trustworthy source when the app sits behind a proxy. The
- *      chain is comma-separated, most-recent-proxy first by spec; the first
- *      entry is the original client.
- *   2. Otherwise fall back to the synthetic `x-bun-socket-ip` header that
- *      `stampSocketIp` writes at the Bun.serve boundary from
+ *   1. If the socket peer is a configured trusted proxy, walk
+ *      `X-Forwarded-For` right-to-left and return the nearest untrusted IP.
+ *      That avoids trusting a spoofed leftmost value preserved by the proxy.
+ *   2. Otherwise ignore forwarding headers and fall back to the synthetic
+ *      `x-bun-socket-ip` header that `stampSocketIp` writes from
  *      `server.requestIP(req)`. That covers dev (`bun run dev`) and any
  *      self-hosted deployment without a fronting proxy.
  *   3. If neither is available, return `null` — audit/activity logs render
  *      this as "unknown" rather than persisting a fake address.
  */
 export function clientIp(req: Request): string | null {
-  const xff = req.headers.get('x-forwarded-for')
-  if (xff) {
-    const first = xff.split(',')[0]?.trim()
-    if (first) return first
-  }
   const socketIp = req.headers.get(BUN_SOCKET_IP_HEADER)
-  if (socketIp) return socketIp
-  return null
+  if (!socketIp) return null
+
+  const forwardedFor = req.headers.get('x-forwarded-for')
+  if (forwardedFor && isTrustedProxyPeer(socketIp)) {
+    const chain = forwardedFor.split(',').map((entry) => entry.trim()).filter(Boolean)
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const candidate = chain[i]
+      if (!candidate || !parseIpAddress(candidate)) continue
+      if (!isTrustedProxyPeer(candidate)) return normalizeIpLiteral(candidate)
+    }
+  }
+  return socketIp
 }
