@@ -7,7 +7,7 @@
  * and a section body that swaps based on the active tab.
  *
  * Four tabs:
- *   - Profile        — display name + email + role + avatar slot (read-only today)
+ *   - Profile        — display name + email + role + avatar slot
  *   - Active devices — live session list + per-row sign-out + "sign out
  *                       everywhere else"
  *   - Security       — password / MFA / recovery / connected sign-ins

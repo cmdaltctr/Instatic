@@ -15,7 +15,13 @@ export interface ConfirmDeleteRequest {
   description?: string
   /** Confirm button label — defaults to "Delete". */
   confirmLabel?: string
-  /** Action to execute on confirm or, when the preference is off, immediately. */
+  /**
+   * Force this request through the dialog even when the user's
+   * `confirmBeforeDelete` preference is off. Use for destructive actions with
+   * higher document-level blast radius, such as deleting a page.
+   */
+  alwaysConfirm?: boolean
+  /** Action to execute on confirm or, when confirmation is skipped, immediately. */
   commit: () => void
 }
 
@@ -25,11 +31,9 @@ export interface PendingConfirmState {
 
 export interface ConfirmDeleteContextValue {
   /**
-   * Request a confirmation. When the `confirmBeforeDelete` preference is on
-   * the dialog appears and `commit` runs only after the user clicks Delete.
-   * When the preference is off, `commit` runs synchronously and no dialog
-   * is shown — matches the historical "Delete is destructive but instant"
-   * behaviour.
+   * Request a confirmation. When the `confirmBeforeDelete` preference is on,
+   * or the request sets `alwaysConfirm`, the dialog appears and `commit` runs
+   * only after the user clicks Delete. Otherwise `commit` runs synchronously.
    */
   confirmDelete: (request: ConfirmDeleteRequest) => void
 }

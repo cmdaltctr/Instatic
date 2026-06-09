@@ -9,8 +9,8 @@
  *   - The schema-level `layout` field on a PropertyControl ('inline' | 'stacked')
  *     wins when present.
  *   - Otherwise, the renderer falls back to a sensible per-type default
- *     (`image`, `media`, `textarea`, `richtext` are stacked; everything
- *     else is inline). See `defaultLayoutFor`.
+ *     (`image`, `media`, `textarea`, and `svg` are stacked; everything else
+ *     is inline). See `defaultLayoutFor`.
  *   - The resolved layout is forwarded to each concrete control component
  *     so individual controls don't need to repeat the resolution logic.
  */
@@ -22,7 +22,6 @@ import type {
 } from '@core/module-engine'
 import { resolvePropertyControlCategory } from '@core/module-engine'
 import type { DynamicPropBinding } from '@core/page-tree'
-import { sanitizeRichtext } from '@core/sanitize'
 import { useEditorPermissions } from '@site/editorPermissionsContext'
 import { ChevronRightIcon } from 'pixel-art-icons/icons/chevron-right'
 import { TextControl } from './TextControl'
@@ -85,7 +84,6 @@ function defaultLayoutFor(controlType: PropertyControl['type']): PropertyControl
     case 'media':
     case 'svg':
     case 'textarea':
-    case 'richtext':
       return 'stacked'
     default:
       return 'inline'
@@ -216,21 +214,7 @@ export function PropertyControlRenderer({
       break
 
     case 'richtext':
-      // Richtext editor is a future-sprint deliverable. For now, fall back to textarea.
-      // DOMPurify sanitization is applied on every onChange to enforce the richtext
-      // trust boundary (Task #261 / Security Auditor Contribution #368):
-      // the publisher's escapeProps() passes richtext props through unescaped, relying
-      // on this sanitization happening at input time.
-      inner = (
-        <TextareaControl
-          {...shared}
-          value={String(value ?? '')}
-          onChange={(key, rawVal) => onChange(key, sanitizeRichtext(rawVal))}
-          rows={4}
-          placeholder="Rich text (formatting toolbar coming soon…)"
-        />
-      )
-      break
+      return null
 
     case 'group':
       inner = (
@@ -336,6 +320,7 @@ function GroupSection({
     <div className={styles.groupWrapper}>
       {/* Group header */}
       <button
+        type="button"
         onClick={() => setCollapsed((c) => !c)}
         aria-expanded={!collapsed}
         className={styles.groupHeader}

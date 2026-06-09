@@ -2,10 +2,9 @@
  * ConfirmDeleteDialog — generic two-button "are you sure?" prompt for
  * destructive actions in the editor.
  *
- * Driven by the `confirmBeforeDelete` editor preference: callers don't
- * render this directly — they call `useConfirmDelete()` and the provider
- * renders the dialog only when the preference is on. When off, the action
- * runs immediately. See `ConfirmDeleteContext.tsx` for the wiring.
+ * Driven by the `confirmBeforeDelete` editor preference plus per-request
+ * `alwaysConfirm` overrides: callers don't render this directly — they call
+ * `useConfirmDelete()`. See `ConfirmDeleteContext.tsx` for the wiring.
  *
  * Built on the shared `<Dialog>` primitive — the chrome (backdrop, header,
  * footer, focus + Esc handling, portal mount) lives there. This module

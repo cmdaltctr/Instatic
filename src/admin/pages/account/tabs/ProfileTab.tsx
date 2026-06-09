@@ -2,40 +2,40 @@
  * Account → Profile tab.
  *
  * Shows the current user's identity (avatar + display name + email + role)
- * and lets them upload or remove a profile picture. Without an upload, the
- * avatar falls back to the deterministic Gravatar identicon derived from
- * the user's email, so every user has a recognisable picture out of the
- * box.
- *
- * Future work — display-name edit, email change, password change — slots
- * in next to the upload card as additional sections; the avatar surface
- * lives on its own card so it can carry its own busy/error state without
- * a giant section-wide form. Display-name + email edits ride on top of
- * the existing `/me` plumbing (`PATCH /me` is the natural next endpoint).
+ * and lets them edit profile basics or upload/remove a profile picture.
+ * Without an upload, the avatar falls back to the deterministic Gravatar
+ * identicon derived from the user's email, so every user has a recognisable
+ * picture out of the box.
  */
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Button } from '@ui/components/Button'
+import { Input } from '@ui/components/Input'
 import {
   deleteCurrentUserAvatar,
+  updateCurrentUserProfile,
   uploadCurrentUserAvatar,
   type CmsCurrentUser,
 } from '@core/persistence'
 import { useAdminSessionSetter } from '@admin/sessionContext'
+import { useStepUp } from '@admin/shared/StepUp'
 import { UserAvatar } from '@admin/shared/UserAvatar'
 import styles from '../AccountPage.module.css'
 import { getErrorMessage } from '@core/utils/errorMessage'
+import { isStepUpCancelled } from './securityErrors'
 
 interface ProfileTabProps {
   user: CmsCurrentUser
 }
 
-type AvatarStatus = { tone: 'info' | 'error'; message: string } | null
+type ProfileBusy = null | 'profile' | 'upload' | 'remove'
+type ProfileStatus = { tone: 'info' | 'error'; message: string } | null
+type ProfileForm = { displayName: string; email: string }
 
 async function uploadAvatarHelper(
   file: File,
-  setBusy: (v: null | 'upload' | 'remove') => void,
+  setBusy: (v: ProfileBusy) => void,
   setSessionUser: (user: CmsCurrentUser) => void,
-  setStatus: (v: AvatarStatus) => void,
+  setStatus: (v: ProfileStatus) => void,
 ): Promise<void> {
   try {
     const updated = await uploadCurrentUserAvatar(file)
@@ -53,9 +53,9 @@ async function uploadAvatarHelper(
 }
 
 async function removeAvatarHelper(
-  setBusy: (v: null | 'upload' | 'remove') => void,
+  setBusy: (v: ProfileBusy) => void,
   setSessionUser: (user: CmsCurrentUser) => void,
-  setStatus: (v: AvatarStatus) => void,
+  setStatus: (v: ProfileStatus) => void,
 ): Promise<void> {
   try {
     const updated = await deleteCurrentUserAvatar()
@@ -74,12 +74,22 @@ async function removeAvatarHelper(
 
 export function ProfileTab({ user }: ProfileTabProps) {
   const setSessionUser = useAdminSessionSetter()
-  const [busy, setBusy] = useState<null | 'upload' | 'remove'>(null)
-  const [status, setStatus] = useState<AvatarStatus>(null)
+  const { runStepUp } = useStepUp()
+  const [busy, setBusy] = useState<ProfileBusy>(null)
+  const [status, setStatus] = useState<ProfileStatus>(null)
+  const [profileForm, setProfileForm] = useState<ProfileForm>({
+    displayName: user.displayName,
+    email: user.email,
+  })
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const displayNameId = useId()
+  const emailId = useId()
 
   const displayName = user.displayName.trim() || user.email
   const hasUploadedAvatar = user.avatarUrl !== null
+  const profileDirty =
+    profileForm.displayName.trim() !== user.displayName ||
+    profileForm.email.trim() !== user.email
 
   function openFilePicker(): void {
     if (busy) return
@@ -103,6 +113,41 @@ export function ProfileTab({ user }: ProfileTabProps) {
     setBusy('remove')
     setStatus(null)
     await removeAvatarHelper(setBusy, setSessionUser, setStatus)
+  }
+
+  async function handleProfileSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault()
+    if (busy) return
+
+    const email = profileForm.email.trim()
+    if (!email.includes('@')) {
+      setStatus({ tone: 'error', message: 'Enter a valid email address.' })
+      return
+    }
+
+    setBusy('profile')
+    setStatus(null)
+    try {
+      const updated = await runStepUp(() => updateCurrentUserProfile({
+        displayName: profileForm.displayName,
+        email,
+      }))
+      setSessionUser(updated)
+      setProfileForm({
+        displayName: updated.displayName,
+        email: updated.email,
+      })
+      setStatus({ tone: 'info', message: 'Profile saved.' })
+    } catch (err) {
+      if (!isStepUpCancelled(err)) {
+        console.error('[profile-tab] profile update failed:', err)
+        setStatus({
+          tone: 'error',
+          message: getErrorMessage(err, 'Could not save profile.'),
+        })
+      }
+    }
+    setBusy(null)
   }
 
   return (
@@ -151,7 +196,7 @@ export function ProfileTab({ user }: ProfileTabProps) {
                 </Button>
               )}
             </div>
-            <p className={styles.avatarHint}>JPEG, PNG, GIF, or WebP — 5 MB maximum.</p>
+            <p className={styles.avatarHint}>JPEG, PNG, GIF, or WebP, 5 MB maximum.</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -163,26 +208,62 @@ export function ProfileTab({ user }: ProfileTabProps) {
               data-testid="profile-avatar-file"
             />
           </div>
-          <div className={styles.profileFields}>
-            <div className={styles.profileField}>
-              <span className={styles.profileFieldLabel}>Name</span>
-              <span className={styles.profileFieldValue}>{displayName}</span>
+          <form className={styles.profileForm} onSubmit={(event) => void handleProfileSubmit(event)}>
+            <div className={styles.profileFields}>
+              <div className={styles.profileField}>
+                <label className={styles.profileFieldLabel} htmlFor={displayNameId}>Name</label>
+                <Input
+                  id={displayNameId}
+                  value={profileForm.displayName}
+                  name="current-user-display-name"
+                  autoComplete="name"
+                  data-testid="profile-display-name"
+                  disabled={busy !== null}
+                  onChange={(event) => {
+                    setProfileForm({ ...profileForm, displayName: event.currentTarget.value })
+                  }}
+                />
+              </div>
+              <div className={styles.profileField}>
+                <label className={styles.profileFieldLabel} htmlFor={emailId}>Email</label>
+                <Input
+                  id={emailId}
+                  type="email"
+                  value={profileForm.email}
+                  name="current-user-email-address"
+                  autoComplete="email"
+                  data-testid="profile-email"
+                  required
+                  disabled={busy !== null}
+                  onChange={(event) => {
+                    setProfileForm({ ...profileForm, email: event.currentTarget.value })
+                  }}
+                />
+              </div>
+              <div className={styles.profileField}>
+                <span className={styles.profileFieldLabel}>Role</span>
+                <span className={styles.profileFieldValue}>{user.role.name}</span>
+              </div>
             </div>
-            <div className={styles.profileField}>
-              <span className={styles.profileFieldLabel}>Email</span>
-              <span className={styles.profileFieldValue}>{user.email}</span>
+            <div className={styles.profileActions}>
+              <Button
+                variant="primary"
+                size="sm"
+                type="submit"
+                disabled={busy !== null || !profileDirty}
+                aria-busy={busy === 'profile'}
+                data-testid="profile-save"
+              >
+                <span>{busy === 'profile' ? 'Saving…' : 'Save profile'}</span>
+              </Button>
             </div>
-            <div className={styles.profileField}>
-              <span className={styles.profileFieldLabel}>Role</span>
-              <span className={styles.profileFieldValue}>{user.role.name}</span>
-            </div>
-          </div>
+          </form>
         </div>
         {status && (
           <p
             className={status.tone === 'error' ? styles.error : styles.cardStatus}
             role={status.tone === 'error' ? 'alert' : 'status'}
-            data-testid="profile-avatar-status"
+            data-testid="profile-status"
           >
             {status.message}
           </p>

@@ -173,6 +173,12 @@
     display: none;
 }
 
+.profileForm {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+
 .profileFields {
     display: grid;
     gap: 10px;
@@ -198,6 +204,11 @@
     font-size: 13px;
     font-weight: 600;
     word-break: break-word;
+}
+
+.profileActions {
+    display: flex;
+    justify-content: flex-end;
 }
 
 .error {

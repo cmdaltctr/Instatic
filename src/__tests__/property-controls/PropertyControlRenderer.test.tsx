@@ -392,9 +392,9 @@ describe('PropertyControlRenderer — type dispatch', () => {
     expect(html).toContain('data-testid="property-control-href"')
   })
 
-  it('richtext → falls back to <textarea> for MVP', () => {
-    const html = renderControl({ type: 'richtext' as 'textarea', label: 'Content' }, 'content', '')
-    expect(html).toContain('<textarea')
+  it('richtext → does not render a visible site-editor control', () => {
+    const html = renderControl({ type: 'richtext', label: 'Content' }, 'content', '')
+    expect(html).toBe('')
   })
 
 })
@@ -618,7 +618,7 @@ describe('PropertyControlRenderer — layout variant', () => {
     expect(html).toContain('data-layout="inline"')
   })
 
-  it('media/image/textarea/richtext control types default to stacked', () => {
+  it('media/image/textarea control types default to stacked', () => {
     expect(renderControl({ type: 'image', label: 'Image' }, 'src')).toContain('data-layout="stacked"')
     expect(
       renderControl({ type: 'media', mediaKind: 'video', label: 'Clip' }, 'video'),
@@ -626,9 +626,6 @@ describe('PropertyControlRenderer — layout variant', () => {
     expect(renderControl({ type: 'textarea', label: 'Body' }, 'body')).toContain(
       'data-layout="stacked"',
     )
-    expect(
-      renderControl({ type: 'richtext' as 'textarea', label: 'Content' }, 'content'),
-    ).toContain('data-layout="stacked"')
   })
 
   it('explicit schema layout overrides the per-type default', () => {

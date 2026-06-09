@@ -75,8 +75,8 @@ export async function handleCmsRequest(
   // try the next one".
   const response =
     (await handleSetupRoutes(req, db))
-    ?? (await handleAuthRoutes(req, db))
     ?? (await handleMeRoutes(req, db, options))
+    ?? (await handleAuthRoutes(req, db))
     // User preferences sit next to /me/* because they share the same
     // self-targeted "anything an authenticated user can do to their own
     // account" surface. Routes mount under `/admin/api/cms/me/preferences/`.

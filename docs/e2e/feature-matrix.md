@@ -37,11 +37,11 @@ Use this matrix to choose agent-browser audit scope. Rows are user goals. Keep s
 | ID | Priority | Auto | Area | User Goal | Setup | Path | Expected Outcome | Watch For |
 |---|---:|:---:|---|---|---|---|---|---|
 | ADMIN-001 | P1 | ✅ | Navigation | Move between Site, Content, Plugins, Users, Account | Logged in | Admin navigation | Active page and breadcrumbs are clear | dead links, unclear active state |
-| ADMIN-002 | P2 | partial | Account | Change account profile basics | Logged in | Account page | Changes save and persist | missing feedback, validation copy |
+| ADMIN-002 | P2 | partial | Account | Change account profile basics | Logged in | Account page | Step-up prompt appears; changes save and persist | missing feedback, validation copy |
 | ADMIN-003 | P2 | — | Security | Start and cancel MFA setup | Logged in | Account security | Flow is understandable and cancelable | scary copy, stuck modal |
 | ADMIN-004 | P2 | ✅ | Users | Create a non-owner user | Owner logged in | Users page | New user appears with intended role | role confusion, unsafe defaults |
 
-ADMIN-002 note: avatar upload is automated (`account.e2e.ts`); display name, email, and password editing are not yet built — ProfileTab renders those read-only.
+ADMIN-002 note: display-name editing is automated with the step-up prompt, and avatar upload is automated (`account.e2e.ts`). Email editing uses the same step-up-gated Profile form and is covered at the `/me` API level so the shared owner login email stays stable during the E2E suite.
 
 ## Capabilities And Access Control
 
@@ -77,7 +77,7 @@ CAP-003 note: publish step-up is exercised in every publishing spec (`core-owner
 | BUILDER-005 | P1 | ✅ | Undo/Redo | Undo and redo edits | Edited page | Toolbar/shortcuts | State moves predictably backward/forward | partial undo, UI desync |
 | BUILDER-006 | P2 | — | Styling | Apply spacing, color, and typography | Selected node | Properties and class controls | Visual result matches settings | token label confusion, no preview |
 | BUILDER-007 | P2 | — | Breakpoints | Edit mobile/tablet/desktop variants | Page with content | Breakpoint selector | Variant changes are scoped and understandable | accidental global change, clipped UI |
-| BUILDER-008 | P2 | — | Rich Text | Edit formatted text | Text module | Rich text controls | Formatting persists and publishes cleanly | toolbar confusion, sanitization surprises |
+| BUILDER-008 | P2 | — | Formatted content | Render formatted post content | Content entry with rich body | Content outlet or text bindings | Formatting persists and publishes cleanly | binding confusion, sanitization surprises |
 
 ## Media
 
@@ -121,14 +121,13 @@ Full scenario descriptions and per-assertion steps live in `docs/e2e/spotlight.m
 |---|---:|:---:|---|---|---|---|---|---|
 | SPOT-001 | P1 | ✅ | Open/Close | Open palette with ⌘K and close with Esc | Logged in | ⌘K → Esc | Palette opens, input focused, Esc closes, focus restored | Focus trap failures; palette fails to open |
 | SPOT-002 | P1 | ✅ | Navigation | Type a query and navigate to a workspace | Logged in | Open palette, type, Enter | Correct workspace opened; palette closed | Wrong navigation; palette left open |
-| SPOT-003 | P2 | — | Subcommand | Push a scope and pick an item | Site workspace with viewport contexts | Open palette, drill into "Switch viewport →" | Active viewport changes; palette closes | Scope push fails; wrong item selected |
+| SPOT-003 | P2 | ✅ | Subcommand | Push a scope and pick an item | Site workspace with viewport contexts | Open palette, drill into "Switch viewport →" | Active viewport changes; palette closes | Scope push fails; wrong item selected |
 | SPOT-004 | P1 | ✅ | Destructive | Two-Enter confirm flow for a destructive command | Multiple pages exist | Open palette, destructive command, Enter×2 | First Enter shows confirm; second runs | No confirm shown; double-fire |
 | SPOT-005 | P2 | — | Destructive timeout | Confirm collapses after 5 s without second Enter | Active confirm state | Wait >5 s | Confirm prompt disappears | Timer off; row stuck |
 | SPOT-006 | P1 | ✅ | Empty state | No-match query shows empty state | Logged in | Open palette, type nonsense string | Empty-state UI with quoted query | Empty state missing; wrong empty state |
 | SPOT-007 | P2 | — | Context ranking | Duplicate-layer command boosted with node selected | Editor, node selected | Open palette | "Duplicate selected layer" near top | Command missing; not boosted |
 | SPOT-008 | P2 | ✅ | Recents | Recent commands at top on re-open | Run one command | Close and reopen palette | Recent group with prior command visible | Recents not persisted; duplicates |
 
-SPOT-003 note: blocked by a product bug — `breakpointsScope.ts` sources breakpoints via a Node-style `require()` that is undefined in the browser bundle, so "Switch viewport" always shows no commands. Tracked in the existing bounty findings.
 
 ## Performance And Reliability
 

@@ -2,9 +2,10 @@ import { expect, test, type Page } from '@playwright/test'
 import { createPage, openSiteEditor } from './helpers'
 
 /**
- * SPOT-001 / SPOT-002 / SPOT-004 / SPOT-006 — open and close the ⌘K command
- * palette, navigate to a workspace from it, run a destructive two-Enter confirm,
- * and see the empty state for a no-match query.
+ * SPOT-001 / SPOT-002 / SPOT-003 / SPOT-004 / SPOT-006 — open and close the
+ * ⌘K command palette, navigate to a workspace from it, switch viewport through
+ * a nested scope, run a destructive two-Enter confirm, and see the empty state
+ * for a no-match query.
  *
  * Read-only/draft mutations, so these run on the shared owner state.
  */
@@ -85,10 +86,23 @@ test.describe('command palette', () => {
     await expect(page.getByRole('option')).toHaveCount(0)
   })
 
-  // SPOT-003 (subcommand "Switch viewport") is intentionally NOT automated:
-  // breakpointsScope.ts sources breakpoints via a Node-style require() that is
-  // undefined in the browser bundle, so the scope is always empty ("No commands
-  // available"). Tracked as a product bug; left to the agent-run audit.
+  test('switches viewport through the nested scope (SPOT-003)', async ({ page }) => {
+    await openSiteEditor(page)
+
+    await expect(
+      page.getByRole('button', { name: /Switch to Desktop breakpoint/, pressed: true }),
+    ).toBeVisible()
+
+    await openPalette(page)
+    await input(page).fill('switch viewport')
+    await page.getByRole('option', { name: /Switch viewport/ }).click()
+    await page.getByRole('option', { name: 'Mobile' }).click()
+
+    await expect(palette(page)).toBeHidden()
+    await expect(
+      page.getByRole('button', { name: /Switch to Mobile breakpoint/, pressed: true }),
+    ).toBeVisible()
+  })
 
   test('boosts a recently run command to the top on reopen (SPOT-008)', async ({
     page,

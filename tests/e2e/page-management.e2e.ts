@@ -23,10 +23,6 @@ test.describe('page management', () => {
   })
 
   test('deletes a page from the explorer (PAGE-003)', async ({ page }) => {
-    // FINDING: single-page delete in the explorer is immediate — there is no
-    // confirm dialog (only *bulk* delete and the ⌘K "Delete current page"
-    // command confirm; the latter is covered by SPOT-004). This asserts the
-    // delete mechanics and the page leaving the tree.
     const name = uniqueName('Disposable')
 
     await openSiteEditor(page)
@@ -35,6 +31,10 @@ test.describe('page management', () => {
 
     await item.click({ button: 'right' })
     await page.getByRole('menuitem', { name: 'Delete' }).click()
+    const dialog = page.getByRole('alertdialog', { name: 'Delete page?' })
+    await expect(dialog).toBeVisible()
+    await expect(item).toBeVisible()
+    await dialog.getByRole('button', { name: 'Delete page' }).click()
 
     await expect(item).toHaveCount(0)
   })

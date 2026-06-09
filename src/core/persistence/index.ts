@@ -84,6 +84,7 @@ export {
   startCurrentUserTotpSetup,
   stepUpCms,
   updateCurrentUserStepUpSettings,
+  updateCurrentUserProfile,
   uploadCurrentUserAvatar,
   verifyCmsMfa,
 } from './cmsAuth'

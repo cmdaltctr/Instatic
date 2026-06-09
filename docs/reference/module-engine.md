@@ -138,7 +138,7 @@ The `schema` field maps prop keys to `PropertyControl` descriptors. Full union i
 |-------------|---------------------------------------------------|--------------------------|
 | `text`      | `<Input>`                                         | `string`                 |
 | `textarea`  | `<Textarea>`                                      | `string`                 |
-| `richtext`  | Rich text editor (DOMPurify output)               | HTML string              |
+| `richtext`  | No visible site-editor control; hidden/internal sanitized HTML prop | HTML string              |
 | `number`    | `<Input type="number">`                           | `number`                 |
 | `toggle`    | `<Switch>`                                        | `boolean`                |
 | `select`    | `<Select>` or `<ContextMenu>` for long lists      | option value string      |
@@ -203,7 +203,7 @@ html: { type: 'richtext', label: 'Content', hidden: true }
 | `svg`                     | `sanitizeSvg` (DOMPurify SVG profile)                      |
 | everything else, or a prop absent from `schema` | `escapeHtml` (safe default)          |
 
-A prop that needs URL/richtext/SVG handling **must** declare the matching `type` (use `hidden` if it should not appear in the panel). There is no key-name fallback.
+A prop that needs URL/richtext/SVG handling **must** declare the matching `type`. `richtext` is intentionally an internal/hidden HTML prop type for publisher sanitization; author-facing formatted content is authored in the Content workspace and rendered through content outlets or variable bindings. There is no key-name fallback.
 
 ---
 

@@ -207,8 +207,9 @@ describe('AccountPage', () => {
     expect(screen.getByTestId('account-tab-sessions')).toBeTruthy()
     expect(screen.getByTestId('account-tab-security')).toBeTruthy()
     expect(screen.getByTestId('account-tab-activity')).toBeTruthy()
-    // Default tab is Profile — user's email is visible.
-    expect(screen.getByText('owner@example.com')).toBeTruthy()
+    // Default tab is Profile — identity values are loaded into editable fields.
+    expect(screen.getByTestId('profile-display-name').getAttribute('value')).toBe('Olivia Owner')
+    expect(screen.getByTestId('profile-email').getAttribute('value')).toBe('owner@example.com')
   })
 
   it('Sessions tab renders the device list with the current session pinned', async () => {

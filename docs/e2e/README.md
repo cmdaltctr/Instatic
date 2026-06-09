@@ -70,9 +70,10 @@ regression runs that need a clean database.
   SETUP-001) and the owner's authenticated `storageState` is saved. Every spec
   depends on it.
 - **Session rule.** Specs default to the shared owner `storageState` (fast).
-  Specs that **publish** (which triggers a step-up) or **sign out** rotate the
-  session token server-side, so they opt into `ANONYMOUS_STATE` and `login()`
-  fresh — otherwise they would invalidate the shared state for later specs.
+  Specs that run a **step-up-gated action** (publish, profile basics, etc.) or
+  **sign out** rotate the session token server-side, so they opt into
+  `ANONYMOUS_STATE` and `login()` fresh — otherwise they would invalidate the
+  shared state for later specs.
 - **Selectors.** Durable user-facing selectors first (roles, labels, accessible
   names). `data-testid` only for stable editor/canvas controls where an
   accessible name is not practical (canvas notch, toolbar publish actions, the
@@ -96,9 +97,9 @@ These feature-matrix rows now have Playwright regression coverage:
 | BUILDER-001, BUILDER-002, BUILDER-005, EDIT-002 | `visual-builder.e2e.ts` |
 | MEDIA-001, MEDIA-002, MEDIA-003 | `media.e2e.ts` |
 | CONTENT-001, CONTENT-002 | `content.e2e.ts` |
-| SPOT-001, SPOT-002, SPOT-004, SPOT-006, SPOT-008 | `command-palette.e2e.ts` |
+| SPOT-001, SPOT-002, SPOT-003, SPOT-004, SPOT-006, SPOT-008 | `command-palette.e2e.ts` |
 | ADMIN-004, CAP-001 | `users.e2e.ts` |
-| ADMIN-002 (avatar) | `account.e2e.ts` |
+| ADMIN-002 (display name + avatar) | `account.e2e.ts` |
 | A11Y-001, RESP-001 | `accessibility.e2e.ts` |
 
 ### Intentionally left agent-run only
@@ -112,7 +113,7 @@ durable assertion brittle:
   step-up side-effect review better audited than asserted. (ADMIN-004 + the
   CAP-001 workspace-isolation core are now automated in `users.e2e.ts`.)
 - **BUILDER-003/004 (DOM + canvas drag-reorder), BUILDER-006/007/008
-  (styling/breakpoints/rich-text)** — drag physics and visual/typographic
+  (styling/breakpoints/formatted content)** — drag physics and visual/typographic
   judgement; left to the friction audit. (Undo/redo, BUILDER-005, is automated.)
 - **PAGE-004, CONTENT-003, MEDIA-? (none)** — unsaved-edit save-state clarity and
   collection-schema review with subjective "is this clear?" outcomes.
@@ -120,23 +121,8 @@ durable assertion brittle:
 - **SPOT-005/007/009–013** — confirm-timeout, context ranking, reduced-motion /
   high-contrast: timing and animation/OS-mode checks unsuited to a stable
   boolean assertion.
-- **SPOT-003** — **blocked by an app bug**: the viewport scope
-  (`breakpointsScope.ts`) sources breakpoints via a Node-style `require()` that
-  is undefined in the browser bundle, so "Switch viewport" shows *no commands*.
-- **ADMIN-002 (display name/email/password)** — not yet built; ProfileTab renders
-  identity read-only. Only the avatar is editable (automated above).
 - **A11Y-002, RESP-002, PERF-*, REL-***  — deeper keyboard sweeps, public mobile
   layout, performance and recovery: observational, agent-run.
-
-### Findings surfaced while automating
-
-- **Single-page delete has no confirmation.** Deleting one page from the Site
-  Explorer is immediate (only *bulk* delete and the ⌘K "Delete current page"
-  command confirm). PAGE-003 asserts the mechanics; the missing confirm is a
-  UX gap.
-- **Command palette "Switch viewport" is dead in the browser** (see SPOT-003
-  above) — a `require()` that only resolves under Node.
-- **Account profile is read-only except the avatar** (see ADMIN-002 above).
 
 The first reference spec remains `core-owner-lifecycle.e2e.ts`, the flagship
 owner journey: login/logout, edit homepage text, save/reload, step-up-gated

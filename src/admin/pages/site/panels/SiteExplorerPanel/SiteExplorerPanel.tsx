@@ -243,7 +243,13 @@ export function SiteExplorerPanel({
 
   function handleDelete(target: SiteExplorerContextTarget) {
     if (target.kind === 'page') {
-      deletePage(target.id)
+      confirmDelete({
+        title: 'Delete page?',
+        description: `This will remove "${target.title}" from the site tree.`,
+        confirmLabel: 'Delete page',
+        alwaysConfirm: true,
+        commit: () => deletePage(target.id),
+      })
     } else if (target.kind === 'component') {
       confirmVCDeletion({
         vcId: target.id,

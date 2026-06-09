@@ -2,14 +2,15 @@
  * Self-targeted user mutations — endpoints any authenticated user can call
  * to change their own profile data without needing `users.manage`.
  *
+ *   PATCH  /admin/api/cms/me        — update display name and email
  *   POST   /admin/api/cms/me/avatar — upload a new avatar image
  *   DELETE /admin/api/cms/me/avatar — clear the avatar, falling back to the
  *                                     Gravatar identicon served by the client
  *
  * `GET /admin/api/cms/me` lives in `./auth.ts` because it shares the session
  * helpers with login/logout. The avatar endpoints land here so the file
- * stays focused on self-mutation flows (display-name edit, avatar, future
- * password change all slot in next to each other).
+ * stays focused on self-mutation flows (display-name edit, avatar, password
+ * change all slot in next to each other).
  *
  * Avatars are stored as ordinary `media_assets` rows + an `avatar_media_id`
  * pointer on the user. We deliberately leave the old media row in the
@@ -31,8 +32,10 @@ import {
 import {
   disableUserTotpMfa,
   enableUserTotpMfa,
+  findUserByEmail,
   replaceUserRecoveryCodeHashes,
   setUserAvatarMediaId,
+  updateUser,
   updateUserStepUpPolicy,
   updateUserPasswordHash,
 } from '../../repositories/users'
@@ -41,6 +44,7 @@ import { createAuditEvent } from '../../repositories/audit'
 import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
 import {
   CMS_API_PREFIX,
+  mutationErrorResponse,
   requestAuditContext,
   type CmsHandlerOptions,
 } from './shared'
@@ -60,6 +64,11 @@ const MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
 const ChangePasswordBodySchema = Type.Object({
   newPassword: Type.String({ minLength: 12 }),
+})
+
+const UpdateProfileBodySchema = Type.Object({
+  displayName: Type.String({ maxLength: 160 }),
+  email: Type.String({ minLength: 3, maxLength: 320 }),
 })
 
 const EnableTotpBodySchema = Type.Object({
@@ -96,6 +105,47 @@ export async function handleMeRoutes(
   _options: CmsHandlerOptions,
 ): Promise<Response | null> {
   const url = new URL(req.url)
+
+  if (url.pathname === `${CMS_API_PREFIX}/me`) {
+    if (req.method !== 'PATCH') return null
+    const user = await requireAuthenticatedUser(req, db)
+    if (user instanceof Response) return user
+    const stepUp = await requireStepUp(req, db, user)
+    if (stepUp) return stepUp
+    const body = await readValidatedBody(req, UpdateProfileBodySchema)
+    if (!body) return badRequest('Invalid profile payload')
+
+    const email = body.email.trim()
+    if (!email.toLowerCase().includes('@')) return badRequest('Invalid email')
+    const existing = await findUserByEmail(db, email)
+    if (existing && existing.id !== user.id) {
+      return badRequest('Email is already in use')
+    }
+
+    try {
+      const updated = await updateUser(db, user.id, {
+        displayName: body.displayName,
+        email,
+      })
+      if (!updated) return jsonResponse({ error: 'User not found' }, { status: 404 })
+
+      await createAuditEvent(db, {
+        actorUserId: user.id,
+        action: 'user.update',
+        targetType: 'user',
+        targetId: user.id,
+        metadata: {
+          profileChanged: true,
+          displayNameChanged: updated.displayName !== user.displayName,
+          emailChanged: updated.email !== user.email,
+        },
+        ...requestAuditContext(req),
+      })
+      return jsonResponse({ user: updated })
+    } catch (err) {
+      return mutationErrorResponse(err)
+    }
+  }
 
   if (url.pathname === `${CMS_API_PREFIX}/me/password`) {
     if (req.method !== 'PATCH') return methodNotAllowed()

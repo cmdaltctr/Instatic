@@ -10,11 +10,10 @@ per-run logging.
 All scenarios in this file assume the user is **logged in** as the site owner
 unless stated otherwise. Priority codes follow `docs/e2e/feature-matrix.md`.
 
-**Playwright automation status:** SPOT-001, SPOT-002, SPOT-004, SPOT-006, and
-SPOT-008 have Playwright regression coverage in `tests/e2e/command-palette.e2e.ts`.
-SPOT-003 is blocked by a product bug (`breakpointsScope.ts` uses a Node-style
-`require()` that is undefined in the browser bundle). The remaining rows are
-agent-run only (timing, animation, OS accessibility mode checks).
+**Playwright automation status:** SPOT-001, SPOT-002, SPOT-003, SPOT-004,
+SPOT-006, and SPOT-008 have Playwright regression coverage in
+`tests/e2e/command-palette.e2e.ts`. The remaining rows are agent-run only
+(timing, animation, OS accessibility mode checks).
 
 ---
 

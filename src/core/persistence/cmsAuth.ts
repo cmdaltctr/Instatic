@@ -27,6 +27,11 @@ interface CmsStepUpInput {
   mfaCode?: string
 }
 
+interface CmsProfileInput {
+  displayName: string
+  email: string
+}
+
 export const CmsStepUpAuthModeSchema = Type.Union([
   Type.Literal('required'),
   Type.Literal('disabled'),
@@ -287,6 +292,21 @@ export async function deleteCurrentUserAvatar(
     schema: MeAvatarEnvelope,
     fetchImpl,
     fallbackMessage: 'CMS avatar delete failed',
+  })
+  return body.user
+}
+
+export async function updateCurrentUserProfile(
+  input: CmsProfileInput,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/admin/api/cms',
+): Promise<CmsCurrentUser> {
+  const body = await apiRequest(`${basePath}/me`, {
+    method: 'PATCH',
+    body: input,
+    schema: MeUserEnvelope,
+    fetchImpl,
+    fallbackMessage: 'CMS profile update failed',
   })
   return body.user
 }

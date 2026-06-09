@@ -38,6 +38,7 @@ src/modules/base/
 ├── body/                — base.body (root container)
 ├── container/           — base.container (flex/grid container)
 ├── text/                — base.text (tags.ts — tag coercion leaf)
+├── textNode/            — base.text-node (bare imported DOM text nodes)
 ├── outlet/              — base.outlet (Content Outlet — template content slot)
 ├── button/              — base.button (anchor.ts — element-decision leaf)
 ├── link/                — base.link (content.ts — children/text fallback leaf)
@@ -183,7 +184,7 @@ schema: PropertySchema = {
 |-------------|-----------------------------------------------------------|---------------------------------|
 | `text`      | `<Input>`                                                 | `string`                        |
 | `textarea`  | `<Textarea>`                                              | `string`                        |
-| `richtext`  | `<RichTextEditor>` (DOMPurify-sanitized output)           | HTML string                     |
+| `richtext`  | No visible site-editor control; hidden/internal sanitized HTML prop | HTML string                     |
 | `number`    | `<Input type="number">`                                   | `number`                        |
 | `toggle`    | `<Switch>`                                                | `boolean`                       |
 | `select`    | `<Select>` (short list) or `<ContextMenu>` (long)         | option value string             |

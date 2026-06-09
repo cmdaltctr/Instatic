@@ -25,7 +25,6 @@ import { ChevronDownIcon } from 'pixel-art-icons/icons/chevron-down'
 import { ChevronUpIcon } from 'pixel-art-icons/icons/chevron-up'
 import { UndoIcon } from 'pixel-art-icons/icons/undo'
 import { MediaLibraryControl } from '@site/property-controls/MediaLibraryControl'
-import { RichTextEditor } from '@site/property-controls/RichTextEditor'
 import { cn } from '@ui/cn'
 import { ControlRow } from '@ui/components/ControlRow'
 import styles from './ParamRow.module.css'
@@ -229,13 +228,7 @@ export function ParamRow({
         )
 
       case 'richText':
-        return (
-          <RichTextEditor
-            value={String(value ?? '')}
-            onChange={(sanitized) => onValueChange(sanitized)}
-            ariaLabel={paramName}
-          />
-        )
+        return <span className={styles.slotCaption}>Use a content outlet</span>
 
       case 'slot':
         // No value control for slot params — edit on canvas

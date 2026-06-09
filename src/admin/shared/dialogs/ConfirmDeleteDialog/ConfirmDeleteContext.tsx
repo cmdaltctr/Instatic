@@ -2,11 +2,11 @@
  * ConfirmDeleteProvider — single-instance dialog host for destructive
  * editor actions (delete layer, delete page, etc.).
  *
- * Reads the `confirmBeforeDelete` editor preference. When enabled, calling
- * `confirmDelete(request)` mounts <ConfirmDeleteDialog/> and runs
- * `request.commit` only after the user confirms. When disabled, `commit`
- * runs synchronously — preserving the previous one-key delete flow for
- * users who opt out of confirmations.
+ * Reads the `confirmBeforeDelete` editor preference. When enabled, or when a
+ * request opts into `alwaysConfirm`, calling `confirmDelete(request)` mounts
+ * <ConfirmDeleteDialog/> and runs `request.commit` only after the user
+ * confirms. Otherwise `commit` runs synchronously — preserving the previous
+ * one-key layer-delete flow for users who opt out of confirmations.
  *
  * One provider mounted at the editor root replaces N inline confirm states
  * across panels and the canvas.
@@ -31,7 +31,7 @@ export function ConfirmDeleteProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<PendingConfirmState | null>(null)
 
   const confirmDelete = (request: ConfirmDeleteRequest) => {
-    if (!confirmBeforeDelete) {
+    if (!confirmBeforeDelete && !request.alwaysConfirm) {
       request.commit()
       return
     }

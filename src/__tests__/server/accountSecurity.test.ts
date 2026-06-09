@@ -165,6 +165,48 @@ describe('Account security endpoints', () => {
     resetLimiters()
   })
 
+  it('PATCH /me requires step-up before updating profile basics', async () => {
+    const { db } = testDb
+    const { cookie } = await login(db)
+    const nextEmail = 'owner-renamed@example.com'
+
+    const blockedReq = new Request('http://localhost/admin/api/cms/me', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: 'Owner Renamed',
+        email: nextEmail,
+      }),
+    })
+    blockedReq.headers.set('cookie', cookie)
+    const blockedRes = await handleCmsRequest(blockedReq, db)
+    expect(blockedRes.status).toBe(401)
+    expect(await blockedRes.json()).toEqual({ error: 'step_up_required' })
+    expect(await findUserByEmail(db, nextEmail)).toBeNull()
+
+    const steppedCookie = await stepUp(db, cookie)
+    const updateReq = new Request('http://localhost/admin/api/cms/me', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: 'Owner Renamed',
+        email: nextEmail,
+      }),
+    })
+    updateReq.headers.set('cookie', steppedCookie)
+    const updateRes = await handleCmsRequest(updateReq, db)
+    expect(updateRes.status).toBe(200)
+    const body = await updateRes.json() as {
+      user: { displayName: string; email: string; gravatarHash: string }
+    }
+    expect(body.user.displayName).toBe('Owner Renamed')
+    expect(body.user.email).toBe(nextEmail)
+    expect(body.user.gravatarHash).toHaveLength(64)
+
+    const updated = await findUserByEmail(db, nextEmail)
+    expect(updated?.displayName).toBe('Owner Renamed')
+  })
+
   it('PATCH /me/password requires step-up, changes the password, and revokes other sessions', async () => {
     const { db } = testDb
     const { cookie } = await login(db)

@@ -10,7 +10,6 @@
  * USAGE
  * -----
  * Call `sanitizeRichtext(value)` at EVERY write path that stores a richtext prop:
- *   - PropertyControlRenderer: onChange for richtext/textarea controls
  *   - useSandboxBridge: PROP_CHANGE messages from community module iframes
  *   - CMS draft hydration before store load
  *   - Phase D agent dispatcher: setProps tool calls for richtext-typed props
