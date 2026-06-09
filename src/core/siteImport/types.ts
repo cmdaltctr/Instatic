@@ -59,9 +59,9 @@ export type NewStyleRule = Omit<StyleRule, 'id' | 'createdAt' | 'updatedAt'>
  *   list just gains suffixed names. See `scopeClasses.ts`.
  *
  * Phase 2 (site import pipeline) kinds:
- * - `missing-stylesheet`: a `<link rel="stylesheet">` href referenced in an
- *   HTML file was not found in the FileMap. The page is still imported; the
- *   missing CSS is noted but not fatal.
+ * - `missing-stylesheet`: a stylesheet referenced from an HTML `<link>` or a
+ *   local CSS `@import` was not found in the FileMap. The page is still
+ *   imported; the missing CSS is noted but not fatal.
  * - `missing-script`: a `<script src>` referenced in an HTML file was not
  *   found in the FileMap. The page is still imported; the missing script is
  *   noted but not fatal.
@@ -102,7 +102,7 @@ export interface ImportWarning {
   /**
    * For CSS warnings: the raw CSS source text that triggered the warning,
    * truncated to ~120 chars with a trailing `…` if cut.
-   * For `missing-stylesheet`: the HTML file that referenced the missing CSS.
+   * For `missing-stylesheet`: the HTML/CSS file that referenced the missing CSS.
    */
   source?: string
   /** The CSS selector relevant to the warning (for unknown-property, duplicate-class). */
@@ -344,8 +344,9 @@ export interface PagePlan {
   slug: string
   /**
    * FileMap keys of CSS files linked by `<link rel="stylesheet">` in the
-   * page's `<head>`. Only paths that exist in the FileMap are included; missing
-   * hrefs produce `missing-stylesheet` warnings instead.
+   * page's `<head>`, expanded to include unconditional local CSS `@import`
+   * dependencies. Only paths that exist in the FileMap are included; missing
+   * hrefs/imports produce `missing-stylesheet` warnings instead.
    */
   linkedCssPaths: string[]
   /**

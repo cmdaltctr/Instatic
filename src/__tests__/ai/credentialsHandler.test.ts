@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { createCapabilityTestHarness, readJson, type CapabilityTestHarness } from '../helpers/capabilityHarness'
-import { __resetMasterKeyCacheForTesting } from '../../../server/ai/credentials/masterKey'
+import { __resetMasterKeyCacheForTesting } from '../../../server/secrets/masterKey'
 
 describe('AI credential handler', () => {
   let harness: CapabilityTestHarness

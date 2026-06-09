@@ -134,7 +134,7 @@ Set a maintenance window before enabling automatic updates on sites with attache
 | SQLite data disappears after redeploy | `DATABASE_URL` must point under the mounted volume, e.g. `/app/storage/data/cms.db`. |
 | Uploaded files disappear after redeploy | `UPLOADS_DIR` must point under the mounted volume, e.g. `/app/storage/uploads`. |
 | Postgres app cannot connect | `DATABASE_URL` must reference the Postgres service's internal `DATABASE_URL`, not a copied local URL. |
-| Adding an AI provider credential returns 500 | Set `INSTATIC_SECRET_KEY` on the app service. Generate it with `bun run scripts/generate-secret-key.ts`; do not rotate or delete it without re-entering stored AI keys. |
+| Adding an AI provider credential or enabling TOTP MFA returns 500 | Set `INSTATIC_SECRET_KEY` on the app service. Generate it with `bun run scripts/generate-secret-key.ts`; do not rotate or delete it without re-entering stored AI keys and re-enrolling TOTP MFA. |
 | Deployments appear in the Instatic GitHub repo | The service is connected to GitHub source. Change the service source to the published Docker image. |
 
 ## Related

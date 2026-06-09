@@ -29,6 +29,7 @@ import {
   totpProvisioningUri,
   verifyTotpCode,
 } from '../../auth/mfa'
+import { totpSecretErrorResponse } from '../../auth/totpSecrets'
 import {
   disableUserTotpMfa,
   enableUserTotpMfa,
@@ -210,10 +211,17 @@ export async function handleMeRoutes(
     if (!codeOk) return badRequest('Invalid authentication code')
 
     const recovery = newRecoveryCodeSet()
-    const updated = await enableUserTotpMfa(db, user.id, {
-      secret: body.secret,
-      recoveryCodeHashes: recovery.hashes,
-    })
+    let updated: Awaited<ReturnType<typeof enableUserTotpMfa>>
+    try {
+      updated = await enableUserTotpMfa(db, user.id, {
+        secret: body.secret,
+        recoveryCodeHashes: recovery.hashes,
+      })
+    } catch (err) {
+      const response = totpSecretErrorResponse(err)
+      if (response) return response
+      throw err
+    }
     if (!updated) return jsonResponse({ error: 'User not found' }, { status: 404 })
 
     const currentSessionHash = await getSessionHash(req)

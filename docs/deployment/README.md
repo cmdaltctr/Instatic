@@ -2,7 +2,7 @@
 
 This index maps supported deployment targets to the files, variables, and persistence rules they need.
 
-Instatic is one Bun server packaged by the root `Dockerfile`. The server reads runtime configuration from `server/config.ts`: `PORT`, `DATABASE_URL`, `UPLOADS_DIR`, and `STATIC_DIR`. AI provider credentials are encrypted with `INSTATIC_SECRET_KEY` when configured. Database migrations run automatically on boot in `server/index.ts`.
+Instatic is one Bun server packaged by the root `Dockerfile`. The server reads runtime configuration from `server/config.ts`: `PORT`, `DATABASE_URL`, `UPLOADS_DIR`, and `STATIC_DIR`. Reversible server secrets, including AI provider credentials and MFA TOTP seeds, are encrypted with `INSTATIC_SECRET_KEY` when configured. Database migrations run automatically on boot in `server/index.ts`.
 
 ---
 
@@ -29,10 +29,10 @@ PORT          HTTP port the Bun server listens on
 DATABASE_URL  sqlite:/path/to/cms.db, file:/path/to/cms.db, postgres://..., or postgresql://...
 UPLOADS_DIR   directory for media, plugin packs, fonts, and published disk artefacts
 STATIC_DIR    built admin SPA directory; /app/dist in the Docker image
-INSTATIC_SECRET_KEY  base64 32-byte key for encrypted AI provider credentials
+INSTATIC_SECRET_KEY  base64 32-byte key for encrypted server secrets
 ```
 
-Generate `INSTATIC_SECRET_KEY` with `bun run scripts/generate-secret-key.ts` before adding Anthropic, OpenAI, or OpenRouter credentials in production. Without it, the admin can load but saving AI credentials fails because there is no stable encryption key.
+Generate `INSTATIC_SECRET_KEY` with `bun run scripts/generate-secret-key.ts` before adding Anthropic, OpenAI, or OpenRouter credentials or enabling TOTP MFA in production. Without it, the admin can load but saving reversible secrets fails because there is no stable encryption key.
 
 The Docker image sets:
 

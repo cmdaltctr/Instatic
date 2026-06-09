@@ -333,6 +333,30 @@ describe('Account security endpoints', () => {
     const { cookie } = await login(db)
     const { secret } = await enableMfa(db, cookie)
 
+    const schemaRows = db.dialect === 'sqlite'
+      ? await db.unsafe<{ name: string }>("select name from pragma_table_info('users')")
+      : await db.unsafe<{ name: string }>(
+        "select column_name as name from information_schema.columns where table_name = 'users'",
+      )
+    const userColumns = schemaRows.rows.map((row) => row.name)
+    expect(userColumns).not.toContain('mfa_totp_secret')
+
+    const storedRows = await db<{
+      mfa_totp_secret_ciphertext: Uint8Array | null
+      mfa_totp_secret_iv: Uint8Array | null
+      mfa_totp_secret_key_fingerprint: string | null
+    }>`
+      select mfa_totp_secret_ciphertext, mfa_totp_secret_iv, mfa_totp_secret_key_fingerprint
+      from users
+      where email_normalized = ${EMAIL}
+      limit 1
+    `
+    const stored = storedRows.rows[0]
+    expect(stored?.mfa_totp_secret_ciphertext).toBeInstanceOf(Uint8Array)
+    expect(stored?.mfa_totp_secret_iv).toBeInstanceOf(Uint8Array)
+    expect(stored?.mfa_totp_secret_key_fingerprint).toMatch(/^[a-f0-9]{16}$/)
+    expect(new TextDecoder().decode(stored!.mfa_totp_secret_ciphertext!)).not.toContain(secret)
+
     const pending = await login(db)
     expect(pending.body.mfaRequired).toBe(true)
 

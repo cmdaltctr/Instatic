@@ -13,10 +13,10 @@ The static-site pipeline has two parts: a pure analysis function (`buildImportPl
 - `commitImportPlan(plan, adapter)` — uploads assets, then wraps all store writes in a single `adapter.commit` call → one Cmd+Z reverts the whole import.
 - Static imports load the current CMS draft into the editor store on demand when launched outside `/admin/site`; if no draft exists, the modal creates an empty site before analysis.
 - Conflict resolution: rename with a numeric suffix (default), overwrite, skip, or custom-rename — per page slug, per class name, and per design token (colour / font CSS variable), with category-level bulk actions for rename / skip / overwrite. Token renames rewrite `var(--x)` references so imports stay faithful.
-- What imports: pages, `kind:'class'` and `kind:'ambient'` style rules, `@keyframes`, uploadable media/font files, root CSS color tokens, root CSS font tokens, `@font-face` families, known external font stylesheet imports, safe extra HTML attributes on base modules, body-level classes/attributes/style metadata, bare DOM text nodes in mixed content, and executable HTML scripts as page-scoped runtime scripts.
+- What imports: pages, linked CSS plus unconditional local CSS `@import` graphs, `kind:'class'` and `kind:'ambient'` style rules, `@keyframes`, uploadable media/font files, root CSS color tokens, root CSS font tokens, `@font-face` families, known external font stylesheet imports, safe extra HTML attributes on base modules, body-level classes/attributes/style metadata, bare DOM text nodes in mixed content, and executable HTML scripts as page-scoped runtime scripts.
 - CMS bundle import preserves exported tables, rows, optional site shell, and embedded media using the same merge strategies as site transfer (`replace`, `merge-add`, `merge-overwrite`).
 - HTML forms import through the shared HTML importer as first-class form primitives (`base.form`, controls, labels, submit buttons), not as custom containers.
-- What cannot be modeled: `@layer` and arbitrary/local `@import` — surfaced as warnings when the CSS engine exposes them, never silently dropped.
+- What cannot be modeled: `@layer`, conditional local CSS `@import`, and arbitrary external `@import` — surfaced as warnings when the CSS engine exposes them, never silently dropped.
 - Headless: `src/core/siteImport/` carries no admin, React, or server imports (gated by `siteImport-headless.test.ts`).
 
 ---
@@ -34,6 +34,7 @@ src/core/siteImport/
 ├── colorTokens.ts       — extract root custom-property color tokens from :root/html/body rules
 ├── fontTokens.ts        — extract root --font-* custom properties as ImportFontToken[] from :root/html/body rules
 ├── fontImports.ts       — resolve trusted Google CSS2 @import rules into installed-font requests
+├── cssImports.ts        — expand unconditional local CSS @import graphs while preserving each source path
 ├── scopeClasses.ts      — scope colliding class names across per-page stylesheets
 ├── mimeTypes.ts         — extension → MIME fallback for FileMap entries that carry no MIME type (e.g. ZIP)
 ├── assetPlan.ts         — normalise URL props/HTML attributes in node fragments + CSS/@keyframes url(); resolve @font-face; collect assets
@@ -85,9 +86,13 @@ User drops files / folder / .zip / CMS bundle JSON
     │               nodeFragment (via @core/htmlImport) }           │
     └───────────────────────────────────────────────────────────────┘
             │
-    ┌── per linked CSS file ─────────────────────────────────────────┐
-    │   extractGoogleFontImports(css)                                  │
-    │   → ImportGoogleFont[] install requests for trusted CSS2 imports │
+    expandLinkedCssImports(linkedCssPaths, fileMap)
+            │  follows unconditional local @import rules recursively
+            │  imported CSS paths are added to each page's cascade list
+            ▼
+    ┌── per expanded linked CSS file ─────────────────────────────────┐
+    │   extractGoogleFontImports(css)                                │
+    │   → ImportGoogleFont[] install requests for trusted CSS2 imports│
     │                                                                │
     │   cssToStyleRules(css, { breakpoints })                        │
     │   → rules[], assetRefs[], conditions[], fontFaces[]            │
@@ -159,7 +164,7 @@ All URL-shaped values inside `pages[].nodeFragment` props, imported `htmlAttribu
 |---|---|---|
 | **Pages** | One `PagePlan` per `.html` file | `makeHtmlPagePlan` parses the body via `@core/htmlImport`; slug derived from the relative file path (`documentation/index.html` → `documentation`, `guides/install.html` → `guides/install`) |
 | **HTML attributes** | Safe extra attributes on ordinary elements (`id`, ARIA, `role`, custom attrs, `data-*`, etc.) | Stored as `props.htmlAttributes` on base container/text/link/button/image modules so CSS selectors, anchors, classic scripts, accessibility attributes, and template runtime hooks such as `data-bg-src`, `data-aos`, and `data-bs-*` survive import. Users edit the same bag in the Properties panel's Attributes view. `class` is handled by the selector registry, inline `style` becomes `node.inlineStyles`, event handlers are stripped, and reserved Instatic/editor `data-*` names are not imported. Local asset URLs inside these attributes are uploaded and rewritten. |
-| **Style rules** | All rules from linked CSS files | `cssToStyleRules` maps selector declaration blocks to `NewStyleRule` entries (class or ambient kind) and stores supported stylesheet-level rules such as `@keyframes` as ambient raw CSS rules |
+| **Style rules** | All rules from linked CSS files and their unconditional local `@import` graph | `expandLinkedCssImports` follows bundled local CSS imports first, then `cssToStyleRules` maps selector declaration blocks to `NewStyleRule` entries (class or ambient kind) and stores supported stylesheet-level rules such as `@keyframes` as ambient raw CSS rules |
 | **Media** | Uploadable images, videos, and fonts — including unreferenced files in the bundle | `buildAssetPlan` collects referenced assets and sweeps uploadable unreferenced files. Source companions such as `.scss`, sourcemaps, PHP mailers, `desktop.ini`, and README files are excluded before upload. |
 | **Color tokens** | CSS custom properties on `:root` / `html` / `body` that look like colours | `extractRootColorTokens` pulls them into `ImportColorToken[]`; they become framework palette tokens. A `--<slug>` that collides with an existing colour token surfaces as a `TokenConflict` (rename / skip / overwrite) |
 | **Fonts** | Self-hosted `@font-face` families with at least one bundled file, plus trusted Google CSS2 imports | `buildFontFamilies` in `assetPlan.ts` picks the best bundled format (woff2 → woff → ttf → otf); `extractGoogleFontImports` turns Google CSS2 `@import` rules into install requests. Commit uploads custom files via `tx.addFonts`, installs Google families through the CMS Google-font installer, then merges those returned `FontEntry` records via `tx.addInstalledFonts` |
@@ -177,9 +182,10 @@ All URL-shaped values inside `pages[].nodeFragment` props, imported `htmlAttribu
 | `.foo { … }` (single class) | `StyleRule{ kind:'class', name:'foo', selector:'.foo' }` |
 | `h1`, `body`, `a:hover`, `.hero .title` | `StyleRule{ kind:'ambient', selector: verbatim }` |
 | `@media ... { … }` | Merged into a matching viewport context's `contextStyles` when it matches a configured media query (or an older/default max-width threshold); otherwise preserved as a reusable media condition |
+| Unconditional local `@import "file.css"` | Followed recursively from the linked stylesheet; the imported file keeps its own source path so relative `url(...)` assets resolve correctly |
 | Trusted Google CSS2 `@import` | Parsed into `ImportGoogleFont` install requests and committed as self-hosted installed font entries |
 | `@keyframes` | Stored as a supported ambient raw CSS rule and emitted globally by the publisher after its raw-keyframes safety gate |
-| Arbitrary/local `@import`, `@layer` | Dropped; source text added to `droppedAtRules`; a `dropped-at-rule` warning emitted when surfaced by the CSS engine |
+| Conditional local `@import`, arbitrary external `@import`, `@layer` | Dropped; source text added to `droppedAtRules`; a `dropped-at-rule` warning emitted when surfaced by the CSS engine |
 | `@font-face` | Captured as `ParsedFontFace`; resolved into `ImportFontFamily` by `buildAssetPlan` |
 
 ---
@@ -270,7 +276,7 @@ On success the same step switches to its **complete** state — a success mark, 
 
 | Kind | When emitted |
 |---|---|
-| `dropped-at-rule` | An unsupported at-rule such as `@layer` or arbitrary/local `@import` was present but cannot be modelled |
+| `dropped-at-rule` | An unsupported at-rule such as `@layer`, conditional local `@import`, or arbitrary external `@import` was present but cannot be modelled |
 | `unmatched-media-query` | Legacy warning kind retained for old import reports; current imports preserve unmatched `@media` blocks as reusable conditions |
 | `invalid-rule` | A CSS rule caused `replaceSync` to throw (sheet-level parse error) |
 | `blocked-property` | A CSS property name is on the security denylist (`behavior`, `-moz-binding`, …) — declaration dropped |
@@ -307,6 +313,7 @@ On success the same step switches to its **complete** state — a success mark, 
   - `src/core/siteImport/colorTokens.ts` — `extractRootColorTokens`
   - `src/core/siteImport/fontTokens.ts` — `extractRootFontTokens`
   - `src/core/siteImport/fontImports.ts` — `extractGoogleFontImports`
+  - `src/core/siteImport/cssImports.ts` — `expandLinkedCssImports`
   - `src/core/siteImport/conflicts.ts` — `detectConflicts`, `applyConflictResolutions`
   - `src/admin/modals/SiteImport/SiteImportModal.tsx` — wizard shell
   - `src/admin/modals/SiteImport/steps/AnalyzeStep.tsx` — category navigator + detail panes

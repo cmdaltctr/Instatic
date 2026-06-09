@@ -88,7 +88,7 @@ ipAllowList=[]
 
 Render web services use `PORT=10000` by default. The templates set `PORT` explicitly because the Docker image's default is `3001`.
 
-`INSTATIC_SECRET_KEY` uses Render's `generateValue: true` support. Operators should copy the generated value from Render's environment settings into their password manager after first deploy. Losing the value means stored AI provider credentials must be re-entered.
+`INSTATIC_SECRET_KEY` uses Render's `generateValue: true` support. Operators should copy the generated value from Render's environment settings into their password manager after first deploy. Losing the value means stored AI provider credentials must be re-entered and TOTP MFA must be re-enrolled.
 
 Do not add a separate migration command. `server/index.ts` creates the DB client from `DATABASE_URL` and runs the matching migrations before the HTTP server starts.
 
@@ -110,7 +110,7 @@ Render disk snapshots cover the app disk. Render Postgres backups cover the mana
 | SQLite data disappears after redeploy | `DATABASE_URL` must point under the mounted disk, e.g. `sqlite:/app/storage/data/cms.db`. |
 | Uploaded files disappear after redeploy | `UPLOADS_DIR` must point under the mounted disk, e.g. `/app/storage/uploads`. |
 | Postgres app cannot connect | `DATABASE_URL` must use `fromDatabase` with `property: connectionString`. |
-| Adding an AI provider credential returns 500 | Confirm `INSTATIC_SECRET_KEY` exists and has not been rotated. |
+| Adding an AI provider credential or enabling TOTP MFA returns 500 | Confirm `INSTATIC_SECRET_KEY` exists and has not been rotated. |
 | The service deploys from source instead of the release image | The Blueprint should use `runtime: image`, not `runtime: docker`. |
 
 ## Related

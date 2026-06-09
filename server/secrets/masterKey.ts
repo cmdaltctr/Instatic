@@ -1,9 +1,10 @@
 /**
- * Master encryption key bootstrap for the AI credential store.
+ * Master encryption key bootstrap for reversible server secrets.
  *
  * The master key is a 32-byte (256-bit) AES key used by `encryption.ts` to
- * encrypt every AI provider credential at rest. It is loaded once at boot
- * and cached for the lifetime of the process.
+ * encrypt secrets that must be recovered later, such as AI provider API keys
+ * and MFA TOTP seeds. It is loaded once at boot and cached for the lifetime of
+ * the process.
  *
  * Source priority:
  *
@@ -17,17 +18,14 @@
  *      under `.tmp/` (already git-ignored).
  *
  * Key rotation: replace the env var or `.tmp/secret.key` file and restart.
- * Existing credential rows whose `key_fingerprint` no longer matches will be
- * flagged in the UI as "needs re-entry". There is no second-key migration
- * path in v1 — the operator re-enters each API key.
- *
- * @see docs/plans/2026-05-26-ai-runtime-rewrite.md → "Encryption"
+ * Existing encrypted rows whose key fingerprint no longer matches will require
+ * re-entry or re-enrollment.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-const REQUIRED_KEY_BYTES = 32 // 256-bit AES key
+const REQUIRED_KEY_BYTES = 32
 const DEV_KEY_PATH = '.tmp/secret.key'
 const ENV_VAR_NAME = 'INSTATIC_SECRET_KEY'
 
@@ -41,11 +39,6 @@ export class MasterKeyConfigurationError extends Error {
   }
 }
 
-/**
- * Load (and cache) the AES-256 master key as a non-extractable `CryptoKey`.
- *
- * Safe to call repeatedly — the underlying secret is read once.
- */
 export async function loadMasterKey(): Promise<CryptoKey> {
   if (cachedKey) return cachedKey
   const rawBytes = readMasterKeyBytes()
@@ -53,43 +46,27 @@ export async function loadMasterKey(): Promise<CryptoKey> {
     'raw',
     rawBytes as BufferSource,
     { name: 'AES-GCM' },
-    /* extractable */ false,
+    false,
     ['encrypt', 'decrypt'],
   )
   cachedFingerprint = await computeMasterKeyFingerprint(rawBytes)
   return cachedKey
 }
 
-/**
- * Returns the fingerprint of the currently-loaded master key — the first 16
- * hex chars of SHA-256(rawKeyBytes). Stored on every credential row so the
- * UI can detect key rotation and prompt the user to re-enter.
- *
- * Lazily ensures the key is loaded first (since the fingerprint is computed
- * inside `loadMasterKey`).
- */
 export async function getMasterKeyFingerprint(): Promise<string> {
   if (!cachedFingerprint) {
     await loadMasterKey()
   }
   if (!cachedFingerprint) {
-    throw new Error('[ai/masterKey] Fingerprint unavailable after loadMasterKey().')
+    throw new Error('[secrets/masterKey] Fingerprint unavailable after loadMasterKey().')
   }
   return cachedFingerprint
 }
 
-/**
- * Test-only: reset the cached key so the next loadMasterKey() picks up a
- * different env value or file contents. Production code MUST NOT call this.
- */
 export function __resetMasterKeyCacheForTesting(): void {
   cachedKey = null
   cachedFingerprint = null
 }
-
-// ---------------------------------------------------------------------------
-// Internals
-// ---------------------------------------------------------------------------
 
 function readMasterKeyBytes(): Uint8Array {
   const envValue = process.env[ENV_VAR_NAME]
@@ -99,7 +76,7 @@ function readMasterKeyBytes(): Uint8Array {
 
   if (process.env.NODE_ENV === 'production') {
     throw new MasterKeyConfigurationError(
-      `[ai/masterKey] ${ENV_VAR_NAME} is required in production. ` +
+      `[secrets/masterKey] ${ENV_VAR_NAME} is required in production. ` +
       'Generate one with: bun run scripts/generate-secret-key.ts',
     )
   }
@@ -117,11 +94,13 @@ function readOrCreateDevKey(path: string): Uint8Array {
   if (dir && !existsSync(dir)) mkdirSync(dir, { recursive: true })
   const base64 = bytesToBase64(fresh)
   writeFileSync(path, base64 + '\n', 'utf8')
-  // 0600 — owner read/write only; defence-in-depth against accidental
-  // exposure when the file system is shared.
-  try { chmodSync(path, 0o600) } catch { /* best-effort on POSIX */ }
+  try {
+    chmodSync(path, 0o600)
+  } catch {
+    // chmod is best-effort on non-POSIX filesystems.
+  }
   console.warn(
-    `[ai/masterKey] Generated a new dev master key at ${path}. ` +
+    `[secrets/masterKey] Generated a new dev master key at ${path}. ` +
     `Set ${ENV_VAR_NAME} for production.`,
   )
   return fresh
@@ -133,14 +112,14 @@ function parseAndValidateBase64(value: string, source: string): Uint8Array {
     bytes = base64ToBytes(value)
   } catch (err) {
     throw new MasterKeyConfigurationError(
-      `[ai/masterKey] ${source} is not valid base64. ` +
+      `[secrets/masterKey] ${source} is not valid base64. ` +
       'Generate a new key with: bun run scripts/generate-secret-key.ts',
       { cause: err },
     )
   }
   if (bytes.length !== REQUIRED_KEY_BYTES) {
     throw new MasterKeyConfigurationError(
-      `[ai/masterKey] ${source} decoded to ${bytes.length} bytes; ` +
+      `[secrets/masterKey] ${source} decoded to ${bytes.length} bytes; ` +
       `must be exactly ${REQUIRED_KEY_BYTES}. ` +
       'Generate a new key with: bun run scripts/generate-secret-key.ts',
     )
@@ -153,8 +132,6 @@ async function computeMasterKeyFingerprint(keyBytes: Uint8Array): Promise<string
   const hex = Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
-  // 16 hex chars = 8 bytes (64 bits) — collision-resistant enough to
-  // distinguish a rotated key without leaking the key itself.
   return hex.slice(0, 16)
 }
 

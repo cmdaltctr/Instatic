@@ -61,7 +61,8 @@ import { loginPerIpRateLimit, loginRateLimit, mfaRateLimit } from '../../auth/ra
 import { evaluateFailedAttempt, evaluateLockState } from '../../auth/lockout'
 import { clientIp } from '../../auth/security'
 import { deriveDeviceLabel } from '../../auth/deviceLabel'
-import { findMatchingRecoveryCodeHash, verifyTotpCode } from '../../auth/mfa'
+import { findMatchingRecoveryCodeHash } from '../../auth/mfa'
+import { totpSecretErrorResponse, verifyEncryptedTotpCode } from '../../auth/totpSecrets'
 import { jsonResponse, readValidatedBody, setCookieHeader } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'
 import { CMS_API_PREFIX, requestAuditContext } from './shared'
@@ -103,6 +104,16 @@ function accountLockedResponse(retryAfterMs: number): Response {
 function previouslyLocked(user: AuthUser): boolean {
   if (user.failedLoginCount > 0) return true
   return user.lockedUntil !== null
+}
+
+async function verifyUserTotpCode(user: AuthUser, code: string): Promise<boolean | Response> {
+  try {
+    return await verifyEncryptedTotpCode(user.encryptedMfaTotpSecret, code)
+  } catch (err) {
+    const response = totpSecretErrorResponse(err)
+    if (response) return response
+    throw err
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -436,7 +447,9 @@ async function handleMfaVerify(req: Request, db: DbClient): Promise<Response> {
   const MfaVerifyBodySchema = Type.Object({ code: Type.String() })
   const body = await readValidatedBody(req, MfaVerifyBodySchema)
   const code = body?.code ?? ''
-  const totpOk = user.mfaTotpSecret ? verifyTotpCode(user.mfaTotpSecret, code) : false
+  const totpResult = await verifyUserTotpCode(user, code)
+  if (totpResult instanceof Response) return totpResult
+  const totpOk = totpResult
   const recoveryHash = findMatchingRecoveryCodeHash(code, user.mfaRecoveryCodeHashes)
   if (!totpOk && !recoveryHash) {
     await recordLoginAttempt(db, {
@@ -654,13 +667,9 @@ async function verifyStepUpMfa(
     }
   }
 
-  const totpOk = (() => {
-    try {
-      return user.mfaTotpSecret ? verifyTotpCode(user.mfaTotpSecret, mfaCode) : false
-    } catch {
-      return false
-    }
-  })()
+  const totpResult = await verifyUserTotpCode(user, mfaCode)
+  if (totpResult instanceof Response) return { failure: totpResult, user: null }
+  const totpOk = totpResult
   const recoveryHash = findMatchingRecoveryCodeHash(mfaCode, user.mfaRecoveryCodeHashes)
   if (!totpOk && !recoveryHash) {
     await recordLoginAttempt(db, {

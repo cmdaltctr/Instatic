@@ -173,6 +173,39 @@ describe('buildImportPlan — structure', () => {
     expect(plan.styleRules.length).toBeGreaterThan(0)
   })
 
+  it('follows local CSS @import rules from linked stylesheets', () => {
+    const encoder = new TextEncoder()
+    const html = `<!doctype html><html><head>
+      <link rel="stylesheet" href="css/main.css">
+    </head><body>
+      <section class="hero imported-only">Food</section>
+    </body></html>`
+    const fileMap: FileMap = {
+      files: {
+        'index.html': { bytes: encoder.encode(html), mimeType: 'text/html' },
+        'css/main.css': {
+          bytes: encoder.encode(`@import "components/hero.css"; .imported-only { color: white; }`),
+          mimeType: 'text/css',
+        },
+        'css/components/hero.css': {
+          bytes: encoder.encode(`.hero { min-height: 640px; background-image: url('../img/hero.png'); }`),
+          mimeType: 'text/css',
+        },
+        'css/img/hero.png': { bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png' },
+      },
+    }
+
+    const p = buildImportPlan({ fileMap, currentSite })
+    const hero = p.styleRules.find((r) => r.kind === 'class' && r.name === 'hero')
+
+    expect(hero).toBeDefined()
+    expect(hero!.styles.minHeight).toBe('640px')
+    expect(hero!.styles.backgroundImage).toContain(`url('css/img/hero.png')`)
+    expect(p.styleRuleSources[p.styleRules.indexOf(hero!)]).toBe('css/components/hero.css')
+    expect(p.assets.some((asset) => asset.sourcePath === 'css/img/hero.png')).toBe(true)
+    expect(p.unusedCss).not.toContain('css/components/hero.css')
+  })
+
   it('folds a body <style> block into the plan as a per-page CSS source', () => {
     const html = `<!doctype html><html><head>
       <style>.promo { color: rgb(255, 99, 71); } a:hover { text-decoration: underline; }</style>

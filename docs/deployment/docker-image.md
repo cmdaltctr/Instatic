@@ -14,7 +14,7 @@ Run the image with:
 - `DATABASE_URL` pointing at SQLite or Postgres
 - `UPLOADS_DIR` mounted on persistent storage
 - `STATIC_DIR=/app/dist`
-- `INSTATIC_SECRET_KEY` set before configuring AI provider credentials
+- `INSTATIC_SECRET_KEY` set before configuring AI provider credentials or TOTP MFA
 
 Use one persistent mount root when the platform only supports one app volume:
 
@@ -144,11 +144,11 @@ The Postgres Blueprint creates one image-backed web service, one persistent disk
 | `UPLOADS_DIR` | Yes for durable media | Persistent upload directory |
 | `STATIC_DIR` | Yes in Docker | `/app/dist` |
 | `PORT` | Platform-dependent | HTTP listen port; defaults to `3001` |
-| `INSTATIC_SECRET_KEY` | Yes for AI credentials | Output of `bun run scripts/generate-secret-key.ts` |
+| `INSTATIC_SECRET_KEY` | Yes for reversible server secrets | Output of `bun run scripts/generate-secret-key.ts` |
 
 Managed platforms usually inject `PORT`. Do not hard-code a different listen port unless the platform asks for a fixed target port.
 
-`INSTATIC_SECRET_KEY` is the stable AES master key for encrypted Anthropic, OpenAI, and OpenRouter credentials. If it is missing in production, adding a credential fails. If it is rotated or lost, existing stored credentials must be re-entered.
+`INSTATIC_SECRET_KEY` is the stable AES master key for reversible server secrets, including Anthropic, OpenAI, and OpenRouter credentials and TOTP MFA seeds. If it is missing in production, adding a credential or enabling TOTP MFA fails. If it is rotated or lost, existing stored credentials must be re-entered and TOTP MFA must be re-enrolled.
 
 ## Health Check
 

@@ -11,7 +11,7 @@ Every state-changing CMS request goes through one auth funnel: parse the session
 - **Sessions** are token-cookie based. Cookie name: `SESSION_COOKIE_NAME` (`instatic_admin_session`). Tokens are hashed before storage; the cookie carries the raw token.
 - **Capabilities** are the access model. 36 `CoreCapability` strings defined in `src/core/capabilities.ts` (`@core/capabilities`). Roles are sets of capabilities. Handlers gate on capability, not role.
 - **`requireCapability(req, db, 'site.read')`** is the canonical handler entrypoint. Returns the `AuthUser` or a 401/403 `Response`.
-- **MFA (TOTP)** is per-user opt-in. Sessions for MFA-enrolled users are `pending_mfa` until verified, then become `active`. Failed MFA codes go through `mfaRateLimit` AND increment the per-account lockout counter — the same counter the password step uses. A locked account is rejected at the MFA step before any code is checked.
+- **MFA (TOTP)** is per-user opt-in. TOTP seeds are encrypted at rest with `INSTATIC_SECRET_KEY`; recovery codes are one-way hashes. Sessions for MFA-enrolled users are `pending_mfa` until verified, then become `active`. Failed MFA codes go through `mfaRateLimit` AND increment the per-account lockout counter — the same counter the password step uses. A locked account is rejected at the MFA step before any code is checked.
 - **Step-up auth** gates sensitive actions (delete user, revoke another device, sign out all) unless the user disables it on Account -> Security. The default window is 15 minutes; users can configure 5, 15, 30, or 60 minutes.
 - **Lockout** kicks in after 5 failed logins. Exponential backoff capped at 24 hours.
 - **CSRF defense in depth.** State-changing methods must come from a matching `Origin`. `SameSite=Lax` covers the rest.
@@ -31,6 +31,7 @@ server/auth/
 ├── stepUpPolicy.ts   — step-up modes and allowed window lengths
 ├── tokens.ts         — SESSION_COOKIE_NAME, hashSessionToken
 ├── mfa.ts            — generateTotpSecret, verifyTotpCode, recovery codes
+├── totpSecrets.ts    — encrypt/decrypt persisted TOTP seeds
 ├── lockout.ts        — evaluateFailedAttempt, evaluateLockState
 ├── rateLimit.ts      — RateLimiter + loginRateLimit / loginPerIpRateLimit / mfaRateLimit
 ├── security.ts       — isStateChangingMethod, originAllowed, stampSocketIp, clientIp, DEV_ORIGIN_ALLOWLIST
@@ -47,7 +48,7 @@ Handler endpoints: `server/handlers/cms/auth.ts`, `server/handlers/cms/me.ts`, `
 POST /admin/api/cms/auth/login  { email, password }
     │
     ▼
-verify password    ← bcrypt / argon2 against users.password_hash
+verify password    ← Argon2id against users.password_hash
     │
     ├─→ rate-limited via loginRateLimit (per-email + per-IP)
     ├─→ failed attempt → lockout.evaluateFailedAttempt → exponential backoff
@@ -73,7 +74,7 @@ POST /admin/api/cms/auth/mfa/verify  { code }
     ├─→ rate-limited via mfaRateLimit (per-IP)
     │
     ▼
-verifyTotpCode(secret, code) or matchRecoveryCode
+decrypt encrypted TOTP seed and verifyTotpCode(seed, code), or matchRecoveryCode
     │
     ├─→ fail → recordFailedLoginAttempt → evaluateFailedAttempt → may trigger lockout
     │

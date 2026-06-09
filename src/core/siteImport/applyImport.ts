@@ -25,6 +25,7 @@
 import type { SiteDocument, ConditionDef } from '@core/page-tree'
 import { compareVariants, type FontEntry } from '@core/fonts'
 import { cssToStyleRules } from './cssToStyleRules'
+import { expandLinkedCssImports } from './cssImports'
 import { extractRootColorTokens } from './colorTokens'
 import { extractGoogleFontImports, stripGoogleFontImportRules } from './fontImports'
 import { extractRootFontTokens } from './fontTokens'
@@ -105,7 +106,6 @@ export function buildImportPlan({ fileMap, currentSite, options }: BuildImportPl
     warnings.push(...pageWarnings)
     rawPagePlans.push(pagePlan)
     if (inlineCss.trim().length > 0) inlineCssByPage.set(pagePlan.source, inlineCss)
-    for (const cssPath of pagePlan.linkedCssPaths) allLinkedCssPaths.add(cssPath)
     for (const pageScript of pagePlan.scripts) {
       const scriptPath = pageScript.path
       const existing = scriptsByPath.get(scriptPath)
@@ -133,6 +133,24 @@ export function buildImportPlan({ fileMap, currentSite, options }: BuildImportPl
     ...script,
     pageSources: [...script.pageSources],
   }))
+
+  const cssSourcesByPath = new Map<string, string>()
+  const orderedCssPaths: string[] = []
+  allLinkedCssPaths.clear()
+  for (const plan of rawPagePlans) {
+    const expanded = expandLinkedCssImports(plan.linkedCssPaths, fileMap)
+    warnings.push(...expanded.warnings)
+    for (const w of expanded.warnings) {
+      if (w.kind === 'dropped-at-rule' && w.source) droppedAtRules.push(w.source)
+    }
+    plan.linkedCssPaths = expanded.cssPaths
+    for (const cssPath of expanded.cssPaths) allLinkedCssPaths.add(cssPath)
+    for (const source of expanded.sources) {
+      if (cssSourcesByPath.has(source.cssPath)) continue
+      cssSourcesByPath.set(source.cssPath, source.cssSource)
+      orderedCssPaths.push(source.cssPath)
+    }
+  }
 
   // 3. Parse CSS files linked from ≥1 page; record unused CSS
   const unusedCss: string[] = []
@@ -162,9 +180,12 @@ export function buildImportPlan({ fileMap, currentSite, options }: BuildImportPl
     if (f.role !== 'css') continue
     if (!allLinkedCssPaths.has(f.path)) {
       unusedCss.push(f.path)
-      continue
     }
-    const cssSource = decodeUtf8(f.bytes)
+  }
+
+  for (const cssPath of orderedCssPaths) {
+    const cssSource = cssSourcesByPath.get(cssPath)
+    if (!cssSource) continue
     collectGoogleFonts(cssSource)
     const cssForStyleRules = stripGoogleFontImportRules(cssSource)
     const { rules, warnings: cssWarnings, assetRefs, conditions: cssConditions, fontFaces } = cssToStyleRules(cssForStyleRules, {
@@ -193,7 +214,7 @@ export function buildImportPlan({ fileMap, currentSite, options }: BuildImportPl
       if (!fontTokensByVariable.has(token.variable)) fontTokensByVariable.set(token.variable, token)
     }
 
-    cssFileResults.push({ cssPath: f.path, rules: rulesAfterFontTokens, assetRefs, fontFaces })
+    cssFileResults.push({ cssPath, rules: rulesAfterFontTokens, assetRefs, fontFaces })
   }
 
   // 4a-inline. Fold each page's `<style>` CSS in as a synthetic per-page source.

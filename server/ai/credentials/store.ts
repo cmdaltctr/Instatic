@@ -24,12 +24,12 @@ import {
   decryptSecret,
   encryptSecret,
   type EncryptedSecret,
-} from './encryption'
+} from '../../secrets/encryption'
 import {
   getMasterKeyFingerprint,
   loadMasterKey,
   MasterKeyConfigurationError,
-} from './masterKey'
+} from '../../secrets/masterKey'
 import type {
   CreateCredentialInput,
   CredentialRecord,
@@ -443,7 +443,7 @@ function credentialEncryptionConfigurationError(
   err: MasterKeyConfigurationError,
 ): CredentialError {
   return new CredentialError(
-    `AI credential encryption is not configured: ${err.message.replace('[ai/masterKey] ', '')}`,
+    `AI credential encryption is not configured: ${err.message.replace('[secrets/masterKey] ', '')}`,
     500,
   )
 }

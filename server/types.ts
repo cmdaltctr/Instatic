@@ -35,7 +35,9 @@ export interface UserRow {
   password_updated_at: Date | string | null
   mfa_enabled: boolean | number
   mfa_enabled_at: Date | string | null
-  mfa_totp_secret: string | null
+  mfa_totp_secret_ciphertext: Uint8Array | null
+  mfa_totp_secret_iv: Uint8Array | null
+  mfa_totp_secret_key_fingerprint: string | null
   mfa_recovery_code_hashes_json: unknown
   step_up_auth_mode: UserStepUpAuthMode | string
   step_up_window_minutes: number

@@ -9,6 +9,11 @@ import {
   type StepUpAuthMode,
   type StepUpWindowMinutes,
 } from '../auth/stepUpPolicy'
+import {
+  encryptedTotpSecretFromParts,
+  encryptTotpSecret,
+  type EncryptedTotpSecret,
+} from '../auth/totpSecrets'
 import type { UserRow, UserStatus } from '../types'
 import { Type, filterArray } from '@core/utils/typeboxHelpers'
 
@@ -48,7 +53,7 @@ export interface CmsUser {
 
 export interface AuthUser extends CmsUser {
   passwordHash: string
-  mfaTotpSecret: string | null
+  encryptedMfaTotpSecret: EncryptedTotpSecret | null
   mfaRecoveryCodeHashes: string[]
 }
 
@@ -84,7 +89,9 @@ export const USER_JOINED_COLUMNS = `users.id,
        users.password_updated_at,
        users.mfa_enabled,
        users.mfa_enabled_at,
-       users.mfa_totp_secret,
+       users.mfa_totp_secret_ciphertext,
+       users.mfa_totp_secret_iv,
+       users.mfa_totp_secret_key_fingerprint,
        users.mfa_recovery_code_hashes_json,
        users.step_up_auth_mode,
        users.step_up_window_minutes,
@@ -196,7 +203,11 @@ export function rowToUser(row: JoinedUserRow): AuthUser {
     passwordUpdatedAt: isoDateOrNull(row.password_updated_at),
     mfaEnabled: Boolean(row.mfa_enabled),
     mfaEnabledAt: isoDateOrNull(row.mfa_enabled_at),
-    mfaTotpSecret: row.mfa_totp_secret ?? null,
+    encryptedMfaTotpSecret: encryptedTotpSecretFromParts(
+      row.mfa_totp_secret_ciphertext,
+      row.mfa_totp_secret_iv,
+      row.mfa_totp_secret_key_fingerprint,
+    ),
     mfaRecoveryCodeHashes,
     mfaRecoveryCodesRemaining: mfaRecoveryCodeHashes.length,
     stepUpAuthMode: normalizeStepUpAuthMode(row.step_up_auth_mode),
@@ -375,11 +386,14 @@ export async function enableUserTotpMfa(
     recoveryCodeHashes: string[]
   },
 ): Promise<CmsUser | null> {
+  const encryptedSecret = await encryptTotpSecret(input.secret)
   const result = await db`
     update users
     set mfa_enabled = ${true},
         mfa_enabled_at = current_timestamp,
-        mfa_totp_secret = ${input.secret},
+        mfa_totp_secret_ciphertext = ${encryptedSecret.ciphertext},
+        mfa_totp_secret_iv = ${encryptedSecret.iv},
+        mfa_totp_secret_key_fingerprint = ${encryptedSecret.keyFingerprint},
         mfa_recovery_code_hashes_json = ${input.recoveryCodeHashes},
         updated_at = current_timestamp
     where id = ${userId}
@@ -396,7 +410,9 @@ export async function disableUserTotpMfa(
     update users
     set mfa_enabled = ${false},
         mfa_enabled_at = ${null},
-        mfa_totp_secret = ${null},
+        mfa_totp_secret_ciphertext = ${null},
+        mfa_totp_secret_iv = ${null},
+        mfa_totp_secret_key_fingerprint = ${null},
         mfa_recovery_code_hashes_json = ${[]},
         updated_at = current_timestamp
     where id = ${userId}
