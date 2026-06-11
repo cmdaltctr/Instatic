@@ -1,12 +1,16 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { registry } from '@core/module-engine'
+import { pluginRuntime } from '@core/plugins/runtime'
+import type { SavedLayout } from '@core/layouts'
 import type { VisualComponent } from '@core/visualComponents'
 import type { InsertLocation } from '@site/store/insertLocation'
 import { selectActiveCanvasPage, useEditorStore } from '@site/store/store'
@@ -35,6 +39,7 @@ import {
 } from './insertionPresets'
 import {
   buildModuleInserterItems,
+  composeLayoutsSection,
   filterInserterItems,
   itemDescription,
   recentRefForItem,
@@ -49,6 +54,7 @@ import {
   type ModuleInserterRecentRef,
 } from './moduleInserterPrefs'
 import { findCanvasViewportAtPoint } from './moduleInserterDropTarget'
+import { SavedLayoutManageMenu, type SavedLayoutMenuState } from './SavedLayoutManageMenu'
 import {
   dropPreviewStyle,
   fixedPreviewForTarget,
@@ -90,6 +96,7 @@ interface PointerDropResolution {
 type InserterZone = 'search' | 'grid' | 'rail'
 
 const EMPTY_COMPONENTS: VisualComponent[] = []
+const EMPTY_LAYOUTS: SavedLayout[] = []
 const SECTIONS: readonly SectionDefinition[] = [
   { id: 'modules', name: 'Modules', accent: 'lilac', icon: AppGridPlusGlyphIcon },
   { id: 'layouts', name: 'Layouts', accent: 'sky', icon: LayoutSolidIcon },
@@ -109,6 +116,7 @@ export function ModuleInserterDialog({
   const [view, setView] = useState<InserterView>(prefs.view)
   const [recentRefs, setRecentRefs] = useState<ModuleInserterRecentRef[]>(prefs.recent)
   const [drag, setDrag] = useState<DragVisualState | null>(null)
+  const [savedLayoutMenu, setSavedLayoutMenu] = useState<SavedLayoutMenuState | null>(null)
   const backdropRef = useRef<HTMLDivElement | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -116,6 +124,7 @@ export function ModuleInserterDialog({
   const selectionSourceRef = useRef<ModuleInserterSelectionSource>('pointer')
 
   const visualComponents = useEditorStore((s) => s.site?.visualComponents ?? EMPTY_COMPONENTS)
+  const savedLayouts = useEditorStore((s) => s.site?.layouts ?? EMPTY_LAYOUTS)
   const setActiveBreakpoint = useEditorStore((s) => s.setActiveBreakpoint)
   const canvasPage = useEditorStore(selectActiveCanvasPage)
   const insertionContext = useModuleInsertionContext()
@@ -127,26 +136,39 @@ export function ModuleInserterDialog({
   const {
     moduleItems,
     layoutItems,
+    savedLayoutItems,
     componentItems,
     allItems,
   } = buildModuleInserterItems({
     modules: registry.list(),
     context: insertionContext,
     layoutPresets: LAYOUT_PRESETS,
+    savedLayouts,
     visualComponents,
   })
   const recentItems = resolveRecentItems(recentRefs, allItems)
 
   const filteredModules = filterInserterItems(moduleItems, query)
+  const filteredSavedLayouts = filterInserterItems(savedLayoutItems, query)
   const filteredLayouts = filterInserterItems(layoutItems, query)
   const filteredComponents = filterInserterItems(componentItems, query)
   const filteredRecent = filterInserterItems(recentItems, query)
+  // Layouts section order: the user's saved layouts, one group per plugin
+  // (labelled with the plugin's display name), then the built-in presets.
+  const layoutsSection = composeLayoutsSection(
+    filteredSavedLayouts,
+    filteredLayouts,
+    (pluginId) => pluginRuntime.getPluginName(pluginId),
+  )
   const items = itemsForSection(section, {
     modules: filteredModules,
-    layouts: filteredLayouts,
+    layouts: layoutsSection.items,
     components: filteredComponents,
     recent: filteredRecent,
   })
+
+  // Group labels for the Layouts section, keyed by each group's first item.
+  const groupLabelByKey = section === 'layouts' ? layoutsSection.labelByKey : new Map<string, string>()
   const selectedKey =
     selectedKeyOverride && items.some((item) => item.key === selectedKeyOverride)
       ? selectedKeyOverride
@@ -155,7 +177,7 @@ export function ModuleInserterDialog({
   const selectedSection = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0]
   const sectionCounts = {
     modules: filteredModules.length,
-    layouts: filteredLayouts.length,
+    layouts: layoutsSection.items.length,
     components: filteredComponents.length,
     recent: filteredRecent.length,
   }
@@ -424,6 +446,22 @@ export function ModuleInserterDialog({
     if (event.target === event.currentTarget) onClose()
   }
 
+  // Saved-layout manage menu (rename / delete) — see SavedLayoutManageMenu.
+  function handleItemContextMenu(
+    item: ModuleInserterItem,
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) {
+    if (item.kind !== 'savedLayout') return
+    event.preventDefault()
+    event.stopPropagation()
+    setSavedLayoutMenu({
+      x: event.clientX,
+      y: event.clientY,
+      layoutId: item.id,
+      name: item.name,
+    })
+  }
+
   const dialog = (
     <div
       ref={backdropRef}
@@ -553,25 +591,32 @@ export function ModuleInserterDialog({
             ) : (
               <div className={view === 'list' ? styles.list : styles.grid}>
                 {items.map((item) => (
-                  <ModuleInserterItemButton
-                    key={item.key}
-                    item={item}
-                    view={view}
-                    selected={selectedKey === item.key}
-                    favorite={isFavorite(recentRefForItem(item))}
-                    onSelect={() => {
-                      selectionSourceRef.current = 'pointer'
-                      setSelectedKeyOverride(item.key)
-                    }}
-                    onPick={() => {
-                      if (suppressClickRef.current) return
-                      pickItem(item, undefined, 'click')
-                    }}
-                    onToggleFavorite={() => {
-                      toggleFavorite(recentRefForItem(item))
-                    }}
-                    onPointerDown={handlePointerDown}
-                  />
+                  <Fragment key={item.key}>
+                    {groupLabelByKey.has(item.key) && (
+                      <div className={styles.groupLabel} role="presentation">
+                        {groupLabelByKey.get(item.key)}
+                      </div>
+                    )}
+                    <ModuleInserterItemButton
+                      item={item}
+                      view={view}
+                      selected={selectedKey === item.key}
+                      favorite={isFavorite(recentRefForItem(item))}
+                      onSelect={() => {
+                        selectionSourceRef.current = 'pointer'
+                        setSelectedKeyOverride(item.key)
+                      }}
+                      onPick={() => {
+                        if (suppressClickRef.current) return
+                        pickItem(item, undefined, 'click')
+                      }}
+                      onToggleFavorite={() => {
+                        toggleFavorite(recentRefForItem(item))
+                      }}
+                      onPointerDown={handlePointerDown}
+                      onContextMenu={handleItemContextMenu}
+                    />
+                  </Fragment>
                 ))}
               </div>
             )}
@@ -592,6 +637,14 @@ export function ModuleInserterDialog({
           </span>
         </div>
       ) : null}
+
+      {savedLayoutMenu && (
+        <SavedLayoutManageMenu
+          menu={savedLayoutMenu}
+          onClose={() => setSavedLayoutMenu(null)}
+          onCloseInserter={onClose}
+        />
+      )}
 
       {drag ? (
         <div className={styles.ghost} style={ghostStyle(drag)} aria-hidden="true">

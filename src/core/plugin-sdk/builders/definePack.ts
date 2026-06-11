@@ -13,6 +13,12 @@
  *       section: { paddingTop: '72px', maxWidth: '1120px' },
  *       'heading-xl': { fontSize: 'clamp(2.4rem, 4vw, 3.4rem)', fontWeight: '700' },
  *     },
+ *     layouts: [{
+ *       id: 'hero-section',
+ *       name: 'Hero section',
+ *       html: '<section class="hero"><h1>Big claim</h1></section>',
+ *       css: '.hero { padding: 96px 24px; text-align: center; }',
+ *     }],
  *   })
  *
  * Wins over hand-rolled JSON:
@@ -30,11 +36,14 @@
 import type { StyleRule, Page } from '@core/page-tree'
 import { classKindSelector } from '@core/page-tree'
 import type { VisualComponent } from '@core/visualComponents'
+import type { SavedLayout } from '@core/layouts'
+import { compilePackLayout, type LayoutPackEntry } from './packLayouts'
 
 export interface PluginPackContents {
   visualComponents: VisualComponent[]
   pages: Page[]
   classes: StyleRule[]
+  layouts: SavedLayout[]
 }
 
 interface DefinePackConfig {
@@ -49,6 +58,13 @@ interface DefinePackConfig {
    * override the derived classname.
    */
   classes?: Record<string, ClassPackEntry>
+  /**
+   * Saved layouts — offered in the module inserter's Layouts section under
+   * the plugin's name. Authored as clean HTML (+ optional CSS); compiled to
+   * the host's snapshot format at build time by `compilePackLayout`. Ids are
+   * auto-namespaced to `<pluginId>/<id>`; re-installs replace by id.
+   */
+  layouts?: LayoutPackEntry[]
 }
 
 type ClassPackEntry =
@@ -110,9 +126,14 @@ export function definePack(config: DefinePackConfig): PluginPackContents {
     })
   }
 
+  const layouts: SavedLayout[] = (config.layouts ?? []).map((entry) =>
+    compilePackLayout(config.pluginId, entry),
+  )
+
   return {
     visualComponents: config.visualComponents ?? [],
     pages: config.pages ?? [],
     classes,
+    layouts,
   }
 }

@@ -256,6 +256,16 @@ export const CmsComponentsEnvelopeSchema = Type.Object(
   { additionalProperties: true },
 )
 
+/**
+ * Envelope for GET /admin/api/cms/layouts.
+ * Inner items are DataRow objects; validate them at the HTTP boundary before
+ * converting through savedLayoutFromRow + validateSavedLayouts.
+ */
+export const CmsLayoutsEnvelopeSchema = Type.Object(
+  { rows: Type.Optional(Type.Array(DataRowSchema)) },
+  { additionalProperties: true },
+)
+
 // ---------------------------------------------------------------------------
 // fonts API — bundled Google directory + install/uninstall envelopes
 // ---------------------------------------------------------------------------
@@ -311,11 +321,13 @@ export const CmsPluginPackInstallSummarySchema = Type.Object(
       visualComponents: Type.Array(Type.Object({ id: Type.String(), name: Type.String() })),
       pages: Type.Array(Type.Object({ id: Type.String(), title: Type.String() })),
       classes: Type.Array(Type.Object({ id: Type.String(), name: Type.String() })),
+      layouts: Type.Array(Type.Object({ id: Type.String(), name: Type.String() })),
     }),
     replaced: Type.Object({
       visualComponents: Type.Array(Type.String()),
       pages: Type.Array(Type.String()),
       classes: Type.Array(Type.String()),
+      layouts: Type.Array(Type.String()),
     }),
   },
   { additionalProperties: true },
