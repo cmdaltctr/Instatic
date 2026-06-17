@@ -119,51 +119,6 @@ export const MODULE_WIRES: Readonly<Record<string, WireNode>> = {
   }),
 }
 
-export const LAYOUT_WIRES = {
-  cardGrid: row([
-    col([image({ height: 30 }), lines(1, { width: 80 }), lines(2)], { gap: 5, flex: 1, pad: 4, card: true }),
-    col([image({ height: 30 }), lines(1, { width: 80 }), lines(2)], { gap: 5, flex: 1, pad: 4, card: true }),
-    col([image({ height: 30 }), lines(1, { width: 80 }), lines(2)], { gap: 5, flex: 1, pad: 4, card: true }),
-  ], { gap: 10 }),
-  cta: col([
-    lines(1, { big: true, width: 64, center: true }),
-    lines(2, { center: true }),
-    row([button({ width: 44, solid: true }), button({ width: 44 })], { gap: 8, center: true }),
-  ], { gap: 8, center: true, pad: 8, card: true }),
-  featureGrid: col([
-    col([lines(1, { big: true, width: 50, center: true }), lines(1, { width: 70, center: true })], { gap: 5, center: true }),
-    row([
-      col([icon({ big: true }), lines(1, { width: 70 }), lines(2)], { gap: 6, flex: 1, pad: 4 }),
-      col([icon({ big: true }), lines(1, { width: 70 }), lines(2)], { gap: 6, flex: 1, pad: 4 }),
-      col([icon({ big: true }), lines(1, { width: 70 }), lines(2)], { gap: 6, flex: 1, pad: 4 }),
-    ], { gap: 10 }),
-  ], { gap: 12 }),
-  footer: row([
-    col([box([icon()], { logo: true }), lines(2)], { gap: 6, flex: 1 }),
-    col([lines(1, { width: 60 }), lines(1, { width: 80 }), lines(1, { width: 50 })], { gap: 5, flex: 1 }),
-    col([lines(1, { width: 60 }), lines(1, { width: 80 }), lines(1, { width: 50 })], { gap: 5, flex: 1 }),
-    col([lines(1, { width: 60 }), field()], { gap: 6, flex: 1 }),
-  ], { gap: 14, pad: 4 }),
-  heroSplit: row([
-    col([
-      lines(1, { big: true, width: 90 }),
-      lines(1, { big: true, width: 60 }),
-      lines(3),
-      row([button({ width: 40, solid: true }), button({ width: 40 })], { gap: 8 }),
-    ], { gap: 8, flex: 1.1, pad: 4 }),
-    image({ flex: 1, height: 96 }),
-  ], { gap: 12, align: 'center' }),
-  stats: row([
-    col([lines(1, { big: true, width: 60, center: true }), lines(1, { width: 80, center: true })], { gap: 5, flex: 1, center: true }),
-    col([lines(1, { big: true, width: 60, center: true }), lines(1, { width: 80, center: true })], { gap: 5, flex: 1, center: true }),
-    col([lines(1, { big: true, width: 60, center: true }), lines(1, { width: 80, center: true })], { gap: 5, flex: 1, center: true }),
-    col([lines(1, { big: true, width: 60, center: true }), lines(1, { width: 80, center: true })], { gap: 5, flex: 1, center: true }),
-  ], { gap: 12, pad: 6 }),
-  twoColumn: row([
-    col([lines(1, { big: true, width: 70 }), lines(4)], { gap: 6, flex: 1 }),
-    col([lines(1, { big: true, width: 70 }), lines(4)], { gap: 6, flex: 1 }),
-  ], { gap: 14 }),
-}
 
 export function moduleWireForId(moduleId: string, category?: string): WireNode {
   const known = MODULE_WIRES[moduleId]

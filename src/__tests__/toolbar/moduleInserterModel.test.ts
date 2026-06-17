@@ -3,7 +3,6 @@ import {
   DEFAULT_MODULE_INSERTER_FAVORITES,
   composeLayoutsSection,
   dedupeModuleInserterRefs,
-  getLayoutPresetItems,
   getSavedLayoutItems,
   getVisibleModuleItems,
   layoutPluginId,
@@ -94,12 +93,12 @@ describe('module inserter model', () => {
     expect(dedupeModuleInserterRefs([
       { kind: 'module', id: 'base.text' },
       { kind: 'module', id: 'base.text' },
-      { kind: 'layout', id: 'layout.contact' },
+      { kind: 'savedLayout', id: 'user-layout-1' },
       { kind: 'module', id: 'base.image' },
-      { kind: 'layout', id: 'layout.contact' },
+      { kind: 'savedLayout', id: 'user-layout-1' },
     ])).toEqual([
       { kind: 'module', id: 'base.text' },
-      { kind: 'layout', id: 'layout.contact' },
+      { kind: 'savedLayout', id: 'user-layout-1' },
       { kind: 'module', id: 'base.image' },
     ])
   })
@@ -138,14 +137,14 @@ describe('module inserter preferences', () => {
     writeModuleInserterView('list')
 
     trackModuleInserterRecent({ kind: 'module', id: 'base.text' })
-    trackModuleInserterRecent({ kind: 'layout', id: 'layout.contact' })
+    trackModuleInserterRecent({ kind: 'savedLayout', id: 'user-layout-1' })
     trackModuleInserterRecent({ kind: 'module', id: 'base.text' })
 
     expect(readModuleInserterPrefs()).toEqual({
       view: 'list',
       recent: [
         { kind: 'module', id: 'base.text' },
-        { kind: 'layout', id: 'layout.contact' },
+        { kind: 'savedLayout', id: 'user-layout-1' },
       ],
     })
   })
@@ -239,7 +238,8 @@ describe('module inserter selection scrolling', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Layouts section composition (Saved · per-plugin · Built-in)
+// Layouts section composition (Saved · per-plugin) — every layout is a
+// SavedLayout row; there are no code-defined presets.
 // ---------------------------------------------------------------------------
 
 function savedLayout(id: string, name: string): SavedLayout {
@@ -268,7 +268,7 @@ describe('layouts section composition', () => {
     expect(layoutPluginId(savedLayout('acme.kit/hero', 'Hero'))).toBe('acme.kit')
   })
 
-  it('orders user layouts, per-plugin groups (by display name), then built-ins — with labels', () => {
+  it('orders user layouts, then per-plugin groups (by display name) — with labels', () => {
     const saved = getSavedLayoutItems(
       [
         savedLayout('zzz.kit/footer', 'Footer'),
@@ -278,42 +278,28 @@ describe('layouts section composition', () => {
       PAGE_CTX,
       [],
     )
-    const presets = getLayoutPresetItems([
-      {
-        id: 'two-column',
-        name: 'Two column',
-        description: 'Side-by-side',
-        kind: 'layout',
-        root: { moduleId: 'base.container' },
-        wire: { tag: 'box', children: [] },
-      },
-    ])
 
-    const { items, labelByKey } = composeLayoutsSection(saved, presets, (pluginId) =>
+    const { items, labelByKey } = composeLayoutsSection(saved, (pluginId) =>
       pluginId === 'acme.kit' ? 'Acme UI Kit' : null,
     )
 
-    expect(items.map((i) => i.name)).toEqual(['My hero', 'Hero', 'Footer', 'Two column'])
+    expect(items.map((i) => i.name)).toEqual(['My hero', 'Hero', 'Footer'])
     expect(labelByKey.get(items[0].key)).toBe('Saved')
     expect(labelByKey.get(items[1].key)).toBe('Acme UI Kit')
     // No display name registered → falls back to the plugin id.
     expect(labelByKey.get(items[2].key)).toBe('zzz.kit')
-    expect(labelByKey.get(items[3].key)).toBe('Built-in')
   })
 
-  it('renders no labels when only one group is present', () => {
-    const presets = getLayoutPresetItems([
-      {
-        id: 'two-column',
-        name: 'Two column',
-        description: 'Side-by-side',
-        kind: 'layout',
-        root: { moduleId: 'base.container' },
-        wire: { tag: 'box', children: [] },
-      },
-    ])
-    const { items, labelByKey } = composeLayoutsSection([], presets, () => null)
+  it('renders no labels when only the user group is present', () => {
+    const saved = getSavedLayoutItems([savedLayout('user-layout-id1', 'My hero')], PAGE_CTX, [])
+    const { items, labelByKey } = composeLayoutsSection(saved, () => null)
     expect(items).toHaveLength(1)
+    expect(labelByKey.size).toBe(0)
+  })
+
+  it('yields an empty Layouts section on a fresh site (no presets leak in)', () => {
+    const { items, labelByKey } = composeLayoutsSection([], () => null)
+    expect(items).toHaveLength(0)
     expect(labelByKey.size).toBe(0)
   })
 })

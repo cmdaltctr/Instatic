@@ -35,9 +35,6 @@ import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
 import { ListBoxSolidIcon } from 'pixel-art-icons/icons/list-box-solid'
 import { PackageSolidIcon } from 'pixel-art-icons/icons/package-solid'
 import {
-  LAYOUT_PRESETS,
-} from './insertionPresets'
-import {
   buildModuleInserterItems,
   composeLayoutsSection,
   filterInserterItems,
@@ -135,14 +132,12 @@ export function ModuleInserterDialog({
 
   const {
     moduleItems,
-    layoutItems,
     savedLayoutItems,
     componentItems,
     allItems,
   } = buildModuleInserterItems({
     modules: registry.list(),
     context: insertionContext,
-    layoutPresets: LAYOUT_PRESETS,
     savedLayouts,
     visualComponents,
   })
@@ -150,14 +145,12 @@ export function ModuleInserterDialog({
 
   const filteredModules = filterInserterItems(moduleItems, query)
   const filteredSavedLayouts = filterInserterItems(savedLayoutItems, query)
-  const filteredLayouts = filterInserterItems(layoutItems, query)
   const filteredComponents = filterInserterItems(componentItems, query)
   const filteredRecent = filterInserterItems(recentItems, query)
-  // Layouts section order: the user's saved layouts, one group per plugin
-  // (labelled with the plugin's display name), then the built-in presets.
+  // Layouts section order: the user's saved layouts, then one group per plugin
+  // (labelled with the plugin's display name). All sourced from `data_rows`.
   const layoutsSection = composeLayoutsSection(
     filteredSavedLayouts,
-    filteredLayouts,
     (pluginId) => pluginRuntime.getPluginName(pluginId),
   )
   const items = itemsForSection(section, {

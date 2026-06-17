@@ -7,10 +7,6 @@ import {
 import { wouldCreateCycle, type VisualComponent } from '@core/visualComponents'
 import { firstOutletId } from '@core/templates'
 import {
-  countPresetNodes,
-  type InsertionPreset,
-} from './insertionPresets'
-import {
   moduleWireForId,
   wireFromTree,
   type WireNode,
@@ -22,7 +18,7 @@ export type ModuleInserterSectionId =
   | 'layouts'
   | 'components'
   | 'recent'
-type ModuleInserterItemKind = 'module' | 'layout' | 'savedLayout' | 'component'
+type ModuleInserterItemKind = 'module' | 'savedLayout' | 'component'
 type ModuleInserterRecentRef = ModuleInserterItemRef
 
 export interface RegistryModuleForInserter {
@@ -57,12 +53,6 @@ interface ModuleInserterModuleItem<
   category: string
 }
 
-interface ModuleInserterLayoutItem extends BaseInserterItem {
-  kind: 'layout'
-  preset: InsertionPreset
-  blocks: number
-}
-
 interface ModuleInserterSavedLayoutItem extends BaseInserterItem {
   kind: 'savedLayout'
   layout: SavedLayout
@@ -84,7 +74,6 @@ interface ModuleInserterComponentItem extends BaseInserterItem {
 
 export type ModuleInserterItem =
   | ModuleInserterModuleItem
-  | ModuleInserterLayoutItem
   | ModuleInserterSavedLayoutItem
   | ModuleInserterComponentItem
 
@@ -192,23 +181,6 @@ export function getVisibleModuleItems<TModule extends RegistryModuleForInserter>
   return items
 }
 
-export function getLayoutPresetItems(
-  presets: readonly InsertionPreset[],
-): ModuleInserterLayoutItem[] {
-  return presets.map((preset) => ({
-    key: recentKey({ kind: 'layout', id: preset.id }),
-    id: preset.id,
-    kind: 'layout',
-    name: preset.name,
-    description: preset.description,
-    accent: preset.kind === 'form' ? 'mint' : 'sky',
-    preset,
-    blocks: countPresetNodes(preset.root),
-    wire: preset.wire,
-    searchText: searchText([preset.name, preset.id, preset.description, preset.kind]),
-  }))
-}
-
 /** Component ids referenced by `base.visual-component-ref` nodes in a snapshot. */
 function referencedVcIdsInLayout(layout: SavedLayout): string[] {
   const ids = new Set<string>()
@@ -291,17 +263,17 @@ export function getSavedLayoutItems(
 }
 
 /**
- * Compose the Layouts section: the user's saved layouts first, then one
- * group per plugin (labelled with the plugin's display name), then the
- * built-in presets. Group labels render only when more than one group is
- * present; `labelByKey` keys each label to its group's first item.
+ * Compose the Layouts section: the user's saved layouts first, then one group
+ * per plugin (labelled with the plugin's display name). Every layout is a
+ * `SavedLayout` row in `data_rows` — there are no code-defined presets. Group
+ * labels render only when more than one group is present; `labelByKey` keys
+ * each label to its group's first item.
  */
 export function composeLayoutsSection(
   savedItems: readonly ModuleInserterSavedLayoutItem[],
-  presetItems: readonly ModuleInserterLayoutItem[],
   pluginNameFor: (pluginId: string) => string | null,
 ): {
-  items: (ModuleInserterSavedLayoutItem | ModuleInserterLayoutItem)[]
+  items: ModuleInserterSavedLayoutItem[]
   labelByKey: Map<string, string>
 } {
   const userItems = savedItems.filter((item) => item.pluginId === null)
@@ -319,19 +291,16 @@ export function composeLayoutsSection(
     }))
     .sort((a, b) => a.label.localeCompare(b.label))
 
-  const groupCount =
-    (userItems.length > 0 ? 1 : 0) + pluginGroups.length + (presetItems.length > 0 ? 1 : 0)
+  const groupCount = (userItems.length > 0 ? 1 : 0) + pluginGroups.length
 
   const items = [
     ...userItems,
     ...pluginGroups.flatMap((group) => group.items),
-    ...presetItems,
   ]
   const labelByKey = new Map<string, string>()
   if (groupCount > 1) {
     if (userItems.length > 0) labelByKey.set(userItems[0].key, 'Saved')
     for (const group of pluginGroups) labelByKey.set(group.items[0].key, group.label)
-    if (presetItems.length > 0) labelByKey.set(presetItems[0].key, 'Built-in')
   }
   return { items, labelByKey }
 }
@@ -355,9 +324,7 @@ function getComponentItems(
 
 interface BuiltModuleInserterItems {
   moduleItems: ModuleInserterModuleItem[]
-  /** Built-in layout presets. */
-  layoutItems: ModuleInserterLayoutItem[]
-  /** User-saved layouts — shown ABOVE the built-in presets in the Layouts section. */
+  /** User-saved layouts (`SavedLayout` rows) — the sole source of the Layouts section. */
   savedLayoutItems: ModuleInserterSavedLayoutItem[]
   componentItems: ModuleInserterComponentItem[]
   /** Every visible item — including disabled ones (carrying `disabledReason`). */
@@ -367,29 +334,24 @@ interface BuiltModuleInserterItems {
 export function buildModuleInserterItems({
   modules,
   context,
-  layoutPresets,
   savedLayouts,
   visualComponents,
 }: {
   modules: readonly AnyModuleDefinition[]
   context: ModuleInsertionContext
-  layoutPresets: readonly InsertionPreset[]
   savedLayouts: readonly SavedLayout[]
   visualComponents: readonly VisualComponent[]
 }): BuiltModuleInserterItems {
   const moduleItems = getVisibleModuleItems(modules, context)
-  const layoutItems = getLayoutPresetItems(layoutPresets)
   const savedLayoutItems = getSavedLayoutItems(savedLayouts, context, visualComponents)
   const componentItems = getComponentItems(visualComponents)
   return {
     moduleItems,
-    layoutItems,
     savedLayoutItems,
     componentItems,
     allItems: [
       ...moduleItems,
       ...savedLayoutItems,
-      ...layoutItems,
       ...componentItems,
     ],
   }
@@ -450,7 +412,6 @@ export function dedupeModuleInserterRefs(
 export function itemDescription(item: ModuleInserterItem): string {
   // A disabled item's most useful description is WHY it can't be inserted here.
   if (item.disabledReason) return item.disabledReason
-  if (item.kind === 'layout') return `${item.blocks} blocks · ${item.description}`
   if (item.kind === 'savedLayout') {
     return item.blocks === 1 ? `1 block · ${item.description}` : `${item.blocks} blocks · ${item.description}`
   }

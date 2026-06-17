@@ -4,7 +4,6 @@ import { registry } from "@core/module-engine";
 import type { VisualComponent } from "@core/visualComponents";
 import type { SavedLayout } from "@core/layouts";
 import { useInsertModule } from "@site/hooks/useInsertModule";
-import { useInsertPreset } from "@site/hooks/useInsertPreset";
 import {
   DEFAULT_MODULE_INSERTER_FAVORITES,
   buildModuleInserterItems,
@@ -13,7 +12,6 @@ import {
   resolveInserterRefs,
   type ModuleInserterItem,
 } from "@site/module-picker/moduleInserterModel";
-import { LAYOUT_PRESETS } from "@site/module-picker";
 import { useModuleInserterPreference } from "@site/module-picker/useModuleInserterPreference";
 import { useModuleInsertionContext } from "@site/module-picker/useModuleInsertionContext";
 import { resolveInsertLocation } from "@site/store/insertLocation";
@@ -140,7 +138,6 @@ interface FavoriteMenuState {
 
 function FavoriteNotchActions() {
   const insertModule = useInsertModule();
-  const insertPreset = useInsertPreset();
   const { favorites, setFavorites, toggleFavorite } = useModuleInserterPreference();
   const insertionContext = useModuleInsertionContext();
   const visualComponents = useEditorStore((s) => s.site?.visualComponents ?? EMPTY_COMPONENTS);
@@ -154,7 +151,6 @@ function FavoriteNotchActions() {
   const { allItems } = buildModuleInserterItems({
     modules: registry.list(),
     context: insertionContext,
-    layoutPresets: LAYOUT_PRESETS,
     savedLayouts,
     visualComponents,
   });
@@ -204,7 +200,6 @@ function FavoriteNotchActions() {
       {favoriteItems.map((item) => {
         const action = actionForItem(item, {
           insertModule,
-          insertPreset,
           insertComponent,
           insertLayout,
         });
@@ -273,7 +268,6 @@ function actionForItem(
   item: ModuleInserterItem,
   handlers: {
     insertModule: ReturnType<typeof useInsertModule>;
-    insertPreset: ReturnType<typeof useInsertPreset>;
     insertComponent: (componentId: string) => void;
     insertLayout: (layoutId: string) => string | null;
   },
@@ -285,14 +279,6 @@ function actionForItem(
       moduleId: item.id,
       onClick: () => handlers.insertModule(item.module),
       disabledReason: item.disabledReason,
-    };
-  }
-  if (item.kind === "layout") {
-    return {
-      id: item.key,
-      label: item.name,
-      icon: LayoutSolidIcon,
-      onClick: () => handlers.insertPreset(item.preset),
     };
   }
   if (item.kind === "savedLayout") {

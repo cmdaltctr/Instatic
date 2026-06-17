@@ -52,7 +52,11 @@ import { getKeybindingForCommand } from '@admin/spotlight/keybindings'
  * non-editor admin bundle.
  */
 
-import { CMS_SITE_RELOAD_EVENT, consumePendingCmsSiteReload } from '@admin/state/adminEvents'
+import {
+  CMS_SITE_RELOAD_EVENT,
+  EDITOR_SAVE_REQUEST_EVENT,
+  consumePendingCmsSiteReload,
+} from '@admin/state/adminEvents'
 
 export interface PersistenceSaveStatus {
   state: 'loading' | 'saved' | 'unsaved' | 'saving' | 'error'
@@ -331,30 +335,53 @@ export function usePersistence(
     )
     const prefsUnsub = subscribeToEditorPrefsChanged(scheduleAutoSave)
 
-    // beforeunload flush — prevent data loss on tab close.
-    // The 30s debounce means the last unsaved edit would be dropped without this.
-    // Fire-and-forget: beforeunload can't await async work.
-    function flushOnUnload() {
+    // Flush pending unsaved changes without resetting the dirty marks. Covers
+    // two leave paths the autosave debounce would otherwise drop:
+    //   - `beforeunload` — tab close / hard reload.
+    //   - unmount cleanup — in-app SPA navigation AWAY from the editor (e.g. to
+    //     the Data view), which does NOT fire `beforeunload`. Without this, any
+    //     edit made within the debounce window — a freshly "Saved" layout
+    //     included — is silently lost on navigation.
+    // Fire-and-forget: neither path can await async work. Marks are read (not
+    // reset) so a failed flush is retried by the next save.
+    function flushPendingSave() {
       const { site, hasUnsavedChanges, _dirtySave } = useEditorStore.getState()
       if (!site || !loadedRef.current || !hasUnsavedChanges) return
       clearTimeout(timer)
-      // Read the marks without resetting them: if the unload is cancelled and
-      // this fire-and-forget save failed, the next autosave still has them.
       void adapterRef.current
         .saveSite(site, { baselinePageIds: syncedPageIdsRef.current, dirty: _dirtySave })
         .catch((err) => {
-          console.error('[persistence] beforeunload save failed:', err)
+          console.error('[persistence] flush save failed:', err)
         })
     }
 
-    window.addEventListener('beforeunload', flushOnUnload)
+    window.addEventListener('beforeunload', flushPendingSave)
 
     return () => {
       unsub()
       prefsUnsub()
       clearTimeout(timer)
-      window.removeEventListener('beforeunload', flushOnUnload)
+      window.removeEventListener('beforeunload', flushPendingSave)
+      flushPendingSave()
     }
+  }, [enabled, saveCurrentSite])
+
+  // ─── Immediate-save requests ───────────────────────────────────────────────
+  // Deliberate, discrete save actions (e.g. "Save as layout") dispatch
+  // EDITOR_SAVE_REQUEST_EVENT to commit right away instead of waiting for the
+  // autosave debounce. Runs the same pipeline as Cmd+S (snapshot dirty marks,
+  // reset the unsaved flag), independent of the autosave preference.
+  useEffect(() => {
+    if (!enabled) return undefined
+
+    function handleSaveRequest() {
+      void saveCurrentSite().catch((err) => {
+        console.error('[persistence] Save request failed:', err)
+      })
+    }
+
+    window.addEventListener(EDITOR_SAVE_REQUEST_EVENT, handleSaveRequest)
+    return () => window.removeEventListener(EDITOR_SAVE_REQUEST_EVENT, handleSaveRequest)
   }, [enabled, saveCurrentSite])
 
   // ─── 3. Cmd/Ctrl+S — immediate save ───────────────────────────────────────

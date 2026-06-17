@@ -99,7 +99,6 @@ export function ModuleInserterItemButton({
         data-selected={selected ? 'true' : undefined}
         data-accent={item.accent}
         data-module-id={item.kind === 'module' ? item.id : undefined}
-        data-layout-id={item.kind === 'layout' ? item.id : undefined}
         data-saved-layout-id={item.kind === 'savedLayout' ? item.id : undefined}
         data-vc-id={item.kind === 'component' ? item.id : undefined}
       >
@@ -169,7 +168,7 @@ function ItemIcon({ item }: { item: ModuleInserterItem }) {
   if (item.kind === 'module') {
     return <ModuleIcon module={item.module} size={13} aria-hidden="true" />
   }
-  if (item.kind === 'layout' || item.kind === 'savedLayout') {
+  if (item.kind === 'savedLayout') {
     return <LayoutSolidIcon size={13} aria-hidden="true" />
   }
   if (item.kind === 'component') {

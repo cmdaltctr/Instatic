@@ -15,7 +15,7 @@ describe('user preference schemas', () => {
     const parsed = parseValue(USER_PREFERENCE_SCHEMAS['module-inserter'], {
       favorites: [
         { kind: 'module', id: 'base.text' },
-        { kind: 'layout', id: 'layout.contact' },
+        { kind: 'savedLayout', id: 'layout.contact' },
         { kind: 'component', id: 'vc.hero' },
       ],
     })
@@ -23,7 +23,7 @@ describe('user preference schemas', () => {
     expect(parsed).toEqual({
       favorites: [
         { kind: 'module', id: 'base.text' },
-        { kind: 'layout', id: 'layout.contact' },
+        { kind: 'savedLayout', id: 'layout.contact' },
         { kind: 'component', id: 'vc.hero' },
       ],
     })
