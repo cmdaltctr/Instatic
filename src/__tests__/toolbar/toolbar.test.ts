@@ -415,13 +415,17 @@ describe('Toolbar — structural requirements', () => {
     expect(src).toContain('data-testid="toolbar"')
   })
 
-  it('Toolbar is a prop-driven shell — editor-only buttons live in AdminCanvasLayout', () => {
-    // After the Toolbar refactor, Toolbar.tsx itself no longer references
-    // editor-specific sub-components (ZoomControls / PublishButton /
-    // SettingsButton / save status). Those are passed in via the
-    // `rightSlot` prop by AdminCanvasLayout, which keeps Toolbar shareable
-    // with AdminPageLayout (Plugins / Users / Account) without dragging
-    // the editor store into the non-editor admin bundle.
+  it('Toolbar is a prop-driven shell — EDITOR-only buttons live in AdminCanvasLayout, global trailer lives in the shell', () => {
+    // The Toolbar shell owns the GLOBAL trailer (SettingsButton +
+    // OpenLivePageButton + AccountMenuButton) so the settings cog, live-page
+    // link, and account menu are identical on every admin route. SettingsButton
+    // reads the tiny `adminUi` store, so hosting it in the shell does NOT drag
+    // the editor store into non-editor bundles.
+    //
+    // EDITOR-only sub-components (ZoomControls / PublishButton / save status)
+    // stay out of the shell — they are passed in via the `rightSlot` prop by
+    // AdminCanvasLayout, which keeps the toolbar shareable with the lightweight
+    // layouts.
     const { readFileSync } = require('fs')
     const toolbarSrc = readFileSync(
       new URL('../../admin/pages/site/toolbar/Toolbar.tsx', import.meta.url),
@@ -435,15 +439,19 @@ describe('Toolbar — structural requirements', () => {
     expect(toolbarSrc).not.toContain("from './ZoomControls'")
     expect(toolbarSrc).not.toContain("from './PublishButton'")
     expect(toolbarSrc).not.toContain('saveStatus={saveStatus}')
+    // The global trailer — including the settings cog — IS owned by the shell.
+    expect(toolbarSrc).toContain("from './SettingsButton'")
+    expect(toolbarSrc).toContain('<SettingsButton />')
 
-    // The editor-only buttons must be mounted from AdminCanvasLayout.
+    // The editor-only buttons must be mounted from AdminCanvasLayout, which
+    // must NOT re-mount the now-global SettingsButton.
     const layoutSrc = readFileSync(
       new URL('../../admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx', import.meta.url),
       'utf-8',
     )
     expect(layoutSrc).toContain('ZoomControls')
     expect(layoutSrc).toContain('PublishButton')
-    expect(layoutSrc).toContain('SettingsButton')
+    expect(layoutSrc).not.toContain('SettingsButton')
     expect(layoutSrc).toContain('saveStatus={persistence.saveStatus}')
   })
 

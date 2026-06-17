@@ -1,15 +1,18 @@
 /**
  * PublishingSection — self-hosted CMS publishing details.
  */
-import { useEditorStore } from '@site/store/store'
+import { useSiteSettingsController } from '../useSiteSettingsController'
 import { resolveFrameworkPreferences } from '@core/framework'
 import { Switch } from '@ui/components/Switch'
 import { SkeletonBlock } from '@ui/components/Skeleton'
 import s from '../SettingsModal.module.css'
 
 export function PublishingSection() {
-  const site = useEditorStore((state) => state.site)
-  const updateFrameworkPreferences = useEditorStore((state) => state.updateFrameworkPreferences)
+  const { site, error, updateFrameworkPreferences } = useSiteSettingsController()
+
+  if (error) {
+    return <p className={s.sectionDescription} role="alert">{error}</p>
+  }
 
   if (!site) {
     return <SkeletonBlock minHeight={200} ariaLabel="Loading site settings" />

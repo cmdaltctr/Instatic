@@ -109,14 +109,6 @@
     min-width: 8px;
 }
 
-.divider {
-    width: 1px;
-    height: 16px;
-    flex-shrink: 0;
-    margin: 0 2px;
-    background: var(--editor-border);
-}
-
 .pluginButtonWrapper {
     position: relative;
     display: inline-flex;

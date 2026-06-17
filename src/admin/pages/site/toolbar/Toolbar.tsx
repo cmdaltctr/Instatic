@@ -39,6 +39,7 @@ import { pluginRuntime } from '@core/plugins/runtime'
 import type { RegisteredPluginToolbarButton } from '@core/plugin-sdk'
 import { AccountMenuButton } from '@admin/shared/AccountMenuButton'
 import { OpenLivePageButton } from '@admin/shared/OpenLivePageButton'
+import { SettingsButton } from './SettingsButton'
 import { Link } from '@admin/lib/routing'
 import { Button } from '@ui/components/Button'
 import { Skeleton } from '@ui/components/Skeleton'
@@ -241,14 +242,18 @@ export function Toolbar({
 
           {/* ── Right section — caller-owned ─────────────────────────────── */}
           {rightSlot}
-          {/* OpenLivePageButton + AccountMenuButton are always rendered,
-              regardless of `rightSlot`. The first lets every admin route
-              jump to the live site in a new tab (deep-linking to the
-              active page when one is open in the canvas, falling back to
-              the site root elsewhere); the second is the account / sign-out
-              entry point. Both are reachable from Users / Content /
-              Plugins / etc. so they live in the toolbar shell, not in any
-              layout's right slot. */}
+          {/* SettingsButton + OpenLivePageButton + AccountMenuButton are the
+              global toolbar trailer — always rendered regardless of `rightSlot`
+              or which layout mounted the toolbar. SettingsButton opens the
+              global Settings modal (it reads the tiny `adminUi` store, so it
+              never drags the editor toolchain into non-editor bundles);
+              OpenLivePageButton jumps to the live site in a new tab
+              (deep-linking to the active page when one is open in the canvas,
+              the site root elsewhere); AccountMenuButton is the account /
+              sign-out entry point. All three are reachable from every admin
+              route (Site / Content / Data / Media / Plugins / Users / …), so
+              they live in the toolbar shell, not in any layout's right slot. */}
+          <SettingsButton />
           <OpenLivePageButton />
           <AccountMenuButton />
         </div>
@@ -330,14 +335,5 @@ function DefaultNavSlot({
       {icon}
       <span>{label}</span>
     </Link>
-  )
-}
-
-export function ToolbarDivider() {
-  return (
-    <div
-      aria-hidden="true"
-      className={styles.divider}
-    />
   )
 }

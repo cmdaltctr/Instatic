@@ -12,7 +12,7 @@
  * skips that pattern.
  */
 import { Suspense, lazy, useState } from 'react'
-import { useEditorStore } from '@site/store/store'
+import { useSiteSettingsController } from '../useSiteSettingsController'
 import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { Input, Textarea } from '@ui/components/Input'
 import { Button } from '@ui/components/Button'
@@ -37,9 +37,11 @@ const MediaPickerModal = lazy(() =>
 )
 
 export function GeneralSection() {
-  const site = useEditorStore((state) => state.site)
-  const updateSiteName = useEditorStore((state) => state.updateSiteName)
-  const updateSiteSettings = useEditorStore((state) => state.updateSiteSettings)
+  const { site, error, updateSiteName, updateSiteSettings } = useSiteSettingsController()
+
+  if (error) {
+    return <p className={s.sectionDescription} role="alert">{error}</p>
+  }
 
   if (!site) {
     return <SkeletonBlock minHeight={200} ariaLabel="Loading site settings" />

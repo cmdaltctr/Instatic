@@ -38,7 +38,6 @@
  * No env vars, no API keys, no endpoint configuration required (Constraint #385).
  */
 import { Toolbar } from '@admin/pages/site/toolbar/Toolbar'
-import { SettingsButton } from '@admin/pages/site/toolbar/SettingsButton'
 import { ZoomControls } from '@admin/pages/site/toolbar/ZoomControls'
 import { PublishButton } from '@admin/pages/site/toolbar/PublishButton'
 import { useEditorSelectPreference } from '@admin/pages/site/preferences/editorPreferences'
@@ -212,7 +211,6 @@ export function AdminCanvasLayout() {
                 onSave={canSaveSite ? persistence.saveSite : undefined}
                 saveStatus={persistence.saveStatus}
               />
-              <SettingsButton />
             </>
           )}
         />

@@ -13,7 +13,6 @@ import {
   type PublishActionMenuItem,
   type PublishActionStatusTone,
 } from '@site/toolbar/PublishActionGroup'
-import { SettingsButton } from '@site/toolbar/SettingsButton'
 import { SchedulePublishDialog } from '@admin/modals/SchedulePublishDialog'
 import type { SaveMessage } from '@content/hooks/useContentEntryDraft'
 
@@ -222,7 +221,6 @@ export function ContentToolbar({
         onPublish={onPublish}
         menuItems={menuItems}
       />
-      <SettingsButton />
       {selectedEntry && (
         <SchedulePublishDialog
           open={scheduleDialogOpen}
