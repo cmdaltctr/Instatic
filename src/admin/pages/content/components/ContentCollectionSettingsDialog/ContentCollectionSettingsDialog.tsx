@@ -16,6 +16,7 @@ import dialogStyles from '../../../../shared/dialogs/SiteCreateDialog/SiteCreate
 import styles from '../../ContentPage.module.css'
 import { slugFromTitle } from '@core/utils/slug'
 import { getErrorMessage } from '@core/utils/errorMessage'
+import { StepUpCancelledMessage } from '@admin/shared/StepUp'
 
 interface ContentCollectionSettingsDialogProps {
   collection: DataTable
@@ -92,6 +93,9 @@ export function ContentCollectionSettingsDialog({
         fields: [...nextFields, ...customFields],
       })
     } catch (err) {
+      // A step-up cancellation means the user backed out of the password
+      // re-entry prompt — not a failure. Leave the dialog open, show nothing.
+      if (err instanceof Error && err.message === StepUpCancelledMessage) return
       setSubmitError(errorMessage(err))
     }
   }

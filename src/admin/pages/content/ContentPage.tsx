@@ -45,6 +45,8 @@ import { useContentMediaPicker } from './hooks/useContentMediaPicker'
 import { useContentWorkspace } from './hooks/useContentWorkspace'
 import { publicContentPath } from './utils/contentEntryUtils'
 import { useAuthenticatedAdminUser } from '@admin/sessionContext'
+import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
+import { getErrorMessage } from '@core/utils/errorMessage'
 import { ContentAgentMount } from './agent/ContentAgentMount'
 import {
   canCreateContent,
@@ -114,6 +116,12 @@ export function ContentPage() {
   const canCreateEntries = canCreateContent(permissionUser)
   const canManageCollections = canManageContentCollections(permissionUser)
   const workspace = useContentWorkspace({ loadAuthors: canReassignAuthor })
+  // Collection schema mutations (create/update/delete) are step-up gated on
+  // the server — they change the public route surface — so they must run
+  // through `runStepUp`, which transparently opens the password re-entry
+  // dialog on a `step_up_required` response and retries. Without this the
+  // raw `step_up_required` error leaks into the dialog as visible text.
+  const { runStepUp } = useStepUp()
   const draft = useContentEntryDraft({
     selectedEntry: workspace.selectedEntry,
     updateSelectedEntry: workspace.updateSelectedEntry,
@@ -206,30 +214,39 @@ export function ContentPage() {
     })
   }
 
-  function handleUpdateCollection(
+  // Collection update/delete are step-up gated, so they bypass `withEntryOp`
+  // (whose generic catch would surface a step-up *cancellation* as a visible
+  // error). Instead they run through `runStepUp` directly and let the calling
+  // settings dialog render real errors; a cancellation is a silent no-op.
+  async function handleUpdateCollection(
     collection: DataTable,
     input: UpdateDataTableInput,
   ) {
-    return withEntryOp(() => workspace.updateCollection(collection.id, input), {
-      permitted: canManageCollections,
-      permMsg: 'Your role cannot manage content collections',
-      fallback: 'Could not update collection',
-      rethrow: true,
-    })
+    if (!canManageCollections) {
+      workspace.setError('Your role cannot manage content collections')
+      return
+    }
+    workspace.setError(null)
+    // Rejections propagate to the settings dialog, which keeps itself open and
+    // renders the message (and swallows `step_up_cancelled`).
+    await runStepUp(() => workspace.updateCollection(collection.id, input))
   }
 
-  function handleDeleteCollection(collection: DataTable) {
-    return withEntryOp(() => workspace.deleteCollection(collection.id), {
-      permitted: canManageCollections,
-      permMsg: 'Your role cannot manage content collections',
-      fallback: 'Could not delete collection',
-      rethrow: true,
-      apply: () => {
-        if (workspace.selectedCollectionId === collection.id) {
-          draft.applySelectedEntry(null)
-        }
-      },
-    })
+  async function handleDeleteCollection(collection: DataTable) {
+    if (!canManageCollections) {
+      workspace.setError('Your role cannot manage content collections')
+      return
+    }
+    workspace.setError(null)
+    try {
+      await runStepUp(() => workspace.deleteCollection(collection.id))
+      if (workspace.selectedCollectionId === collection.id) {
+        draft.applySelectedEntry(null)
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === StepUpCancelledMessage) return
+      workspace.setError(getErrorMessage(err, 'Could not delete collection'))
+    }
   }
 
   function handleRenameEntry(
@@ -580,7 +597,9 @@ export function ContentPage() {
               setCollectionDialogOpen(false)
               return
             }
-            await workspace.createCollection(input)
+            // On a step-up cancellation `runStepUp` rejects before this line,
+            // so the dialog stays open (it swallows `step_up_cancelled`).
+            await runStepUp(() => workspace.createCollection(input))
             setCollectionDialogOpen(false)
           }}
         />
